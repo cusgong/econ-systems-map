@@ -7,3 +7,9 @@ desktop.ini
 # Agent tooling + internal session notes (not part of the deployed app)
 .claude/
 docs/session-log.md
+
+# Vercel CLI local link (contains project/org ids, not for the repo)
+.vercel/
+
+.vercel
+.env*
