@@ -6,7 +6,7 @@
 2차·3차 파급효과를 탐색하는 3D 경제 인과관계 지도로 시스템 사고를 훈련하는 웹앱.
 
 ## 지금 단계
-v2.1.0 배포: https://econ-systems-map.vercel.app. 탐색 중심 IA(탭 3개), 사례·루프·시뮬레이터를 탐색 안으로 통합.
+v2.2.0 배포: https://econ-systems-map.vercel.app. AI 채팅이 멀티 제공자(Anthropic·Google·OpenAI 호환) API 키를 받음. 탐색 중심 IA(탭 3개) 유지.
 
 ## Milestones  (상태는 매 작업·도달 시 갱신)
 - [x] M1 스캐폴드 + canonical 데이터 스키마/노드 정의
@@ -32,6 +32,7 @@ v2.1.0 배포: https://econ-systems-map.vercel.app. 탐색 중심 IA(탭 3개), 
 - 라이브에 앱만 노출되게 `.vercelignore` 유지(Vercel CLI는 .gitignore 무시). GitHub push: cusgong 전환 + `git -c credential.helper= -c credential.helper="!gh auth git-credential" push` 후 5bu-gainge 복구.
 
 ## 최근 완료
+- v2.2.0 멀티 제공자 AI 키 (Marcus: "Anthropic 말고 다른 주요 AI API key도 받게"): AI 채팅이 Anthropic(Claude)·Google(Gemini)·OpenAI 호환(OpenRouter·xAI/Grok·Groq·DeepSeek·Mistral·직접입력 Base URL) 키를 받음. `AI_PROVIDERS` 레지스트리 + 제공자별 build()/extract() 어댑터 + 통합 SSE 파서. 편집 가능한 모델 필드(datalist, 모델명 드리프트 대응). 제공자별 키 저장(`macroscope.key.<id>`, 구 `macroscope.apikey`에서 자동 마이그레이션). 셋업 UI = 제공자 선택 + (openai_compat일 때) 프리셋·Base URL + 제공자별 키 힌트/발급 링크. **OpenAI 본체 API는 브라우저 CORS 차단**이라 GPT는 OpenRouter 경유 안내. 검증: Gemini 어댑터를 라이브 API로 확인(gemini-2.5-flash HTTP 200, SSE 형식=extract 일치), 4개 셋업 상태 전부 렌더·콘솔 에러 0, Anthropic 경로 v2.0.0과 동일. 라이브 v2.2.0 확인.
 - v2.1.0 탐색 중심 IA 개편 (Marcus 지적: 사례·루프를 탐색하며 보게 했으면 상단 탭이 없어야 맞다 → 이전 크로스링크는 탭 갈아타기라 반쪽): 원칙 = **상단 탭은 도구/렌즈, 콘텐츠 아님**. 탭 3개(탐색·지금·AI)로 축소, 역사 사례·루프·시뮬레이터 탭 제거. 탐색이 허브: 홈에서 사례·루프 전체 브라우징 + 시뮬레이터 열기, 변수 선택 시 관련 사례·루프 인라인. 이 셋은 탐색 안의 뷰(탐색 탭 유지 + "← 탐색" 백, 지도 안 벗어남). 변수에서 연 사례는 백이 그 변수로 복귀, 홈에서 연 건 홈으로. 홈버튼·Esc·온보딩·i18n 반영. 실브라우저 전 흐름 검증.
 - v2.0.0 라이브 배포 해제(260711): Vercel BLOCKED 실사유 = 커밋 author의 noreply 이메일 무효 판정(개인 Hobby도 git-author 검사 적용, Pro전용 아님). author를 globin0806@gmail.com으로 재작성해 통과. 라이브 v2.0.0 확인.
 - v2.0.0 (Marcus 피드백 5건): ①탐색↔사례·루프 크로스링크(변수 선택 시 등장 사례·루프 버튼 + NOW 계기 스트립) ②핵심 변수 계기판(3D 라벨 실측값 6종) ③전파 시각화 혁신(시차 비례 펄스 파동, 도착 밀당 바운스, 레버 노드 상하 드래그 즉석 충격→시뮬레이터 자동 전환) ④국면 반전 8건(금색 엣지+⇄배지, 예: 성장발 금리 상승은 주가 호재) ⑤AI 채팅 탭(BYO Anthropic 키·스트리밍·프롬프트 캐시, 답변의 map 블록이 지도 하이라이트/시나리오 착색/사례·루프 점프 자동 실행) ⑥콘텐츠 추가: 닷컴 버블 사례(AI 슈퍼사이클 테마와 상호 연결)+자산효과 루프 — 저작→회의적 팩트체크 파이프라인(정정 10+건)
@@ -45,4 +46,4 @@ v2.1.0 배포: https://econ-systems-map.vercel.app. 탐색 중심 IA(탭 3개), 
 - 로컬: preview `econ-map` (127.0.0.1:5230) 또는 `python -m http.server 5230` (프로젝트 루트)
 - 데이터 수정: 스크래치 JSON → `python scripts/build-data.py <dir>` (data/*.js 직접 편집 금지)
 
-업데이트: 260710
+업데이트: 260711
