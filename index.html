@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>매크로스코프 · 경제 인과관계 3D 지도</title>
+<meta name="description" content="금리·물가·환율 등 30개 거시 변수의 연결과 2차·3차 파급효과를 탐색하며 시스템 사고를 훈련하는 인터랙티브 3D 인과관계 지도.">
+<meta name="theme-color" content="#030610">
+<meta property="og:title" content="매크로스코프 MacroScope">
+<meta property="og:description" content="변수 사이의 연결로 경제를 읽는 시스템 사고 훈련장. 3D 인과관계 지도, 시나리오 시뮬레이터, 역사 사례 재생.">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="ko_KR">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23071021'/%3E%3Cpath d='M8 22 L16 12 L24 20' stroke='%232ba8c8' stroke-width='1.6' fill='none'/%3E%3Ccircle cx='8' cy='22' r='3.2' fill='%2354e0ff'/%3E%3Ccircle cx='16' cy='12' r='3.2' fill='%23ff9257'/%3E%3Ccircle cx='24' cy='20' r='3.2' fill='%2357e39a'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/lang-toggle.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.min.js",
+    "three/addons/": "./vendor/addons/"
+  }
+}
+</script>
+</head>
+<body>
+<a class="skip-link" href="#panel" data-i18n>본문(설명 패널)으로 건너뛰기</a>
+
+<div id="stage" aria-hidden="true"></div>
+<div id="labels" aria-hidden="true"></div>
+
+<header class="hud-top">
+  <a class="brand" href="./" aria-label="MacroScope 홈" data-i18n-al>
+    <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="7" fill="#0a1428" stroke="rgba(84,224,255,.35)"/>
+      <path d="M8 22 L16 12 L24 20" stroke="#2ba8c8" stroke-width="1.6" fill="none"/>
+      <circle cx="8" cy="22" r="3" fill="#54e0ff"/>
+      <circle cx="16" cy="12" r="3" fill="#ff9257"/>
+      <circle cx="24" cy="20" r="3" fill="#57e39a"/>
+    </svg>
+    <span class="t">
+      <b>MACROSCOPE</b>
+      <small data-i18n>경제 인과관계 지도 · 시스템 사고 훈련장</small>
+    </span>
+    <span class="ver" id="app-version">v1.3.0</span>
+  </a>
+
+  <nav class="mode-tabs" aria-label="모드" data-i18n-al>
+    <button class="mode-tab" id="tab-explore" aria-pressed="true" data-mode="explore" data-i18n>탐색</button>
+    <button class="mode-tab" id="tab-now" aria-pressed="false" data-mode="now" data-i18n>지금</button>
+    <button class="mode-tab" id="tab-sim" aria-pressed="false" data-mode="sim" data-i18n>시뮬레이터</button>
+    <button class="mode-tab" id="tab-cases" aria-pressed="false" data-mode="cases" data-i18n>역사 사례</button>
+    <button class="mode-tab" id="tab-loops" aria-pressed="false" data-mode="loops" data-i18n>루프</button>
+  </nav>
+
+  <div class="hud-actions">
+    <button class="icon-btn" id="btn-search" title="검색 (Ctrl+K)" data-i18n-ti aria-haspopup="dialog">
+      <span aria-hidden="true">⌕</span><span class="visually-hidden" data-i18n>검색</span>
+    </button>
+    <button class="icon-btn" id="btn-home" title="처음 화면" data-i18n-ti>
+      <span aria-hidden="true">⌖</span><span class="visually-hidden" data-i18n>처음 화면</span>
+    </button>
+    <button class="icon-btn" id="btn-motion" aria-pressed="false" title="모션 줄이기" data-i18n-ti>
+      <span aria-hidden="true">✦</span><span class="visually-hidden" data-i18n>모션 줄이기</span>
+    </button>
+    <button class="icon-btn" id="btn-help" title="도움말" data-i18n-ti aria-haspopup="dialog">?</button>
+    <div class="lang-toggle" role="group" aria-label="Language / 언어">
+      <button class="lang-btn" data-lang="ko" aria-pressed="true">한국어</button>
+      <button class="lang-btn" data-lang="en" aria-pressed="false">EN</button>
+    </div>
+  </div>
+</header>
+
+<aside id="panel" aria-label="설명 패널" data-i18n-al>
+  <div class="panel-head">
+    <span class="ph-title" id="panel-title">EXPLORE</span>
+    <span class="spacer"></span>
+    <button class="icon-btn" id="btn-sources-mini" title="출처와 한계" data-i18n-ti aria-haspopup="dialog">
+      <span aria-hidden="true">ⓘ</span><span class="visually-hidden" data-i18n>출처와 한계</span>
+    </button>
+    <button class="icon-btn" id="panel-toggle" aria-expanded="true">
+      <span data-i18n>접기</span>
+    </button>
+  </div>
+  <div class="panel-body" id="panel-body" tabindex="-1"></div>
+</aside>
+
+<details id="legend">
+  <summary data-i18n>범례</summary>
+  <div class="lg-body" id="legend-body"></div>
+</details>
+
+<div id="statusline">
+  <span id="status-msg"></span>
+  <button id="btn-sources" aria-haspopup="dialog" data-i18n>출처와 한계</button>
+</div>
+
+<dialog id="dlg-onboarding" aria-labelledby="ob-title">
+  <div class="dlg-body" id="ob-body"></div>
+</dialog>
+
+<dialog id="dlg-search" class="search-dlg" aria-label="검색" data-i18n-al>
+  <div class="search-box">
+    <input id="search-input" type="search" placeholder="변수·사례·루프 검색 (초성 가능)" data-i18n-ph
+           autocomplete="off" enterkeyhint="search" aria-label="검색어" data-i18n-al
+           role="combobox" aria-expanded="true" aria-controls="search-results">
+    <div id="search-results" role="listbox" aria-label="검색 결과" data-i18n-al></div>
+    <div class="search-hint" data-i18n>↑↓ 이동 · Enter 선택 · Esc 닫기</div>
+  </div>
+</dialog>
+
+<dialog id="dlg-sources" aria-labelledby="src-title">
+  <div class="dlg-body" id="sources-body"></div>
+</dialog>
+
+<div id="toast" role="status"></div>
+<div class="visually-hidden" id="sr-live" aria-live="polite"></div>
+
+<div id="loading">
+  <div class="ring" aria-hidden="true"></div>
+  <p data-i18n>인과 지도를 그리는 중…</p>
+</div>
+
+<div id="fatal" role="alertdialog" aria-labelledby="fatal-title">
+  <div class="card">
+    <h3 id="fatal-title" data-i18n>문제가 발생했습니다</h3>
+    <p id="fatal-msg" data-i18n>화면을 그리는 중 오류가 났습니다. 새로고침하면 대부분 해결됩니다.</p>
+    <p style="margin-top:10px"><button class="btn primary" onclick="location.reload()" data-i18n>새로고침</button></p>
+  </div>
+</div>
+
+<script>
+  // Boot watchdog: if the module graph fails to load (network, syntax, old
+  // browser), the module-side error handlers never exist. Fail visibly.
+  window.__msBooted = false;
+  setTimeout(function () {
+    if (!window.__msBooted) {
+      var l = document.getElementById('loading'); if (l) l.classList.add('gone');
+      var f = document.getElementById('fatal'); if (f) f.classList.add('show');
+    }
+  }, 8000);
+</script>
+<script src="js/i18n.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

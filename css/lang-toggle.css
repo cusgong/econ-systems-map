@@ -1,0 +1,64 @@
+/* lang-toggle.css — drop-in styles for the language toggle.
+   Markup:
+     <div class="lang-toggle" role="group" aria-label="Language / 언어">
+       <button class="lang-btn" data-lang="ko" aria-pressed="true">한국어</button>
+       <button class="lang-btn" data-lang="en" aria-pressed="false">EN</button>
+     </div>
+   Defaults are tuned for a DARK header. For a light surface, override the --lt-* vars
+   (e.g. --lt-fg:#475569; --lt-fg-hover:#0f172a; --lt-track-bg:rgba(0,0,0,0.04)). The
+   active state keys off both .is-active (JS) and [aria-pressed="true"] (semantic), so the
+   highlight is robust regardless of class-update timing. */
+
+/* Korean line-break baseline. This kit keeps Korean as the source language, and the CSS default
+   word-break:normal lets Korean break mid-eojeol (또렷해집 / 니다). keep-all breaks
+   only at spaces; overflow-wrap rescues over-long tokens (URLs, IDs). Both inherit,
+   so this one rule (linked in <head> for vanilla, imported at the app root for React)
+   covers the whole page. See rules/cjk-rendering-safety §5. */
+:root,
+body {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.lang-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9999px;
+  background: var(--lt-track-bg, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--lt-track-border, rgba(255, 255, 255, 0.12));
+  flex-shrink: 0;
+}
+
+.lang-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--lt-fg, rgba(255, 255, 255, 0.72));
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 5px 10px;
+  border-radius: 9999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.lang-btn:hover { color: var(--lt-fg-hover, #fff); }
+
+.lang-btn.is-active,
+.lang-btn[aria-pressed="true"] {
+  background: var(--lt-active-bg, #2563eb);
+  color: var(--lt-active-fg, #fff);
+}
+
+.lang-btn:focus-visible {
+  outline: 2px solid var(--lt-focus, #93c5fd);
+  outline-offset: 1px;
+}
+
+@media (max-width: 480px) {
+  .lang-btn { padding: 5px 8px; }
+}

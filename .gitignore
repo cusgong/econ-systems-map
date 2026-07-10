@@ -1,0 +1,9 @@
+# OS / editor junk
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+
+# Agent tooling + internal session notes (not part of the deployed app)
+.claude/
+docs/session-log.md
