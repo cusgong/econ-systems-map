@@ -189,6 +189,16 @@ export const UI_DICT_EN = {
   '지도와 대화하기': 'Talk to the map',
   '이 지도에 담긴 변수·인과·역사 사례·현재 상황을 아는 AI에게 투자 환경, 비즈니스, 사회 현상 질문을 던져 보세요. 답변과 동시에 관련 인과 경로가 지도에 켜집니다.':
     'Ask an AI that knows this map\'s variables, causal links, historical cases, and current conditions about investing environments, business, or social questions. As it answers, the relevant causal paths light up on the map.',
+  'AI 제공자': 'AI provider',
+  '서비스': 'Service',
+  'AI 제공자와 API 키': 'AI provider & API key',
+  '서버가 없는 앱이라 본인의 API 키로 브라우저에서 제공자에 직접 요청합니다. 키는 이 브라우저에만 저장되고 해당 제공자 외 어디로도 전송되지 않으며, 사용량은 본인 계정에 과금됩니다.':
+    'This app has no server: your browser calls the provider directly with your own API key. The key is stored only in this browser, sent nowhere but that provider, and usage is billed to your account.',
+  '모델 ID': 'Model ID',
+  '키 형식이 올바르지 않습니다': 'That key format looks wrong',
+  '모델 이름을 찾을 수 없습니다. 모델 ID를 확인해 주세요.': 'Model not found. Check the model ID.',
+  '참고: OpenAI 본체 API는 브라우저 직접 호출을 막아(CORS) 이 앱에서 직접 쓸 수 없습니다. GPT는 OpenRouter로 이용하세요.':
+    'Note: OpenAI\'s own API blocks direct browser calls (CORS), so it can\'t be used directly here. Use GPT models via OpenRouter.',
   '내 Anthropic API 키로 시작': 'Start with your Anthropic API key',
   '서버가 없는 앱이라 본인의 API 키로 브라우저에서 Anthropic에 직접 요청합니다. 키는 이 브라우저에만 저장되고 Anthropic 외 어디로도 전송되지 않으며, 사용량은 본인 계정에 과금됩니다.':
     'This app has no server: your browser calls Anthropic directly with your own API key. The key is stored only in this browser, sent nowhere but Anthropic, and usage is billed to your account.',

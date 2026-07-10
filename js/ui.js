@@ -961,21 +961,142 @@ export function createUI(deps) {
     scene.setLabelValues(map);
   }
 
-  // ---------- AI chat (BYO Anthropic API key, direct browser calls) ----------
-  const AI_KEY_STORE = 'macroscope.apikey';
-  const AI_MODELS = [
-    { id: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
-    { id: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
-    { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
-  ];
+  // ---------- AI chat (BYO API key, direct browser calls) ----------
+  // Only providers whose API allows direct browser CORS are offered (verified
+  // 260711). OpenAI's own API blocks browser CORS, so GPT is reachable only via
+  // an OpenAI-compatible gateway (OpenRouter). Each adapter builds the request
+  // and extracts {text, stop} from SSE `data:` JSON lines.
+  const AI_PROVIDERS = {
+    anthropic: {
+      label: 'Anthropic (Claude)',
+      keyHint: 'sk-ant-...',
+      keyUrl: 'console.anthropic.com',
+      models: [
+        { id: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
+        { id: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
+        { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+      ],
+      validate: (k) => k.startsWith('sk-ant-'),
+      build(sys, msgs, model, key) {
+        return {
+          url: 'https://api.anthropic.com/v1/messages',
+          headers: {
+            'content-type': 'application/json', 'x-api-key': key,
+            'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true',
+          },
+          body: {
+            model, max_tokens: 2048, stream: true, thinking: { type: 'adaptive' },
+            system: [{ type: 'text', text: sys, cache_control: { type: 'ephemeral' } }],
+            messages: msgs.map((m) => ({ role: m.role, content: m.content })),
+          },
+        };
+      },
+      extract(o) {
+        if (o.type === 'content_block_delta' && o.delta && o.delta.type === 'text_delta') return { text: o.delta.text };
+        if (o.type === 'message_delta' && o.delta && o.delta.stop_reason) return { stop: o.delta.stop_reason };
+        return {};
+      },
+    },
+    google: {
+      label: 'Google (Gemini)',
+      keyHint: 'AIza...',
+      keyUrl: 'aistudio.google.com/apikey',
+      models: [
+        { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+        { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+        { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+      ],
+      validate: (k) => k.length > 10,
+      build(sys, msgs, model, key) {
+        return {
+          url: 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model)
+            + ':streamGenerateContent?alt=sse&key=' + encodeURIComponent(key),
+          headers: { 'content-type': 'application/json' },
+          body: {
+            systemInstruction: { parts: [{ text: sys }] },
+            contents: msgs.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+            generationConfig: { maxOutputTokens: 2048 },
+          },
+        };
+      },
+      extract(o) {
+        const cand = o.candidates && o.candidates[0];
+        if (!cand) return {};
+        let text = '';
+        if (cand.content && cand.content.parts) for (const p of cand.content.parts) if (p.text) text += p.text;
+        const out = {};
+        if (text) out.text = text;
+        if (cand.finishReason) out.stop = cand.finishReason;
+        return out;
+      },
+    },
+    openai_compat: {
+      label: 'OpenAI 호환 (OpenRouter · Grok · Groq …)',
+      keyHint: 'sk-... / gsk_...',
+      custom: true,
+      presets: [
+        { id: 'openrouter', label: 'OpenRouter (GPT·Claude·Gemini 등)', base: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini', keyUrl: 'openrouter.ai/keys' },
+        { id: 'xai', label: 'xAI (Grok)', base: 'https://api.x.ai/v1', model: 'grok-3', keyUrl: 'console.x.ai' },
+        { id: 'groq', label: 'Groq', base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile', keyUrl: 'console.groq.com/keys' },
+        { id: 'deepseek', label: 'DeepSeek', base: 'https://api.deepseek.com', model: 'deepseek-chat', keyUrl: 'platform.deepseek.com' },
+        { id: 'mistral', label: 'Mistral', base: 'https://api.mistral.ai/v1', model: 'mistral-large-latest', keyUrl: 'console.mistral.ai/api-keys' },
+        { id: 'custom', label: '직접 입력 (Base URL)', base: '', model: '', keyUrl: '' },
+      ],
+      models: [],
+      validate: (k) => k.length > 8,
+      build(sys, msgs, model, key, baseUrl) {
+        const base = (baseUrl || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
+        return {
+          url: base + '/chat/completions',
+          headers: {
+            'content-type': 'application/json', authorization: 'Bearer ' + key,
+            'HTTP-Referer': location.origin, 'X-Title': 'MacroScope',
+          },
+          body: {
+            model: model || 'openai/gpt-4o-mini', stream: true, max_tokens: 2048,
+            messages: [{ role: 'system', content: sys }, ...msgs.map((m) => ({ role: m.role, content: m.content }))],
+          },
+        };
+      },
+      extract(o) {
+        const ch = o.choices && o.choices[0];
+        if (!ch) return {};
+        const out = {};
+        if (ch.delta && ch.delta.content) out.text = ch.delta.content;
+        if (ch.finish_reason) out.stop = ch.finish_reason;
+        return out;
+      },
+    },
+  };
   const chatLog = []; // {role, text, streaming?, action?}
   let chatBusy = false;
   let chatAbort = null;
   let aiSystemCache = null;
 
-  function getApiKey() { try { return localStorage.getItem(AI_KEY_STORE) || ''; } catch { return ''; } }
-  function setApiKey(k) {
-    try { if (k) localStorage.setItem(AI_KEY_STORE, k); else localStorage.removeItem(AI_KEY_STORE); } catch { /* in-memory only */ }
+  function curProviderId() { return AI_PROVIDERS[prefs.aiProvider] ? prefs.aiProvider : 'anthropic'; }
+  function keyStoreId(p) { return 'macroscope.key.' + p; }
+  function getKey(p) {
+    try {
+      let k = localStorage.getItem(keyStoreId(p)) || '';
+      if (!k && p === 'anthropic') k = localStorage.getItem('macroscope.apikey') || ''; // migrate legacy single-key store
+      return k;
+    } catch { return ''; }
+  }
+  function setKey(p, k) {
+    try {
+      if (k) localStorage.setItem(keyStoreId(p), k); else localStorage.removeItem(keyStoreId(p));
+      if (p === 'anthropic') localStorage.removeItem('macroscope.apikey');
+    } catch { /* in-memory only */ }
+  }
+  function curModel(p) {
+    const stored = prefs.aiModelBy && prefs.aiModelBy[p];
+    if (stored) return stored;
+    const prov = AI_PROVIDERS[p];
+    if (prov.custom) {
+      const preset = prov.presets.find((x) => x.id === (prefs.aiCompatPreset || 'openrouter'));
+      return (preset && preset.model) || '';
+    }
+    return (prov.models[0] && prov.models[0].id) || '';
   }
 
   function buildAiSystem() {
@@ -1098,8 +1219,13 @@ export function createUI(deps) {
 
   async function sendChat(raw) {
     const text = String(raw || '').trim();
-    const key = getApiKey();
+    const p = curProviderId();
+    const prov = AI_PROVIDERS[p];
+    const key = getKey(p);
     if (!key || chatBusy || !text) return;
+    // read live field values so an un-blurred model/base edit still applies
+    const model = ($('#ai-model')?.value || curModel(p)).trim();
+    const baseUrl = prov.custom ? ($('#ai-base')?.value || prefs.aiCompatBase || '') : '';
     chatBusy = true;
     chatLog.push({ role: 'user', text });
     const entry = { role: 'assistant', text: '', streaming: true };
@@ -1120,29 +1246,19 @@ export function createUI(deps) {
 
     chatAbort = new AbortController();
     try {
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        signal: chatAbort.signal,
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': key,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: prefs.aiModel || 'claude-opus-4-8',
-          max_tokens: 2048,
-          stream: true,
-          thinking: { type: 'adaptive' },
-          system: [{ type: 'text', text: buildAiSystem(), cache_control: { type: 'ephemeral' } }],
-          messages: trimmed,
-        }),
+      const req = prov.build(buildAiSystem(), trimmed, model, key, baseUrl);
+      const resp = await fetch(req.url, {
+        method: 'POST', signal: chatAbort.signal,
+        headers: req.headers, body: JSON.stringify(req.body),
       });
       if (!resp.ok) {
+        let detail = '';
+        try { detail = (await resp.text()).slice(0, 200); } catch { /* ignore */ }
         throw new Error(
-          resp.status === 401 ? t('API 키가 올바르지 않습니다. 키를 확인해 주세요.')
+          (resp.status === 401 || resp.status === 403) ? t('API 키가 올바르지 않습니다. 키를 확인해 주세요.')
             : resp.status === 429 ? t('요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.')
-              : t('요청이 실패했습니다') + ' (HTTP ' + resp.status + ')',
+              : resp.status === 404 ? t('모델 이름을 찾을 수 없습니다. 모델 ID를 확인해 주세요.') + ' (' + model + ')'
+                : t('요청이 실패했습니다') + ' (HTTP ' + resp.status + ')' + (detail ? ' ' + detail : ''),
         );
       }
       const reader = resp.body.getReader();
@@ -1156,18 +1272,17 @@ export function createUI(deps) {
         const lines = buf.split('\n');
         buf = lines.pop();
         for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
+          if (!line.startsWith('data:')) continue;
+          const payload = line.slice(5).trim();
+          if (!payload || payload === '[DONE]') continue;
           let evd;
-          try { evd = JSON.parse(line.slice(6)); } catch { continue; }
-          if (evd.type === 'content_block_delta' && evd.delta && evd.delta.type === 'text_delta') {
-            entry.text += evd.delta.text;
-            updateStreamingBubble(entry);
-          } else if (evd.type === 'message_delta' && evd.delta && evd.delta.stop_reason) {
-            stopReason = evd.delta.stop_reason;
-          }
+          try { evd = JSON.parse(payload); } catch { continue; }
+          const d = prov.extract(evd);
+          if (d.text) { entry.text += d.text; updateStreamingBubble(entry); }
+          if (d.stop) stopReason = d.stop;
         }
       }
-      if (stopReason === 'refusal') {
+      if (stopReason === 'refusal' || stopReason === 'content_filter' || stopReason === 'SAFETY') {
         entry.text = (entry.text ? entry.text + '\n\n' : '') + '(' + t('안전상 이 질문에는 답변이 제한되었습니다.') + ')';
       }
       const mAct = entry.text.match(/```map\s*([\s\S]*?)```/);
@@ -1191,52 +1306,109 @@ export function createUI(deps) {
     }
   }
 
+  function providerSelect(p) {
+    const sel = h('select', {
+      class: 'ai-model', 'aria-label': t('AI 제공자'),
+      onchange: (e) => { prefs.aiProvider = e.target.value; savePrefs(); renderPanel(); },
+    });
+    for (const [id, pr] of Object.entries(AI_PROVIDERS)) {
+      const o = h('option', { value: id }, pr.label);
+      if (id === p) o.setAttribute('selected', '');
+      sel.append(o);
+    }
+    return sel;
+  }
+  function modelField(p, host) {
+    const prov = AI_PROVIDERS[p];
+    const dl = h('datalist', { id: 'ai-models' });
+    for (const m of prov.models) dl.append(h('option', { value: m.id }, m.label || m.id));
+    host.append(dl);
+    return h('input', {
+      id: 'ai-model', class: 'ai-model-input', list: 'ai-models', value: curModel(p),
+      placeholder: t('모델 ID'), autocomplete: 'off', 'aria-label': t('모델'),
+      onchange: (e) => { prefs.aiModelBy = prefs.aiModelBy || {}; prefs.aiModelBy[p] = e.target.value.trim(); savePrefs(); },
+    });
+  }
+  function compatKeyUrl() {
+    const pr = AI_PROVIDERS.openai_compat.presets.find((x) => x.id === (prefs.aiCompatPreset || 'openrouter'));
+    return pr ? pr.keyUrl : '';
+  }
+
   function renderAI() {
     const b = els.body;
-    const key = getApiKey();
+    const p = curProviderId();
+    const prov = AI_PROVIDERS[p];
+    const key = getKey(p);
+
     if (!key) {
       b.append(h('div', { class: 'card' },
         h('h3', {}, t('지도와 대화하기')),
         h('p', {}, t('이 지도에 담긴 변수·인과·역사 사례·현재 상황을 아는 AI에게 투자 환경, 비즈니스, 사회 현상 질문을 던져 보세요. 답변과 동시에 관련 인과 경로가 지도에 켜집니다.')),
       ));
-      const input = h('input', {
-        type: 'password', class: 'ai-key-input', placeholder: 'sk-ant-...',
-        'aria-label': 'Anthropic API key', autocomplete: 'off',
+      const setup = h('div', { class: 'card' });
+      setup.append(h('h3', {}, t('AI 제공자와 API 키')));
+      setup.append(h('p', {}, t('서버가 없는 앱이라 본인의 API 키로 브라우저에서 제공자에 직접 요청합니다. 키는 이 브라우저에만 저장되고 해당 제공자 외 어디로도 전송되지 않으며, 사용량은 본인 계정에 과금됩니다.')));
+      setup.append(h('div', { class: 'presets', style: 'margin:8px 0' }, providerSelect(p)));
+
+      if (prov.custom) {
+        const curPreset = prefs.aiCompatPreset || 'openrouter';
+        const presetSel = h('select', {
+          class: 'ai-model', 'aria-label': t('서비스'),
+          onchange: (e) => {
+            prefs.aiCompatPreset = e.target.value;
+            const pr = prov.presets.find((x) => x.id === e.target.value);
+            if (pr && pr.id !== 'custom') {
+              prefs.aiCompatBase = pr.base;
+              prefs.aiModelBy = prefs.aiModelBy || {}; prefs.aiModelBy.openai_compat = pr.model;
+            }
+            savePrefs(); renderPanel();
+          },
+        });
+        for (const pr of prov.presets) {
+          const o = h('option', { value: pr.id }, pr.label);
+          if (pr.id === curPreset) o.setAttribute('selected', '');
+          presetSel.append(o);
+        }
+        setup.append(h('div', { class: 'presets', style: 'margin-bottom:8px' }, presetSel));
+        if (curPreset === 'custom') {
+          setup.append(h('input', {
+            id: 'ai-base', class: 'ai-key-input', style: 'margin-bottom:8px',
+            placeholder: 'https://api.example.com/v1', value: prefs.aiCompatBase || '', 'aria-label': 'Base URL',
+            onchange: (e) => { prefs.aiCompatBase = e.target.value.trim(); savePrefs(); },
+          }));
+        }
+      }
+
+      setup.append(modelField(p, setup));
+      const keyInput = h('input', {
+        type: 'password', class: 'ai-key-input', style: 'margin-top:8px',
+        placeholder: prov.keyHint, 'aria-label': 'API key', autocomplete: 'off',
       });
-      input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') saveKey(); });
-      const saveKey = () => {
-        const v = input.value.trim();
-        if (!v.startsWith('sk-ant-')) { toast(t('sk-ant- 로 시작하는 키를 입력해 주세요')); return; }
-        setApiKey(v);
-        renderPanel();
-        announce(t('AI 대화가 준비되었습니다'));
+      const saveK = () => {
+        const v = keyInput.value.trim();
+        if (!v || !prov.validate(v)) { toast(t('키 형식이 올바르지 않습니다')); return; }
+        setKey(p, v); renderPanel(); announce(t('AI 대화가 준비되었습니다'));
       };
-      b.append(h('div', { class: 'card' },
-        h('h3', {}, t('내 Anthropic API 키로 시작')),
-        h('p', {}, t('서버가 없는 앱이라 본인의 API 키로 브라우저에서 Anthropic에 직접 요청합니다. 키는 이 브라우저에만 저장되고 Anthropic 외 어디로도 전송되지 않으며, 사용량은 본인 계정에 과금됩니다.')),
-        input,
-        h('button', { class: 'btn primary', style: 'margin-top:8px', onclick: saveKey }, t('저장하고 시작')),
-        h('p', { class: 'rd-src', style: 'margin-top:8px' }, t('키 발급') + ': console.anthropic.com → API Keys'),
-      ));
+      keyInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') saveK(); });
+      setup.append(keyInput);
+      setup.append(h('button', { class: 'btn primary', style: 'margin-top:8px', onclick: saveK }, t('저장하고 시작')));
+      const keyUrl = prov.custom ? compatKeyUrl() : prov.keyUrl;
+      if (keyUrl) setup.append(h('p', { class: 'rd-src', style: 'margin-top:8px' }, t('키 발급') + ': ' + keyUrl));
+      if (prov.custom) setup.append(h('p', { class: 'rd-src' }, t('참고: OpenAI 본체 API는 브라우저 직접 호출을 막아(CORS) 이 앱에서 직접 쓸 수 없습니다. GPT는 OpenRouter로 이용하세요.')));
+      b.append(setup);
       return;
     }
 
-    const modelSel = h('select', { class: 'ai-model', 'aria-label': t('모델') });
-    for (const m of AI_MODELS) {
-      const o = h('option', { value: m.id }, m.label);
-      if ((prefs.aiModel || 'claude-opus-4-8') === m.id) o.setAttribute('selected', '');
-      modelSel.append(o);
-    }
-    modelSel.addEventListener('change', () => { prefs.aiModel = modelSel.value; savePrefs(); });
     b.append(h('div', { class: 'presets ai-toolbar' },
-      modelSel,
+      providerSelect(p),
+      modelField(p, b),
       h('button', { class: 'preset-btn', onclick: () => {
         chatLog.length = 0;
         scene?.clearHighlight();
         scene?.setNodeTints(null);
         renderPanel();
       } }, t('대화 지우기')),
-      h('button', { class: 'preset-btn', onclick: () => { setApiKey(''); renderPanel(); } }, t('키 삭제')),
+      h('button', { class: 'preset-btn', onclick: () => { setKey(p, ''); renderPanel(); } }, t('키 삭제')),
     ));
 
     const log = h('div', { id: 'ai-log' });
