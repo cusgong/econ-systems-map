@@ -177,6 +177,14 @@ export const UI_DICT_EN = {
   '금색 강조 = 국면 따라 방향 반전 가능': 'Gold = sign can flip with the regime',
   '레버 노드 위아래 드래그 = 즉석 충격': 'Drag a lever node up/down = instant shock',
 
+  // v2.1: exploration-centric hub
+  '시뮬레이터 열기': 'Open the simulator',
+  '금리·유가·환율 레버를 움직여 파급을 실험합니다. 지도에서 고리 달린 레버 노드를 위아래로 잡아끌어도 됩니다.':
+    'Move the rate, oil, and FX levers to experiment with ripples. You can also grab a ringed lever node on the map and drag it up or down.',
+  '한 곳에서: 탐색 · 지금 · AI': 'One place: Explore · Now · AI',
+  '탐색 한 곳에서 다 이뤄집니다. 변수를 고르면 관련 역사 사례·피드백 루프가 그 자리에서 열리고, 시나리오 시뮬레이터도 탐색 안의 뷰로 지도를 벗어나지 않고 열립니다. 지도에서 고리 달린 레버 노드를 위아래로 잡아끌면 즉석 충격도 줄 수 있습니다. 지금 탭은 오늘의 경제를 지도에 비추고, AI 탭에서는 이 지도를 아는 AI와 대화하며 답변의 근거 경로를 바로 봅니다.':
+    'It all happens in Explore. Pick a variable and its related historical cases and feedback loops open right there; the scenario simulator opens as a view inside Explore too, without ever leaving the map. Grab a ringed lever node and drag it up or down for an instant shock. The Now tab projects today\'s economy onto the map, and the AI tab lets you talk to an AI that knows this map and see the reasoning paths light up as it answers.',
+
   // v2: AI chat
   '지도와 대화하기': 'Talk to the map',
   '이 지도에 담긴 변수·인과·역사 사례·현재 상황을 아는 AI에게 투자 환경, 비즈니스, 사회 현상 질문을 던져 보세요. 답변과 동시에 관련 인과 경로가 지도에 켜집니다.':

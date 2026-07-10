@@ -159,8 +159,10 @@ export function createUI(deps) {
     state.caseId = null;
     state.phaseIdx = 0;
     state.nowThemeId = null;
+    // sim/cases/loops are sub-views OF explore now — they light the 탐색 tab.
+    const tabMode = (mode === 'now' || mode === 'ai') ? mode : 'explore';
     document.querySelectorAll('.mode-tab').forEach((b) => {
-      b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
+      b.setAttribute('aria-pressed', String(b.dataset.mode === tabMode));
     });
     els.title.textContent = PANEL_TITLES[mode];
     scene?.clearHighlight();
@@ -198,6 +200,25 @@ export function createUI(deps) {
     else if (state.mode === 'ai') renderAI();
     else renderLoops();
     if (fkey) els.body.querySelector('[data-fkey="' + fkey + '"]')?.focus();
+  }
+
+  // ---------- browsable card builders (shared by Explore home + sub-views) ----------
+  function caseCardEl(c) {
+    return h('button', { class: 'case-card', onclick: () => { setMode('cases'); openCase(c.id); } },
+      h('div', { class: 'cs-period' }, c.period),
+      h('div', { class: 'cs-title' }, L(c.title)),
+      h('div', { class: 'cs-sub' }, L(c.phases[0].title)),
+    );
+  }
+  function loopCardEl(lp) {
+    const cyc = lp.nodes.map(nodeName).join(' → ') + ' → ' + nodeName(lp.nodes[0]);
+    return h('button', { class: 'case-card', onclick: () => { setMode('loops'); openLoop(lp.id); } },
+      h('div', { class: 'h-node' },
+        h('span', { class: 'cs-title' }, L(lp.name)),
+        h('span', { class: 'loop-type ' + lp.type }, lp.type === 'reinforcing' ? t('강화 루프') + ' ⟳' : t('균형 루프') + ' ⇄'),
+      ),
+      h('div', { class: 'loop-cycle' }, cyc),
+    );
   }
 
   // ---------- explore ----------
@@ -250,6 +271,22 @@ export function createUI(deps) {
       quick.append(row);
       quick.append(h('p', {}, t('드래그로 회전, 휠이나 두 손가락으로 확대·축소할 수 있습니다.')));
       b.append(quick);
+
+      // scenario simulator — a view within Explore, not a separate tab
+      b.append(h('div', { class: 'card' },
+        h('h3', {}, t('시나리오 시뮬레이터')),
+        h('p', {}, t('금리·유가·환율 레버를 움직여 파급을 실험합니다. 지도에서 고리 달린 레버 노드를 위아래로 잡아끌어도 됩니다.')),
+        h('div', { class: 'presets', style: 'margin-top:8px' },
+          h('button', { class: 'btn primary sm', 'data-fkey': 'open-sim', onclick: () => setMode('sim') }, '🎛 ' + t('시뮬레이터 열기'))),
+      ));
+
+      // history cases — browse and play on the map, in place
+      b.append(h('div', { class: 'order-h' }, h('span', { class: 'n' }, '▶'), t('역사 사례')));
+      for (const c of cases) b.append(caseCardEl(c));
+
+      // feedback loops — the heart of systems thinking, browsable here
+      b.append(h('div', { class: 'order-h' }, h('span', { class: 'n' }, '⟳'), t('피드백 루프')));
+      for (const lp of loops) b.append(loopCardEl(lp));
 
       const catCard = h('div', { class: 'card' }, h('h3', {}, t('변수 분류')));
       for (const c of categories) {
@@ -410,7 +447,8 @@ export function createUI(deps) {
 
   function renderSim() {
     const b = els.body;
-    b.append(h('div', { class: 'card' },
+    b.append(h('button', { class: 'btn sm', onclick: () => setMode('explore') }, '← ' + t('탐색')));
+    b.append(h('div', { class: 'card', style: 'margin-top:10px' },
       h('h3', {}, t('시나리오 시뮬레이터')),
       h('p', {}, t('레버를 움직이면 충격이 연쇄 경로를 타고 번지는 모습을 봅니다. 숫자는 예측이 아니라 방향과 상대적 세기입니다.')),
     ));
@@ -513,24 +551,20 @@ export function createUI(deps) {
   function renderCases() {
     const b = els.body;
     if (!state.caseId) {
-      b.append(h('div', { class: 'card' },
+      // reachable only via a #/cases deep link now; the browsable list lives on the Explore home
+      b.append(h('button', { class: 'btn sm', onclick: () => setMode('explore') }, '← ' + t('탐색')));
+      b.append(h('div', { class: 'card', style: 'margin-top:10px' },
         h('h3', {}, t('역사 사례 재생')),
         h('p', {}, t('과거의 큰 사건을 원인 → 확산 → 정책 대응 → 시장 심리 → 결과의 5단계로 지도 위에 재생합니다.')),
       ));
-      for (const c of cases) {
-        b.append(h('button', { class: 'case-card', onclick: () => openCase(c.id) },
-          h('div', { class: 'cs-period' }, c.period),
-          h('div', { class: 'cs-title' }, L(c.title)),
-          h('div', { class: 'cs-sub' }, L(c.phases[0].title)),
-        ));
-      }
+      for (const c of cases) b.append(caseCardEl(c));
       return;
     }
     const c = cases.find((x) => x.id === state.caseId);
     if (!c) { state.caseId = null; renderCases(); return; }
     const phase = c.phases[state.phaseIdx];
 
-    b.append(h('button', { class: 'btn sm', onclick: () => { closeCase(); } }, '← ' + t('사례 목록')));
+    b.append(h('button', { class: 'btn sm', onclick: () => { closeCase(); } }, '← ' + t('탐색')));
     b.append(h('div', { class: 'h-node', style: 'margin-top:10px' },
       h('span', { class: 'nm' }, L(c.title)),
       h('span', { class: 'badge' }, c.period),
@@ -587,11 +621,8 @@ export function createUI(deps) {
   function closeCase() {
     stopAutoplay();
     state.caseId = null;
-    scene?.clearHighlight();
-    scene?.setNodeTints(null);
-    scene?.resetView();
-    renderPanel();
-    syncHash(true);
+    // return to the Explore lens: to the variable you came from, or the home hub
+    setMode('explore');
   }
   function gotoPhase(i) {
     const c = cases.find((x) => x.id === state.caseId);
@@ -638,27 +669,18 @@ export function createUI(deps) {
   function renderLoops() {
     const b = els.body;
     if (!state.loopId) {
-      b.append(h('div', { class: 'card' },
+      // reachable only via a #/loops deep link now; the browsable list lives on the Explore home
+      b.append(h('button', { class: 'btn sm', onclick: () => setMode('explore') }, '← ' + t('탐색')));
+      b.append(h('div', { class: 'card', style: 'margin-top:10px' },
         h('h3', {}, t('피드백 루프')),
         h('p', {}, t('시스템 사고의 핵심은 한 방향 화살표가 아니라 되먹임 고리입니다. 강화 루프는 눈덩이처럼 스스로 커지고, 균형 루프는 온도조절기처럼 되돌립니다.')),
       ));
-      for (const lp of loops) {
-        const edges = loopEdges(graph, lp.nodes);
-        const cyc = lp.nodes.map(nodeName).join(' → ') + ' → ' + nodeName(lp.nodes[0]);
-        b.append(h('button', { class: 'case-card', onclick: () => openLoop(lp.id) },
-          h('div', { class: 'h-node' },
-            h('span', { class: 'cs-title' }, L(lp.name)),
-            h('span', { class: 'loop-type ' + lp.type }, lp.type === 'reinforcing' ? t('강화 루프') + ' ⟳' : t('균형 루프') + ' ⇄'),
-          ),
-          h('div', { class: 'loop-cycle' }, cyc),
-          edges ? null : h('div', { class: 'cs-sub' }, '⚠ broken'),
-        ));
-      }
+      for (const lp of loops) b.append(loopCardEl(lp));
       return;
     }
     const lp = loops.find((x) => x.id === state.loopId);
     if (!lp) { state.loopId = null; renderLoops(); return; }
-    b.append(h('button', { class: 'btn sm', onclick: closeLoop }, '← ' + t('루프 목록')));
+    b.append(h('button', { class: 'btn sm', onclick: closeLoop }, '← ' + t('탐색')));
     b.append(h('div', { class: 'h-node', style: 'margin-top:10px' },
       h('span', { class: 'nm' }, L(lp.name)),
       h('span', { class: 'loop-type ' + lp.type }, lp.type === 'reinforcing' ? t('강화 루프') + ' ⟳' : t('균형 루프') + ' ⇄'),
@@ -674,10 +696,8 @@ export function createUI(deps) {
 
   function closeLoop() {
     state.loopId = null;
-    scene?.clearHighlight();
-    scene?.resetView();
-    renderPanel();
-    syncHash(true);
+    // return to the Explore lens (variable you came from, or home hub)
+    setMode('explore');
   }
 
   function openLoop(id) {
@@ -731,8 +751,8 @@ export function createUI(deps) {
       svg: `<svg width="220" height="90" viewBox="0 0 220 90"><circle cx="25" cy="45" r="10" fill="#4fd8ff"/><circle cx="95" cy="30" r="8" fill="#9d8cff" opacity=".9"/><circle cx="165" cy="55" r="7" fill="#6fe38a" opacity=".8"/><path d="M35 42 L85 32" stroke="#7deeff" stroke-width="2.5"/><path d="M103 33 L156 52" stroke="#7deeff" stroke-width="1.8" opacity=".7"/><text x="52" y="22" fill="#aabfdd" font-size="10">${t('1차')}</text><text x="125" y="60" fill="#aabfdd" font-size="10">${t('2차')}</text></svg>`,
     },
     {
-      title: t('시뮬레이터 · 사례 · 루프'),
-      body: t('지금 탭은 오늘의 경제 상황(출처·기준일 포함)을 지도 위에 색으로 비춥니다. 지도에서 고리 달린 레버 노드를 위아래로 드래그하면 즉석에서 충격을 줄 수 있고, 역사 사례·루프 탭이 이어집니다. AI 탭에서는 이 지도를 아는 AI와 대화하며 답변의 근거 경로를 지도에서 바로 볼 수 있습니다.'),
+      title: t('한 곳에서: 탐색 · 지금 · AI'),
+      body: t('탐색 한 곳에서 다 이뤄집니다. 변수를 고르면 관련 역사 사례·피드백 루프가 그 자리에서 열리고, 시나리오 시뮬레이터도 탐색 안의 뷰로 지도를 벗어나지 않고 열립니다. 지도에서 고리 달린 레버 노드를 위아래로 잡아끌면 즉석 충격도 줄 수 있습니다. 지금 탭은 오늘의 경제를 지도에 비추고, AI 탭에서는 이 지도를 아는 AI와 대화하며 답변의 근거 경로를 바로 봅니다.'),
       svg: `<svg width="220" height="90" viewBox="0 0 220 90"><rect x="20" y="38" width="180" height="6" rx="3" fill="#1b2b4d"/><rect x="20" y="38" width="120" height="6" rx="3" fill="#54e0ff"/><circle cx="140" cy="41" r="9" fill="#eaf3ff"/><text x="20" y="70" fill="#aabfdd" font-size="10">${nodeName('policy_rate')} +75%</text></svg>`,
     },
     {
@@ -1503,14 +1523,14 @@ export function createUI(deps) {
       }
     });
 
-    // home / reset-context button
+    // home button: return to the Explore hub (fresh start screen)
     $('#btn-home').addEventListener('click', () => {
-      if (state.mode === 'cases' && state.caseId) closeCase();
-      else if (state.mode === 'loops' && state.loopId) closeLoop();
-      else if (state.mode === 'now' && state.nowThemeId) closeTheme();
-      else if (state.mode === 'explore' && state.selectedId) selectNode(null);
-      else if (state.mode === 'sim' || state.mode === 'now') scene?.resetView();
-      else { scene?.clearHighlight(); scene?.setNodeTints(null); scene?.resetView(); }
+      stopAutoplay();
+      state.selectedId = null;
+      state.caseId = null;
+      state.loopId = null;
+      state.nowThemeId = null;
+      setMode('explore', { force: true });
     });
 
     // deep links: restore on back/forward
@@ -1546,8 +1566,9 @@ export function createUI(deps) {
       }
       if (ev.key === 'Escape') {
         if (state.mode === 'explore' && state.selectedId) selectNode(null);
-        else if (state.mode === 'cases' && state.caseId) closeCase();
-        else if (state.mode === 'loops' && state.loopId) closeLoop();
+        else if (state.mode === 'cases') closeCase();
+        else if (state.mode === 'loops') closeLoop();
+        else if (state.mode === 'sim') setMode('explore');
         else if (state.mode === 'now' && state.nowThemeId) closeTheme();
       }
       if (state.mode === 'cases' && state.caseId) {
