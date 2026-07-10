@@ -129,9 +129,9 @@ export const UI_DICT_EN = {
   '2차·3차 파급을 따라가기': 'Follow 2nd and 3rd-order ripples',
   '변수를 클릭하면 직접 효과(1차)만이 아니라 한 다리, 두 다리 건너의 파급(2차·3차)까지 경로가 차례로 켜집니다. 화살표 방향과 시차, 확실성을 함께 확인하세요.':
     'Click a variable and the map lights up not just direct effects but ripples one and two steps removed. Check direction, time lag, and certainty as you go.',
-  '시뮬레이터 · 사례 · 루프': 'Now · Simulator · Cases · Loops',
-  '지금 탭은 오늘의 경제 상황(출처·기준일 포함)을 지도 위에 색으로 비춥니다. 시뮬레이터에서 금리·유가·환율 레버를 움직이면 파급 경로가 실시간으로 바뀌고, 역사 사례 탭은 1970년대 인플레이션, 1997 외환위기, 2008 금융위기를 5단계로 재생하며, 루프 탭은 되먹임 고리를 보여줍니다.':
-    'The Now tab projects today\'s economic conditions (with sources and dates) onto the map. In the simulator, move the rate, oil, and FX levers and watch the ripple change live. The Cases tab replays the 1970s inflation, the 1997 crisis, and 2008 in five acts; the Loops tab shows feedback cycles.',
+  '시뮬레이터 · 사례 · 루프': 'Now · Simulator · Cases · AI',
+  '지금 탭은 오늘의 경제 상황(출처·기준일 포함)을 지도 위에 색으로 비춥니다. 지도에서 고리 달린 레버 노드를 위아래로 드래그하면 즉석에서 충격을 줄 수 있고, 역사 사례·루프 탭이 이어집니다. AI 탭에서는 이 지도를 아는 AI와 대화하며 답변의 근거 경로를 지도에서 바로 볼 수 있습니다.':
+    'The Now tab projects today\'s conditions (with sources and dates) onto the map. Grab any ringed lever node and drag it up or down for an instant shock; the Cases and Loops tabs follow. In the AI tab, talk to an AI that knows this map and watch the reasoning paths light up as it answers.',
   '읽는 법 요약': 'How to read the map',
   '선의 색 = 방향, 흐르는 점 = 인과의 흐름과 강도, 점선 = 확실성 낮음. 이 지도는 교과서 메커니즘의 단순화 모형이며 예측 도구가 아닙니다. 단축키: Ctrl+K 또는 / 검색, Esc 닫기·선택 해제, ← → 사례 단계 이동. 경로 속 변수 이름을 클릭하면 그 변수로 바로 이동합니다.':
     'Line color = direction, flowing dots = causal flow and strength, dashed = lower certainty. This map simplifies textbook mechanisms and is not a forecasting tool. Shortcuts: Ctrl+K or / to search, Esc to close or deselect, left/right arrows to step through a case. Click any variable name inside a path to jump straight to it.',
@@ -170,6 +170,48 @@ export const UI_DICT_EN = {
   '보합': 'flat',
   '이 상황판은 자동 갱신되지 않는 수동 스냅샷입니다. 각 항목의 출처와 기준일을 함께 표기했습니다.':
     'This board is a manually updated snapshot, not a live feed. Every item carries its source and data date.',
+
+  // v2: regime flips, cross-links, instrument strip
+  '국면 반전': 'Regime flip',
+  '지금 탭에서 전체 상황 보기': 'See the full board in the Now tab',
+  '금색 강조 = 국면 따라 방향 반전 가능': 'Gold = sign can flip with the regime',
+  '레버 노드 위아래 드래그 = 즉석 충격': 'Drag a lever node up/down = instant shock',
+
+  // v2: AI chat
+  '지도와 대화하기': 'Talk to the map',
+  '이 지도에 담긴 변수·인과·역사 사례·현재 상황을 아는 AI에게 투자 환경, 비즈니스, 사회 현상 질문을 던져 보세요. 답변과 동시에 관련 인과 경로가 지도에 켜집니다.':
+    'Ask an AI that knows this map\'s variables, causal links, historical cases, and current conditions about investing environments, business, or social questions. As it answers, the relevant causal paths light up on the map.',
+  '내 Anthropic API 키로 시작': 'Start with your Anthropic API key',
+  '서버가 없는 앱이라 본인의 API 키로 브라우저에서 Anthropic에 직접 요청합니다. 키는 이 브라우저에만 저장되고 Anthropic 외 어디로도 전송되지 않으며, 사용량은 본인 계정에 과금됩니다.':
+    'This app has no server: your browser calls Anthropic directly with your own API key. The key is stored only in this browser, sent nowhere but Anthropic, and usage is billed to your account.',
+  '저장하고 시작': 'Save & start',
+  '키 발급': 'Get a key',
+  'sk-ant- 로 시작하는 키를 입력해 주세요': 'Enter a key that starts with sk-ant-',
+  'AI 대화가 준비되었습니다': 'AI chat is ready',
+  '모델': 'Model',
+  '대화 지우기': 'Clear chat',
+  '키 삭제': 'Remove key',
+  '무엇이든 물어보세요. 답변의 근거가 되는 인과 경로가 지도에 함께 켜지고, 관련 역사 사례로 바로 건너갈 수 있습니다.':
+    'Ask anything. The causal paths behind each answer light up on the map, and you can jump straight to related historical cases.',
+  '금리가 오르면 왜 주가가 떨어지나요? 반대로 호재가 되는 경우도 있나요?':
+    'Why do stocks fall when rates rise? Are there regimes where it\'s good news instead?',
+  '원화 약세가 수입 원자재를 쓰는 사업에 미치는 영향을 경로로 보여주세요.':
+    'Show me, as a causal path, how a weak won hits a business that imports raw materials.',
+  '지금의 AI 반도체 붐은 2000년 닷컴 버블과 무엇이 같고 무엇이 다른가요?':
+    'How does today\'s AI chip boom compare with the 2000 dot-com bubble?',
+  '예: 지금 금리가 내리면 부동산은 어떻게 되나요?': 'e.g. If rates fall now, what happens to housing?',
+  '질문 입력': 'Type a question',
+  '중지': 'Stop',
+  '보내기': 'Send',
+  '생성 중…': 'Generating…',
+  '교육 목적 도구입니다. 투자 조언이 아니며, 답변은 부정확할 수 있습니다.':
+    'An educational tool. Not investment advice; answers may be inaccurate.',
+  '지도에 표시': 'Show on map',
+  'API 키가 올바르지 않습니다. 키를 확인해 주세요.': 'Invalid API key. Please check it.',
+  '요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.': 'Too many requests. Try again shortly.',
+  '요청이 실패했습니다': 'Request failed',
+  '안전상 이 질문에는 답변이 제한되었습니다.': 'This question was declined for safety reasons.',
+  '중단됨': 'stopped',
 
   // toasts + fallbacks
   '모션을 줄였습니다': 'Motion reduced',

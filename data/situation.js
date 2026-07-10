@@ -187,7 +187,7 @@ export const SITUATION = {
       },
       nodes: ['tech', 'exports', 'earnings', 'stocks', 'gdp'],
       edges: [['tech', 'earnings'], ['exports', 'earnings'], ['earnings', 'stocks'], ['exports', 'gdp'], ['tech', 'gdp']],
-      relatedCase: null,
+      relatedCase: 'dotcom-bubble-2000',
       relatedLoop: 'growth_engine',
       sources: [
         '산업통상자원부 수출입 동향 (2026-07-01): 6월 수출 1,022.5억 달러, 반도체 +199.5%',

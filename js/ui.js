@@ -142,13 +142,14 @@ export function createUI(deps) {
     meta.append(h('span', { class: 'badge', title: t('영향 강도') }, strengthDots(e.strength)));
     meta.append(h('span', { class: 'badge' }, '⏱ ' + L(LAG_LABELS[e.lag])));
     meta.append(h('span', { class: 'badge conf-' + e.confidence }, t('확실성') + ': ' + L(CONF_LABELS[e.confidence])));
+    if (e.flip) meta.append(h('span', { class: 'badge flip' }, '⇄ ' + t('국면 반전')));
     meta.append(h('span', { class: 'badge' }, SOURCE_NAMES[e.source] ? (window.I18n.lang === 'ko' ? SOURCE_NAMES[e.source] : e.source) : e.source));
     for (const x of extra) meta.append(x);
     return meta;
   }
 
   // ---------- mode switching ----------
-  const PANEL_TITLES = { explore: 'EXPLORE', now: 'NOW', sim: 'SIMULATOR', cases: 'CASE REPLAY', loops: 'FEEDBACK LOOPS' };
+  const PANEL_TITLES = { explore: 'EXPLORE', now: 'NOW', sim: 'SIMULATOR', cases: 'CASE REPLAY', loops: 'FEEDBACK LOOPS', ai: 'ASK AI' };
 
   function setMode(mode, opts = {}) {
     if (state.mode === mode && !opts.force) return;
@@ -194,6 +195,7 @@ export function createUI(deps) {
     else if (state.mode === 'now') renderNow();
     else if (state.mode === 'sim') renderSim();
     else if (state.mode === 'cases') renderCases();
+    else if (state.mode === 'ai') renderAI();
     else renderLoops();
     if (fkey) els.body.querySelector('[data-fkey="' + fkey + '"]')?.focus();
   }
@@ -272,6 +274,30 @@ export function createUI(deps) {
     const d = descById.get(n.id);
     if (d) b.append(h('p', { class: 'desc' }, L(d)));
 
+    // NOW instrument strip: what this variable reads today (tap -> NOW board)
+    const rd = situation.readings.find((r) => r.node === n.id);
+    if (rd) {
+      b.append(h('button', { class: 'now-strip', onclick: () => setMode('now'), title: t('지금 탭에서 전체 상황 보기') },
+        h('span', { class: 'asof-chip' }, t('지금') + ' ' + L(rd.value) + ' ' + trendGlyph(rd.trend)),
+        h('span', { class: 'ns-note' }, L(rd.note)),
+      ));
+    }
+
+    // this variable's history & loops: cross-links so exploring flows into cases
+    const relLoops = loops.filter((lp) => lp.nodes.includes(n.id));
+    const relCases = cases.filter((c) => c.phases.some((p) =>
+      p.focusNodes.includes(n.id) || p.activeEdges.some(([f, tt]) => f === n.id || tt === n.id)));
+    if (relLoops.length || relCases.length) {
+      const row = h('div', { class: 'presets rel-row' });
+      for (const lp of relLoops) {
+        row.append(h('button', { class: 'preset-btn', onclick: () => { setMode('loops'); openLoop(lp.id); } }, '⟳ ' + L(lp.name)));
+      }
+      for (const c of relCases) {
+        row.append(h('button', { class: 'preset-btn', onclick: () => { setMode('cases'); openCase(c.id); } }, '▶ ' + L(c.title)));
+      }
+      b.append(row);
+    }
+
     // direction + assumption + depth controls
     const segDir = h('div', { class: 'seg', role: 'group', 'aria-label': t('탐색 방향') },
       h('button', { 'data-fkey': 'dir-down', 'aria-pressed': String(state.dir === 'down'), onclick: () => { state.dir = 'down'; applyExploreHighlight(); renderPanel(); } }, t('영향 보기') + ' →'),
@@ -336,13 +362,19 @@ export function createUI(deps) {
     row.append(h('div', { class: 'mech' }, L(lastEdge.mech)));
     const noteEl = lastEdge.note ? h('div', { class: 'mech', style: 'color:var(--warn)' }, '※ ' + L(lastEdge.note)) : null;
     if (noteEl) noteEl.style.display = 'none';
+    const flipEl = lastEdge.flip
+      ? h('div', { class: 'mech', style: 'color:#ffdf8e' }, '⇄ ' + t('국면 반전') + ': ' + L(lastEdge.flip))
+      : null;
+    if (flipEl) flipEl.style.display = 'none';
     row.append(edgeBadges(lastEdge));
     if (noteEl) row.append(noteEl);
+    if (flipEl) row.append(flipEl);
     row.addEventListener('click', () => {
       const expanded = row.getAttribute('aria-expanded') === 'true';
       document.querySelectorAll('.fx-row[aria-expanded="true"]').forEach((x) => x.setAttribute('aria-expanded', 'false'));
       row.setAttribute('aria-expanded', String(!expanded));
       if (noteEl) noteEl.style.display = expanded ? 'none' : '';
+      if (flipEl) flipEl.style.display = expanded ? 'none' : '';
       // highlight just this path
       const nodeOrders = new Map(info.path.map((pid, i) => [pid, Math.max(1, i)]));
       const edgeOrders = new Map(info.edges.map((e, i) => [edgeKey(e), i + 1]));
@@ -675,6 +707,8 @@ export function createUI(deps) {
     lb.append(row(h('span', {}, '◎'), t('고리 달린 노드 = 시뮬레이터 레버')));
     lb.append(row(h('span', { class: 'lg-dot', style: 'background:var(--up)' }), t('상승 압력')));
     lb.append(row(h('span', { class: 'lg-dot', style: 'background:var(--down)' }), t('하락 압력')));
+    lb.append(row(h('span', { class: 'lg-line', style: 'border-color:#ffdf8e' }), t('금색 강조 = 국면 따라 방향 반전 가능')));
+    lb.append(row(h('span', {}, '⇅'), t('레버 노드 위아래 드래그 = 즉석 충격')));
     lb.append(row(h('span', {}, '↕'), t('높이 = 심리·기대(위) ↔ 실물·원자재(아래)')));
     lb.append(row(h('span', {}, '⊙'), t('중심에서 멀수록 해외·글로벌 변수')));
     const cats = h('div', { class: 'lg-cats' });
@@ -698,7 +732,7 @@ export function createUI(deps) {
     },
     {
       title: t('시뮬레이터 · 사례 · 루프'),
-      body: t('지금 탭은 오늘의 경제 상황(출처·기준일 포함)을 지도 위에 색으로 비춥니다. 시뮬레이터에서 금리·유가·환율 레버를 움직이면 파급 경로가 실시간으로 바뀌고, 역사 사례 탭은 1970년대 인플레이션, 1997 외환위기, 2008 금융위기를 5단계로 재생하며, 루프 탭은 되먹임 고리를 보여줍니다.'),
+      body: t('지금 탭은 오늘의 경제 상황(출처·기준일 포함)을 지도 위에 색으로 비춥니다. 지도에서 고리 달린 레버 노드를 위아래로 드래그하면 즉석에서 충격을 줄 수 있고, 역사 사례·루프 탭이 이어집니다. AI 탭에서는 이 지도를 아는 AI와 대화하며 답변의 근거 경로를 지도에서 바로 볼 수 있습니다.'),
       svg: `<svg width="220" height="90" viewBox="0 0 220 90"><rect x="20" y="38" width="180" height="6" rx="3" fill="#1b2b4d"/><rect x="20" y="38" width="120" height="6" rx="3" fill="#54e0ff"/><circle cx="140" cy="41" r="9" fill="#eaf3ff"/><text x="20" y="70" fill="#aabfdd" font-size="10">${nodeName('policy_rate')} +75%</text></svg>`,
     },
     {
@@ -879,6 +913,364 @@ export function createUI(deps) {
       ' ', h('button', { class: 'btn sm', onclick: openSources }, t('출처와 한계')))));
   }
 
+  // ---------- lever drag-to-shock (grab a lever node, pull up/down) ----------
+  function onLeverDrag(id, v) {
+    if (!scene) return;
+    const preview = { ...state.simShocks, [id]: v };
+    const res = propagate(graph, preview);
+    const tint = new Map();
+    for (const [k, val] of Object.entries(preview)) if (val) tint.set(k, val);
+    for (const r of res) tint.set(r.id, r.value);
+    scene.setNodeTints(tint);
+  }
+  function onLeverDragEnd(id, v) {
+    state.simShocks[id] = v;
+    announce(nodeName(id) + ' ' + fmtShock(v));
+    if (state.mode !== 'sim') setMode('sim', { force: true });
+    else { applySimTints(); renderPanel(); syncHash(false); }
+  }
+
+  // ---------- key-variable instrument values on 3D labels ----------
+  const INSTRUMENT_NODES = ['policy_rate', 'fed_rate', 'fx', 'oil', 'cpi', 'stocks'];
+  function applyLabelValues() {
+    if (!scene) return;
+    const map = new Map();
+    for (const r of situation.readings) {
+      if (INSTRUMENT_NODES.includes(r.node)) map.set(r.node, L(r.value));
+    }
+    scene.setLabelValues(map);
+  }
+
+  // ---------- AI chat (BYO Anthropic API key, direct browser calls) ----------
+  const AI_KEY_STORE = 'macroscope.apikey';
+  const AI_MODELS = [
+    { id: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
+    { id: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
+    { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+  ];
+  const chatLog = []; // {role, text, streaming?, action?}
+  let chatBusy = false;
+  let chatAbort = null;
+  let aiSystemCache = null;
+
+  function getApiKey() { try { return localStorage.getItem(AI_KEY_STORE) || ''; } catch { return ''; } }
+  function setApiKey(k) {
+    try { if (k) localStorage.setItem(AI_KEY_STORE, k); else localStorage.removeItem(AI_KEY_STORE); } catch { /* in-memory only */ }
+  }
+
+  function buildAiSystem() {
+    if (aiSystemCache) return aiSystemCache;
+    const s = [];
+    s.push('당신은 "매크로스코프(MacroScope)"라는 인터랙티브 3D 경제 인과관계 지도 웹앱에 내장된 경제 교육 조수입니다.');
+    s.push('역할: 사용자의 투자·비즈니스·사회과학 질문을 이 지도의 변수와 인과 경로로 풀어 설명합니다. 쉬운 언어(중학생 이해 가능), 메커니즘과 조건 중심. 예측·투자 조언·매수매도 판단은 절대 하지 않고, 대신 "어떤 경로가 어느 방향으로 작동하는지"를 설명합니다.');
+    s.push('답변 언어: 아래 앱 상태의 lang을 따릅니다 (ko=한국어 합니다체, en=영어). 길이: 보통 4~8문장, 필요시 짧은 목록. 지도에 없는 연결을 쓸 때는 "지도 밖의 요인"이라고 명시합니다.');
+    s.push('부호가 국면에 따라 뒤집히는 엣지(반전 표시)는 항상 양쪽 국면을 함께 설명합니다.');
+    s.push('');
+    s.push('## 지도 지식');
+    s.push('### 변수 (id: 이름 - 설명)');
+    for (const n of graph.nodes) {
+      const d = descById.get(n.id);
+      s.push(n.id + ': ' + n.name.ko + (d ? ' - ' + d.ko : ''));
+    }
+    s.push('### 인과 엣지 (from->to [부호 강도s1-3 시차l0-3 확실성c1-3] 메커니즘 / ⇄반전조건)');
+    for (const e of graph.edges) {
+      s.push(e.from + '->' + e.to + ' [' + (e.sign > 0 ? '+' : '-') + ' s' + e.strength + ' l' + e.lag + ' c' + e.confidence + '] '
+        + e.mech.ko + (e.flip ? ' / ⇄ ' + e.flip.ko : ''));
+    }
+    s.push('### 피드백 루프');
+    for (const lp of loops) s.push(lp.id + ' (' + (lp.type === 'reinforcing' ? '강화' : '균형') + '): ' + lp.nodes.join('->') + ' - ' + lp.name.ko);
+    s.push('### 역사 사례');
+    for (const c of cases) s.push(c.id + ': ' + c.title.ko + ' (' + c.period + ')');
+    s.push('### 지금 상황판 (수동 스냅샷, 기준 ' + situation.asOf + ' - 이 날짜 이후는 알 수 없음을 밝히세요)');
+    for (const r of situation.readings) {
+      s.push(r.node + ': ' + r.value.ko + ' ' + (r.trend > 0 ? '↑' : r.trend < 0 ? '↓' : '→') + ' - ' + r.note.ko + ' (' + r.source + ', ' + r.date + ')');
+    }
+    for (const th of situation.themes) s.push('테마 ' + th.id + ': ' + th.title.ko);
+    s.push('');
+    s.push('## 지도 조작 프로토콜 (필수)');
+    s.push('모든 답변의 맨 마지막 줄에 정확히 하나의 코드블록을 출력합니다. 형식:');
+    s.push('```map');
+    s.push('{"focus": ["노드id"], "edges": [["from","to"]], "shocks": {"노드id": 0.5}, "open": {"case": "사례id"}}');
+    s.push('```');
+    s.push('- focus/edges: 답변의 핵심 인과 경로 (위 목록에 실제로 존재하는 엣지만, 3~8개).');
+    s.push('- shocks: 시나리오형 질문일 때만, -1~1 (예: 금리 인상 질문 -> {"policy_rate": 0.75}). 아니면 생략.');
+    s.push('- open: 가장 관련 있는 사례({"case": id}) 또는 루프({"loop": id}) 하나. 없으면 생략.');
+    s.push('- 지도와 무관한 질문이면 {"focus": []} 만 출력.');
+    aiSystemCache = s.join('\n');
+    return aiSystemCache;
+  }
+
+  function appStateContext() {
+    const parts = ['lang=' + window.I18n.lang, 'mode=' + state.mode];
+    if (state.selectedId) parts.push('selected=' + state.selectedId);
+    const sh = Object.entries(state.simShocks).filter(([, v]) => v).map(([k, v]) => k + ':' + v);
+    if (sh.length) parts.push('shocks=' + sh.join(','));
+    return '[앱 상태: ' + parts.join(' ') + ']';
+  }
+
+  function setBubbleText(el, text) {
+    el.replaceChildren();
+    String(text).split('\n').forEach((p, i) => {
+      if (i) el.append(h('br'));
+      el.append(document.createTextNode(p));
+    });
+  }
+  function updateStreamingBubble(entry) {
+    const el = $('#ai-stream');
+    if (!el) return;
+    setBubbleText(el, entry.text);
+    const log = $('#ai-log');
+    if (log) log.scrollTop = log.scrollHeight;
+  }
+
+  // scene-side application of a model-proposed map action (validated defensively)
+  function applyMapActionScene(action) {
+    if (!scene || !action || typeof action !== 'object') return false;
+    let did = false;
+    const focus = Array.isArray(action.focus) ? action.focus.filter((id) => graph.nodeById.has(id)) : [];
+    const pairs = Array.isArray(action.edges)
+      ? action.edges.filter((p) => Array.isArray(p) && graph.byKey.has(p[0] + '>' + p[1]))
+      : [];
+    if (focus.length || pairs.length) {
+      const nodeOrders = new Map(focus.map((id) => [id, 1]));
+      const edgeOrders = new Map();
+      pairs.forEach(([f, tt], i) => {
+        edgeOrders.set(f + '>' + tt, Math.min(4, i + 1));
+        nodeOrders.set(f, nodeOrders.get(f) || 1);
+        nodeOrders.set(tt, nodeOrders.get(tt) || 1);
+      });
+      scene.setHighlight({ nodeOrders, edgeOrders, selectedId: null });
+      scene.focusNodes([...nodeOrders.keys()]);
+      did = true;
+    }
+    if (action.shocks && typeof action.shocks === 'object') {
+      const sh = {};
+      for (const [k, v] of Object.entries(action.shocks)) {
+        if (graph.nodeById.has(k) && typeof v === 'number') sh[k] = Math.max(-1, Math.min(1, v));
+      }
+      if (Object.keys(sh).length) {
+        const res = propagate(graph, sh);
+        const tint = new Map(Object.entries(sh));
+        for (const r of res) tint.set(r.id, r.value);
+        scene.setNodeTints(tint);
+        did = true;
+      }
+    }
+    return did;
+  }
+
+  function renderActionButtons(action, host) {
+    if (!action || typeof action !== 'object') return;
+    const hasVis = (Array.isArray(action.focus) && action.focus.length)
+      || (Array.isArray(action.edges) && action.edges.length)
+      || (action.shocks && Object.keys(action.shocks).length);
+    if (hasVis) {
+      host.append(h('button', { class: 'preset-btn', onclick: () => applyMapActionScene(action) }, '◈ ' + t('지도에 표시')));
+    }
+    const open = action.open;
+    if (open && typeof open === 'object') {
+      const c = open.case ? cases.find((x) => x.id === open.case) : null;
+      if (c) host.append(h('button', { class: 'preset-btn', onclick: () => { setMode('cases'); openCase(c.id); } }, '▶ ' + L(c.title)));
+      const lp = open.loop ? loops.find((x) => x.id === open.loop) : null;
+      if (lp) host.append(h('button', { class: 'preset-btn', onclick: () => { setMode('loops'); openLoop(lp.id); } }, '⟳ ' + L(lp.name)));
+    }
+  }
+
+  async function sendChat(raw) {
+    const text = String(raw || '').trim();
+    const key = getApiKey();
+    if (!key || chatBusy || !text) return;
+    chatBusy = true;
+    chatLog.push({ role: 'user', text });
+    const entry = { role: 'assistant', text: '', streaming: true };
+    chatLog.push(entry);
+    renderPanel();
+    const logEl = $('#ai-log');
+    if (logEl) logEl.scrollTop = logEl.scrollHeight;
+
+    // history: alternating turns, last user message carries app-state context
+    const msgs = [];
+    for (const m of chatLog) {
+      if (m.streaming) continue;
+      msgs.push({ role: m.role, content: m.text });
+    }
+    msgs[msgs.length - 1] = { role: 'user', content: appStateContext() + '\n' + text };
+    let trimmed = msgs.slice(-12);
+    while (trimmed.length && trimmed[0].role !== 'user') trimmed.shift();
+
+    chatAbort = new AbortController();
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        signal: chatAbort.signal,
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: prefs.aiModel || 'claude-opus-4-8',
+          max_tokens: 2048,
+          stream: true,
+          thinking: { type: 'adaptive' },
+          system: [{ type: 'text', text: buildAiSystem(), cache_control: { type: 'ephemeral' } }],
+          messages: trimmed,
+        }),
+      });
+      if (!resp.ok) {
+        throw new Error(
+          resp.status === 401 ? t('API 키가 올바르지 않습니다. 키를 확인해 주세요.')
+            : resp.status === 429 ? t('요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.')
+              : t('요청이 실패했습니다') + ' (HTTP ' + resp.status + ')',
+        );
+      }
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      let stopReason = null;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          let evd;
+          try { evd = JSON.parse(line.slice(6)); } catch { continue; }
+          if (evd.type === 'content_block_delta' && evd.delta && evd.delta.type === 'text_delta') {
+            entry.text += evd.delta.text;
+            updateStreamingBubble(entry);
+          } else if (evd.type === 'message_delta' && evd.delta && evd.delta.stop_reason) {
+            stopReason = evd.delta.stop_reason;
+          }
+        }
+      }
+      if (stopReason === 'refusal') {
+        entry.text = (entry.text ? entry.text + '\n\n' : '') + '(' + t('안전상 이 질문에는 답변이 제한되었습니다.') + ')';
+      }
+      const mAct = entry.text.match(/```map\s*([\s\S]*?)```/);
+      if (mAct) {
+        entry.text = entry.text.replace(mAct[0], '').trim();
+        try { entry.action = JSON.parse(mAct[1]); } catch { entry.action = null; }
+      }
+    } catch (err) {
+      if (err && err.name === 'AbortError') entry.text += '\n(' + t('중단됨') + ')';
+      else entry.text = (entry.text ? entry.text + '\n\n' : '') + '⚠ ' + ((err && err.message) || t('요청이 실패했습니다'));
+    } finally {
+      entry.streaming = false;
+      chatBusy = false;
+      chatAbort = null;
+      renderPanel();
+      if (entry.action) applyMapActionScene(entry.action); // 답변과 동시에 지도 반영
+      const el2 = $('#ai-log');
+      if (el2) el2.scrollTop = el2.scrollHeight;
+      const ta = $('#ai-input');
+      if (ta) ta.focus();
+    }
+  }
+
+  function renderAI() {
+    const b = els.body;
+    const key = getApiKey();
+    if (!key) {
+      b.append(h('div', { class: 'card' },
+        h('h3', {}, t('지도와 대화하기')),
+        h('p', {}, t('이 지도에 담긴 변수·인과·역사 사례·현재 상황을 아는 AI에게 투자 환경, 비즈니스, 사회 현상 질문을 던져 보세요. 답변과 동시에 관련 인과 경로가 지도에 켜집니다.')),
+      ));
+      const input = h('input', {
+        type: 'password', class: 'ai-key-input', placeholder: 'sk-ant-...',
+        'aria-label': 'Anthropic API key', autocomplete: 'off',
+      });
+      input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') saveKey(); });
+      const saveKey = () => {
+        const v = input.value.trim();
+        if (!v.startsWith('sk-ant-')) { toast(t('sk-ant- 로 시작하는 키를 입력해 주세요')); return; }
+        setApiKey(v);
+        renderPanel();
+        announce(t('AI 대화가 준비되었습니다'));
+      };
+      b.append(h('div', { class: 'card' },
+        h('h3', {}, t('내 Anthropic API 키로 시작')),
+        h('p', {}, t('서버가 없는 앱이라 본인의 API 키로 브라우저에서 Anthropic에 직접 요청합니다. 키는 이 브라우저에만 저장되고 Anthropic 외 어디로도 전송되지 않으며, 사용량은 본인 계정에 과금됩니다.')),
+        input,
+        h('button', { class: 'btn primary', style: 'margin-top:8px', onclick: saveKey }, t('저장하고 시작')),
+        h('p', { class: 'rd-src', style: 'margin-top:8px' }, t('키 발급') + ': console.anthropic.com → API Keys'),
+      ));
+      return;
+    }
+
+    const modelSel = h('select', { class: 'ai-model', 'aria-label': t('모델') });
+    for (const m of AI_MODELS) {
+      const o = h('option', { value: m.id }, m.label);
+      if ((prefs.aiModel || 'claude-opus-4-8') === m.id) o.setAttribute('selected', '');
+      modelSel.append(o);
+    }
+    modelSel.addEventListener('change', () => { prefs.aiModel = modelSel.value; savePrefs(); });
+    b.append(h('div', { class: 'presets ai-toolbar' },
+      modelSel,
+      h('button', { class: 'preset-btn', onclick: () => {
+        chatLog.length = 0;
+        scene?.clearHighlight();
+        scene?.setNodeTints(null);
+        renderPanel();
+      } }, t('대화 지우기')),
+      h('button', { class: 'preset-btn', onclick: () => { setApiKey(''); renderPanel(); } }, t('키 삭제')),
+    ));
+
+    const log = h('div', { id: 'ai-log' });
+    if (!chatLog.length) {
+      log.append(h('div', { class: 'card' }, h('p', {},
+        t('무엇이든 물어보세요. 답변의 근거가 되는 인과 경로가 지도에 함께 켜지고, 관련 역사 사례로 바로 건너갈 수 있습니다.'))));
+    }
+    chatLog.forEach((m, i) => {
+      const bubble = h('div', { class: 'ai-msg ' + (m.role === 'user' ? 'user' : 'assistant') });
+      const txt = h('div', { class: 'ai-text' });
+      setBubbleText(txt, m.text || (m.streaming ? '…' : ''));
+      if (m.streaming && i === chatLog.length - 1) txt.id = 'ai-stream';
+      bubble.append(txt);
+      if (m.action && !m.streaming) {
+        const actions = h('div', { class: 'ai-actions presets' });
+        renderActionButtons(m.action, actions);
+        if (actions.children.length) bubble.append(actions);
+      }
+      log.append(bubble);
+    });
+    b.append(log);
+
+    if (!chatLog.length) {
+      const sug = h('div', { class: 'presets' });
+      for (const q of [
+        t('금리가 오르면 왜 주가가 떨어지나요? 반대로 호재가 되는 경우도 있나요?'),
+        t('원화 약세가 수입 원자재를 쓰는 사업에 미치는 영향을 경로로 보여주세요.'),
+        t('지금의 AI 반도체 붐은 2000년 닷컴 버블과 무엇이 같고 무엇이 다른가요?'),
+      ]) {
+        sug.append(h('button', { class: 'preset-btn sug', onclick: () => sendChat(q) }, q));
+      }
+      b.append(sug);
+    }
+
+    const ta = h('textarea', {
+      id: 'ai-input', rows: '2',
+      placeholder: t('예: 지금 금리가 내리면 부동산은 어떻게 되나요?'),
+      'aria-label': t('질문 입력'),
+    });
+    ta.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); submit(); }
+    });
+    const submit = () => { const v = ta.value; ta.value = ''; sendChat(v); };
+    const rowEls = [ta];
+    const btns = h('div', { class: 'ai-btns' });
+    if (chatBusy) btns.append(h('button', { class: 'btn sm', onclick: () => chatAbort && chatAbort.abort() }, '■ ' + t('중지')));
+    btns.append(h('button', { class: 'btn primary sm', onclick: submit, disabled: chatBusy ? '' : null },
+      chatBusy ? t('생성 중…') : t('보내기')));
+    rowEls.push(btns);
+    b.append(h('div', { class: 'ai-inputrow' }, ...rowEls));
+    b.append(h('p', { class: 'rd-src', style: 'margin-top:6px' },
+      t('교육 목적 도구입니다. 투자 조언이 아니며, 답변은 부정확할 수 있습니다.')));
+  }
+
   // ---------- search palette (Ctrl+K / '/') ----------
   const CHO_LIST = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
   function chosungOf(s) {
@@ -1007,6 +1399,7 @@ export function createUI(deps) {
   // ---------- deep links (hash router) ----------
   let applyingHash = false;
   function currentHash() {
+    if (state.mode === 'ai') return '#/ai';
     if (state.mode === 'now' && state.nowThemeId) return '#/now/' + state.nowThemeId;
     if (state.mode === 'now') return '#/now';
     if (state.mode === 'cases' && state.caseId) return '#/case/' + state.caseId + '/' + state.phaseIdx;
@@ -1053,6 +1446,8 @@ export function createUI(deps) {
       } else if (seg[0] === 'now') {
         setMode('now', { force: true });
         if (seg[1] && situation.themes.some((x) => x.id === seg[1])) openTheme(seg[1]);
+      } else if (seg[0] === 'ai') {
+        setMode('ai', { force: true });
       } else if (seg[0] === 'sim') {
         setMode('sim', { force: true });
         for (const k of Object.keys(state.simShocks)) state.simShocks[k] = 0;
@@ -1171,6 +1566,7 @@ export function createUI(deps) {
 
     els.status.textContent = 'NODES ' + graph.nodes.length + ' · LINKS ' + graph.edges.length + ' · ' + version;
     applyLabelTitles();
+    applyLabelValues();
   }
 
   // hover tooltips: variable description on the 3D label chips
@@ -1219,11 +1615,14 @@ export function createUI(deps) {
     reducedMotion,
     prefs,
     savePrefs,
+    onLeverDrag,
+    onLeverDragEnd,
     onLangChange() {
       renderLegend();
       renderPanel();
       scene?.setLang(window.I18n.lang);
       applyLabelTitles();
+      applyLabelValues();
       els.toggle.querySelector('span').textContent = els.panel.classList.contains('collapsed') ? t('펼치기') : t('접기');
     },
     initFromHash() {

@@ -73,7 +73,8 @@
   confidence: 1 | 2 | 3, // 논쟁적 / 일반적 / 교과서 합의
   mech: { ko, en },      // 쉬운 언어 한 문장 (KO 40~90자). 중학생도 이해할 것
   source: "BOK" | "Mishkin" | "Mankiw" | "IMF" | "BIS" | "Dalio" | "Shiller" | "Minsky" | "Empirical",
-  note?: { ko, en }      // 조건·뉘앙스 (J커브, 단기/장기 반전 등). 선택
+  note?: { ko, en },     // 조건·뉘앙스 (J커브, 단기/장기 반전 등). 선택
+  flip?: { ko, en }      // 국면 반전: 부호가 뒤집히는 조건 (v2, flips.json에서 병합). UI에 ⇄배지+금색 강조
 }
 ```
 

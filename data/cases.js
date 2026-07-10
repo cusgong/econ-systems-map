@@ -1120,5 +1120,273 @@ export const CASES = [
    "Federal Reserve, FOMC Statements 2020~2022 / FRED: Federal Funds Target Range - Upper Limit (DFEDTARU)",
    "IMF, World Economic Outlook (October 2022): Countering the Cost-of-Living Crisis"
   ]
+ },
+ {
+  "id": "dotcom-bubble-2000",
+  "title": {
+   "ko": "2000년 닷컴 버블",
+   "en": "The Dot-Com Bubble (2000)"
+  },
+  "period": "1995-2002",
+  "phases": [
+   {
+    "key": "cause",
+    "title": {
+     "ko": "인터넷 혁명과 돈의 물결",
+     "en": "The Internet Revolution Meets a Flood of Money"
+    },
+    "narration": {
+     "ko": "1990년대 중반, 인터넷이 보통 사람들의 일상으로 들어오기 시작했습니다. 웹 브라우저가 등장하고 1995년 넷스케이프가 상장에 크게 성공하자, '인터넷이 경제의 규칙을 바꾼다'는 신경제 열풍이 불었습니다. 마침 1998년 금융 불안에 대응해 연준이 금리를 내리면서 시중에 돈이 풍부해졌고, 그 돈이 인터넷 기업으로 쏟아져 들어왔습니다. 회사 이름에 닷컴만 붙이면 주가가 뛴다는 말이 나올 만큼 IPO(기업공개) 광풍이 불었고, 나스닥 지수는 1995년부터 2000년 3월 고점까지 약 5배 올랐습니다.",
+     "en": "In the mid-1990s, the internet began entering everyday life. After web browsers appeared and Netscape's 1995 stock market debut became a sensation, a 'New Economy' fever took hold: the belief that the internet was rewriting the rules of the economy. Money, meanwhile, was plentiful: the Fed had cut rates in 1998 to calm financial turmoil, and that easy money poured into internet companies. An IPO frenzy followed, with people joking that merely adding '.com' to a company's name could lift its stock, and the Nasdaq rose roughly fivefold from 1995 to its March 2000 peak."
+    },
+    "focusNodes": [
+     "tech",
+     "liquidity",
+     "risk_sentiment",
+     "stocks"
+    ],
+    "activeEdges": [
+     [
+      "tech",
+      "earnings"
+     ],
+     [
+      "earnings",
+      "stocks"
+     ],
+     [
+      "liquidity",
+      "stocks"
+     ],
+     [
+      "liquidity",
+      "risk_sentiment"
+     ],
+     [
+      "risk_sentiment",
+      "stocks"
+     ]
+    ],
+    "shocks": {
+     "tech": 1,
+     "liquidity": 0.8,
+     "risk_sentiment": 0.9,
+     "stocks": 0.9,
+     "earnings": 0.3
+    }
+   },
+   {
+    "key": "spread",
+    "title": {
+     "ko": "이익 없는 회사에 몰리는 돈",
+     "en": "Money Chases Companies With No Profits"
+    },
+    "narration": {
+     "ko": "돈은 이익을 내는 회사가 아니라 꿈을 파는 회사로 몰렸습니다. 아직 이익을 내지 못하는 기업들이 '접속자 수' 같은 지표만으로 어마어마한 몸값을 인정받았습니다. 주가가 오르자 기업들은 서버, 통신망, 광케이블에 앞다투어 투자했고 사람도 대거 뽑았습니다. 주가는 기업이 실제로 벌어들이는 이익에서 점점 멀어졌고, 2000년 3월 10일 나스닥은 당시 사상 최고치인 5,048까지 올랐습니다. 가격과 실력의 간격이 그만큼 벌어졌다는 뜻이기도 했습니다.",
+     "en": "Money chased companies that sold dreams rather than earned profits. Firms that had yet to make any profit were valued at astonishing prices based on metrics like the number of site visitors. As stock prices climbed, companies raced to invest in servers, networks, and fiber-optic cables, and hired aggressively. Prices drifted further and further from what companies actually earned, and on March 10, 2000, the Nasdaq hit what was then an all-time high of 5,048, a peak that also measured how wide the gap between price and substance had grown."
+    },
+    "focusNodes": [
+     "stocks",
+     "investment",
+     "earnings",
+     "risk_sentiment"
+    ],
+    "activeEdges": [
+     [
+      "stocks",
+      "investment"
+     ],
+     [
+      "investment",
+      "employment"
+     ],
+     [
+      "investment",
+      "gdp"
+     ],
+     [
+      "stocks",
+      "consumption"
+     ],
+     [
+      "stocks",
+      "risk_sentiment"
+     ],
+     [
+      "risk_sentiment",
+      "stocks"
+     ]
+    ],
+    "shocks": {
+     "stocks": 1,
+     "risk_sentiment": 0.9,
+     "investment": 0.8,
+     "employment": 0.5,
+     "consumption": 0.4,
+     "gdp": 0.5
+    }
+   },
+   {
+    "key": "policy",
+    "title": {
+     "ko": "연준의 금리 인상, 거품의 방아쇠",
+     "en": "The Fed Hikes: The Trigger for the Bust"
+    },
+    "narration": {
+     "ko": "거품이 계속 부풀던 시기, 경기 과열과 물가를 걱정한 미국의 중앙은행 연준이 브레이크를 밟았습니다. 1999년 6월부터 2000년 5월까지 기준금리를 잇달아 올려 연 6.5%까지 끌어올린 것입니다. 금리가 오르자 시중의 돈줄이 조여들었고, 싼 돈에 기대어 부풀었던 주가가 무너지기 시작했습니다. 거품이 터진 뒤에는 정반대의 정책이 나왔습니다. 연준은 2001년부터 금리를 급하게 내려 2003년에는 1%까지 낮추며 무너진 경기를 떠받쳤습니다.",
+     "en": "As the bubble kept inflating, the US Federal Reserve, worried about an overheating economy and rising inflation, hit the brakes: from June 1999 to May 2000 it raised its policy rate step by step until it reached 6.5%. Higher rates tightened the flow of money, and stock prices that had been propped up by cheap money began to crumble. After the bubble burst, policy swung to the opposite extreme: starting in 2001, the Fed cut rates sharply, all the way down to 1% by 2003, to cushion the collapsing economy."
+    },
+    "focusNodes": [
+     "policy_rate",
+     "market_rate",
+     "liquidity",
+     "stocks",
+     "risk_sentiment"
+    ],
+    "activeEdges": [
+     [
+      "policy_rate",
+      "liquidity"
+     ],
+     [
+      "policy_rate",
+      "market_rate"
+     ],
+     [
+      "market_rate",
+      "stocks"
+     ],
+     [
+      "policy_rate",
+      "risk_sentiment"
+     ],
+     [
+      "liquidity",
+      "stocks"
+     ]
+    ],
+    "shocks": {
+     "policy_rate": 1,
+     "market_rate": 0.8,
+     "liquidity": -0.8,
+     "risk_sentiment": -0.6,
+     "stocks": -0.7
+    }
+   },
+   {
+    "key": "psychology",
+    "title": {
+     "ko": "'이번엔 다르다'는 믿음의 붕괴",
+     "en": "The Collapse of 'This Time Is Different'"
+    },
+    "narration": {
+     "ko": "상승장에서는 '이번엔 다르다', '인터넷 시대에는 이익보다 성장이 먼저다'라는 믿음이 상식처럼 통했고, 나만 못 벌까 두려워 뛰어드는 FOMO(소외 공포) 심리가 주가를 밀어 올렸습니다. 하지만 주가가 꺾이자 같은 심리가 정반대로 돌았습니다. 떨어지는 주가가 공포를 부르고, 공포가 매도를 부르고, 매도가 주가를 더 떨어뜨리는 악순환이 시작된 것입니다. 한국도 예외가 아니었습니다. 나스닥과 함께 부풀었던 코스닥 거품이 꺼지면서, 지수가 2000년 3월 고점 대비 그해 연말까지 약 80% 폭락했습니다.",
+     "en": "During the boom, sayings like 'this time is different' and 'in the internet age, growth comes before profit' passed for common sense, and FOMO, the fear of missing out while everyone else got rich, pushed prices ever higher. Once prices turned, the same psychology ran in reverse: falling prices bred fear, fear triggered selling, and selling drove prices down further. Korea was no exception. The KOSDAQ bubble, which had inflated alongside the Nasdaq, burst, and the index plunged roughly 80% from its March 2000 peak by the end of that year."
+    },
+    "focusNodes": [
+     "risk_sentiment",
+     "stocks",
+     "consumer_conf"
+    ],
+    "activeEdges": [
+     [
+      "risk_sentiment",
+      "stocks"
+     ],
+     [
+      "stocks",
+      "risk_sentiment"
+     ],
+     [
+      "stocks",
+      "consumer_conf"
+     ],
+     [
+      "stocks",
+      "consumption"
+     ],
+     [
+      "stocks",
+      "investment"
+     ]
+    ],
+    "shocks": {
+     "risk_sentiment": -1,
+     "stocks": -0.9,
+     "consumer_conf": -0.6,
+     "consumption": -0.4,
+     "investment": -0.6
+    }
+   },
+   {
+    "key": "outcome",
+    "title": {
+     "ko": "78% 폭락, 그러나 기술은 남았다",
+     "en": "A 78% Crash, but the Technology Endured"
+    },
+    "narration": {
+     "ko": "나스닥은 2002년 저점까지 고점 대비 약 78% 떨어졌고, 5,048이라는 옛 고점을 되찾는 데는 15년이 걸렸습니다. 수많은 닷컴 기업이 사라졌고, IT 투자가 얼어붙으면서 미국 경제는 2001년 침체를 겪었습니다. 그런데 흥미로운 반전이 있습니다. 거품 시절에 깔린 인터넷 인프라와 살아남은 기업들(아마존 등)은 이후 20년 실물 혁신의 토대가 되었습니다. 기술은 진짜였지만 가격이 틀렸던 것입니다. 좋은 기술이라는 사실과 좋은 가격이라는 판단은 별개라는 것, 이것이 닷컴 버블이 남긴 핵심 교훈입니다.",
+     "en": "The Nasdaq fell about 78% from its peak to its 2002 low, and it took 15 years to reclaim the old high of 5,048. Countless dotcoms vanished, IT investment froze, and the US economy slipped into recession in 2001. Yet there was a twist: the internet infrastructure laid during the bubble and the companies that survived, such as Amazon, became the foundation of the next two decades of real-world innovation. The technology was real; the prices were wrong. The core lesson of the dot-com bubble is that a great technology and a right price are two separate judgments."
+    },
+    "focusNodes": [
+     "stocks",
+     "investment",
+     "employment",
+     "gdp",
+     "tech"
+    ],
+    "activeEdges": [
+     [
+      "stocks",
+      "investment"
+     ],
+     [
+      "investment",
+      "employment"
+     ],
+     [
+      "investment",
+      "gdp"
+     ],
+     [
+      "tech",
+      "earnings"
+     ],
+     [
+      "earnings",
+      "stocks"
+     ],
+     [
+      "tech",
+      "gdp"
+     ]
+    ],
+    "shocks": {
+     "stocks": -1,
+     "investment": -0.9,
+     "employment": -0.6,
+     "gdp": -0.4,
+     "earnings": -0.5,
+     "tech": 0.5
+    }
+   }
+  ],
+  "comparison": {
+   "common": {
+    "ko": "2026년 기준, 시장에서 가장 뜨거운 주제는 AI 반도체 슈퍼사이클입니다. 구조를 보면 닷컴 버블과 닮은 점이 뚜렷합니다. '이 기술이 경제의 규칙을 바꾼다'는 기술 혁명 내러티브가 돈을 끌어모으고, 데이터센터와 반도체에 대규모 설비투자가 쏟아지며, '지금 주가가 미래 이익으로 정당화되는가'라는 밸류에이션 논쟁이 벌어지고 있습니다. 기대가 주가를 올리고 오른 주가가 다시 기대를 키우는 심리의 되먹임 고리도, 금리와 유동성이 자산 가격의 온도를 좌우한다는 사실도 그때와 같습니다.",
+    "en": "As of 2026, the hottest topic in markets is the AI semiconductor supercycle, and its structure clearly echoes the dot-com bubble: a technological-revolution narrative ('this technology changes the rules of the economy') pulls money in, massive capital spending pours into data centers and chips, and a valuation debate rages over whether today's prices are justified by tomorrow's profits. The feedback loop in which expectations lift prices and higher prices feed expectations is the same, as is the fact that interest rates and liquidity set the temperature of asset prices."
+   },
+   "differences": {
+    "ko": "가장 큰 차이는 이익입니다. 1999년의 많은 닷컴 기업은 이익 없이 IPO로 조달한 돈으로 버텼지만, 2026년 기준 AI 사이클을 이끄는 주도 기업들은 실제로 대규모 이익과 현금흐름을 만들어내고 있고, 설비투자의 상당 부분을 자기 이익으로 감당하고 있습니다. 적어도 주도 기업들의 주가는 근거 없는 꿈이 아니라 실제 실적 위에 서 있다는 뜻입니다. 다만 닷컴의 교훈은 여기서도 유효합니다. 기술이 진짜라는 것과 지금 가격이 맞다는 것은 언제나 별개의 문제이며, 밸류에이션 논쟁의 결론은 아직 아무도 모릅니다. 이 지도는 그 답을 예측하지 않습니다. 다만 어떤 연결 고리를 지켜봐야 하는지 보여줄 뿐입니다.",
+    "en": "The biggest difference is profit. Many dotcoms in 1999 survived on IPO money without earning anything, whereas as of 2026 the companies leading the AI cycle generate large real profits and cash flows, and fund much of their capital spending out of their own earnings. At least for these leaders, stock prices stand on actual results, not just dreams. Still, the dot-com lesson applies here too: whether the technology is real and whether today's price is right are always two separate questions, and no one yet knows how the valuation debate will end. This map does not predict the answer; it only shows which links to watch."
+   }
+  },
+  "sources": [
+   "Robert J. Shiller, \"Irrational Exuberance\" (Princeton University Press, 2000)",
+   "John Cassidy, \"Dot.con: The Greatest Story Ever Sold\" (HarperCollins, 2002)",
+   "Alan Greenspan, \"The Challenge of Central Banking in a Democratic Society\" (AEI speech, December 1996, the 'irrational exuberance' remarks)",
+   "FRED (Federal Reserve Bank of St. Louis): NASDAQ Composite Index (NASDAQCOM), Federal Funds Effective Rate (FEDFUNDS)",
+   "한국거래소(KRX) 코스닥 지수 시계열 / Korea Exchange KOSDAQ index series"
+  ]
  }
 ];

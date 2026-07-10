@@ -11,7 +11,7 @@ import { buildGraph } from './graph.js';
 import { createScene } from './scene.js';
 import { createUI } from './ui.js';
 
-const APP_VERSION = 'v1.3.1';
+const APP_VERSION = 'v2.0.0';
 
 let fatalShown = false;
 function showFatal() {
@@ -63,6 +63,8 @@ function boot() {
       categories: CATEGORIES,
       layers: LAYERS,
       onSelect: (id) => uiRef && uiRef.selectNode(id),
+      onLeverDrag: (id, v) => uiRef && uiRef.onLeverDrag(id, v),
+      onLeverDragEnd: (id, v) => uiRef && uiRef.onLeverDragEnd(id, v),
       reducedMotion: initialReducedMotion(),
       lang: 'ko',
       onFirstFrame: hideLoading,

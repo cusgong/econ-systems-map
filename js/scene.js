@@ -222,7 +222,7 @@ export function createScene(opts) {
     chip.style.left = '0';
     chip.style.top = '0';
     chip.setAttribute('tabindex', '-1'); // keyboard path goes through the panel lists
-    chip.innerHTML = '<span class="dot"></span><span class="nm"></span>'
+    chip.innerHTML = '<span class="dot"></span><span class="nm"></span><span class="lval"></span>'
       + (n.lever ? '<span class="lever-mark">LEVER</span>' : '')
       + '<span class="tint" aria-hidden="true"></span>';
     chip.querySelector('.dot').style.background = cat.color;
@@ -332,10 +332,60 @@ export function createScene(opts) {
   scene.add(hlGroup);
   let staged = []; // {materials:[], showAt, shown}
   let hlActive = false;
+  // traveling pulses along highlighted edges (per-edge duration grows with lag)
+  let pulseEdges = [];
+  let pulsePeriod = 0;
+  let pulseT0 = 0;
+  const bounces = new Map(); // nodeId -> {t0, dir}
+
+  function triggerBounce(id, dir) {
+    if (dragState && dragState.id === id) return; // drag owns that node's position
+    bounces.set(id, { t0: clock.getElapsedTime(), dir });
+  }
+
+  function updatePulses(elapsed) {
+    if (!pulseEdges.length || reducedMotion) return;
+    const phase = (elapsed - pulseT0) % pulsePeriod;
+    for (const p of pulseEdges) {
+      const local = (phase - p.start) / p.dur;
+      if (local >= 0 && local <= 1) {
+        p.curve.getPoint(local, tmpV);
+        p.sprite.position.copy(tmpV);
+        p.sprite.visible = true;
+      } else {
+        p.sprite.visible = false;
+      }
+      // arrival: the target node gets pushed up (+) or pulled down (−)
+      if (p.lastLocal !== null && p.lastLocal >= 0 && p.lastLocal <= 1 && local > 1) {
+        triggerBounce(p.toId, p.sign);
+      }
+      p.lastLocal = local;
+    }
+  }
+
+  function updateBounces(elapsed) {
+    for (const [id, b] of bounces) {
+      const v = nodeVis.get(id);
+      if (!v) { bounces.delete(id); continue; }
+      const x = elapsed - b.t0;
+      if (x > 1.1 || reducedMotion) {
+        v.group.position.y = v.n.pos.y;
+        bounces.delete(id);
+        continue;
+      }
+      v.group.position.y = v.n.pos.y + b.dir * 1.6 * Math.exp(-3.5 * x) * Math.sin(9 * x);
+    }
+  }
 
   function clearHighlight() {
     hlActive = false;
     staged = [];
+    pulseEdges = [];
+    for (const [id] of bounces) {
+      const v = nodeVis.get(id);
+      if (v) v.group.position.y = v.n.pos.y;
+    }
+    bounces.clear();
     while (hlGroup.children.length) {
       const c = hlGroup.children.pop();
       c.geometry?.dispose();
@@ -395,7 +445,10 @@ export function createScene(opts) {
     for (const [key, order] of edgeOrders) {
       const ev = edgeVis.get(key);
       if (!ev) continue;
-      const bright = (ev.e.sign > 0 ? COLOR_POS_HL : COLOR_NEG_HL);
+      // regime-flip edges glow gold: the sign can invert depending on the macro regime
+      const bright = ev.e.flip
+        ? new THREE.Color('#ffdf8e')
+        : (ev.e.sign > 0 ? COLOR_POS_HL : COLOR_NEG_HL);
       const tubeGeo = new THREE.TubeGeometry(ev.curve, 40, 0.1 + 0.055 * ev.e.strength, 6, false);
       const tubeMat = new THREE.MeshBasicMaterial({
         color: bright, transparent: true, opacity: 0,
@@ -415,6 +468,28 @@ export function createScene(opts) {
 
       const showAt = reducedMotion ? now : now + (order - 1) * 0.45;
       staged.push({ materials: [tubeMat, coneMat], target: 0.85, showAt });
+
+      // traveling pulse for this edge: departs on its ripple order, and its
+      // travel TIME is proportional to the edge's lag — 시차가 눈에 보인다
+      if (!reducedMotion) {
+        const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: glowTex, color: bright, transparent: true, opacity: 0.95,
+          blending: THREE.AdditiveBlending, depthWrite: false,
+        }));
+        spr.scale.setScalar(3.4);
+        spr.visible = false;
+        hlGroup.add(spr);
+        pulseEdges.push({
+          curve: ev.curve,
+          start: (order - 1) * 0.45,
+          dur: 0.4 + ev.e.lag * 0.4,
+          sprite: spr, sign: ev.e.sign, toId: ev.e.to, lastLocal: null,
+        });
+      }
+    }
+    if (pulseEdges.length) {
+      pulsePeriod = Math.max(...pulseEdges.map((p) => p.start + p.dur)) + 1.6;
+      pulseT0 = now;
     }
   }
 
@@ -498,32 +573,69 @@ export function createScene(opts) {
     tweenCameraTo(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 34, 128));
   }
 
-  // --- picking ---
+  // --- picking + lever drag-to-shock ---
   const ray = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   let downXY = null;
-  renderer.domElement.addEventListener('pointerdown', (ev) => { downXY = [ev.clientX, ev.clientY]; });
-  renderer.domElement.addEventListener('pointerup', (ev) => {
-    if (!downXY) return;
-    const moved = Math.hypot(ev.clientX - downXY[0], ev.clientY - downXY[1]);
-    downXY = null;
-    if (moved > 7) return;
+  let dragState = null; // {id, startY, moved} — vertical drag on a lever node = live shock
+
+  function raycastNode(ev) {
     const r = renderer.domElement.getBoundingClientRect();
     ndc.x = ((ev.clientX - r.left) / r.width) * 2 - 1;
     ndc.y = -((ev.clientY - r.top) / r.height) * 2 + 1;
     ray.setFromCamera(ndc, camera);
-    ray.params.Points = { threshold: 0 };
     const hits = ray.intersectObjects(pickMeshes, false);
-    onSelect(hits.length ? hits[0].object.userData.nodeId : null);
+    return hits.length ? hits[0].object.userData.nodeId : null;
+  }
+  function dragValue(ev) {
+    return THREE.MathUtils.clamp((dragState.startY - ev.clientY) / 110, -1, 1);
+  }
+
+  renderer.domElement.addEventListener('pointerdown', (ev) => {
+    downXY = [ev.clientX, ev.clientY];
+    const id = raycastNode(ev);
+    const n = id ? graph.nodeById.get(id) : null;
+    if (n && n.lever && typeof opts.onLeverDrag === 'function') {
+      dragState = { id, startY: ev.clientY, moved: false };
+      controls.enabled = false;
+      try { renderer.domElement.setPointerCapture(ev.pointerId); } catch { /* ok */ }
+    }
+  });
+  renderer.domElement.addEventListener('pointerup', (ev) => {
+    if (dragState) {
+      const { id, moved } = dragState;
+      const v = dragValue(ev);
+      const nv = nodeVis.get(id);
+      if (nv) nv.group.position.y = nv.n.pos.y;
+      dragState = null;
+      controls.enabled = true;
+      if (moved) {
+        downXY = null;
+        // quantize to the simulator slider's 25% steps so UI stays consistent
+        opts.onLeverDragEnd?.(id, Math.round(v * 4) / 4);
+        return;
+      }
+      // tiny movement: fall through and treat as a click-select
+    }
+    if (!downXY) return;
+    const movedPx = Math.hypot(ev.clientX - downXY[0], ev.clientY - downXY[1]);
+    downXY = null;
+    if (movedPx > 7) return;
+    onSelect(raycastNode(ev));
   });
   renderer.domElement.addEventListener('pointermove', (ev) => {
+    if (dragState) {
+      const v = dragValue(ev);
+      if (Math.abs(dragState.startY - ev.clientY) > 5) dragState.moved = true;
+      const nv = nodeVis.get(dragState.id);
+      if (nv) nv.group.position.y = nv.n.pos.y + v * 4;
+      if (dragState.moved) opts.onLeverDrag(dragState.id, v);
+      return;
+    }
     if (downXY) return;
-    const r = renderer.domElement.getBoundingClientRect();
-    ndc.x = ((ev.clientX - r.left) / r.width) * 2 - 1;
-    ndc.y = -((ev.clientY - r.top) / r.height) * 2 + 1;
-    ray.setFromCamera(ndc, camera);
-    const hits = ray.intersectObjects(pickMeshes, false);
-    renderer.domElement.style.cursor = hits.length ? 'pointer' : '';
+    const id = raycastNode(ev);
+    const n = id ? graph.nodeById.get(id) : null;
+    renderer.domElement.style.cursor = n ? (n.lever ? 'ns-resize' : 'pointer') : '';
   }, { passive: true });
 
   // --- label distance fade ---
@@ -557,7 +669,11 @@ export function createScene(opts) {
     controls.update();
     updateCamTween(elapsed);
     if (!reducedMotion || frame === 0) particlePositions(elapsed);
-    if (hlActive) updateStaged(elapsed);
+    if (hlActive) {
+      updateStaged(elapsed);
+      updatePulses(elapsed);
+    }
+    if (bounces.size) updateBounces(elapsed);
     if (frame % 3 === 0) updateLabelFade();
     // subtle breathing on glows
     if (!reducedMotion && frame % 2 === 0) {
@@ -610,6 +726,13 @@ export function createScene(opts) {
       for (const [id, txt] of map) {
         const v = nodeVis.get(id);
         if (v) v.chip.title = txt;
+      }
+    },
+    setLabelValues(map) {
+      // instrument readout on key-variable labels (e.g. "기준금리 2.50%")
+      for (const v of nodeVis.values()) {
+        const el = v.chip.querySelector('.lval');
+        if (el) el.textContent = (map && map.get(v.n.id)) || '';
       }
     },
     dispose() {

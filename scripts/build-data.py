@@ -63,6 +63,20 @@ for key in ["edges-A", "edges-B", "edges-C", "edges-D"]:
 
 pairset = {f"{e['from']}>{e['to']}" for e in edges}
 
+# ---- regime flips (optional flips.json: attach flip{ko,en} onto matching edges) ----
+if os.path.exists(os.path.join(SRC, "flips.json")):
+    flips = load("flips")["flips"]
+    by_pair = {(e["from"], e["to"]): e for e in edges}
+    for fl in flips:
+        pair = (fl["from"], fl["to"])
+        w = f"flip {fl['from']}->{fl['to']}"
+        if pair not in by_pair:
+            problems.append(f"{w}: edge does not exist")
+            continue
+        check_loc(fl["flip"], w)
+        by_pair[pair]["flip"] = fl["flip"]
+    print(f"flips attached: {sum(1 for e in edges if 'flip' in e)}")
+
 # ---- descs ----
 descs = load("descs")["descs"]
 dids = {d["id"] for d in descs}
@@ -72,8 +86,16 @@ for d in descs:
 missing = IDS - dids
 if missing: problems.append(f"descs missing: {sorted(missing)}")
 
-# ---- loops ----
+# ---- loops (base + optional loops-extra.json) ----
 loops = load("loops")["loops"]
+if os.path.exists(os.path.join(SRC, "loops-extra.json")):
+    extra = load("loops-extra")["loops"]
+    known = {lp["id"] for lp in loops}
+    for lp in extra:
+        if lp["id"] in known:
+            warnings.append(f"loop {lp['id']}: duplicate id in loops-extra, skipped")
+            continue
+        loops.append(lp)
 for lp in loops:
     ids = lp["nodes"]
     sign = 1
@@ -94,7 +116,10 @@ for lp in loops:
 
 # ---- cases ----
 cases = []
-for cid in ["oil70s", "krw97", "gfc08", "covid20"]:
+case_files = ["oil70s", "krw97", "gfc08", "covid20"]
+if os.path.exists(os.path.join(SRC, "case-dotcom.json")):
+    case_files.append("dotcom")
+for cid in case_files:
     data = load("case-" + cid)["caseData"]
     keys = [p["key"] for p in data["phases"]]
     if keys != ["cause", "spread", "policy", "psychology", "outcome"]:

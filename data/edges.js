@@ -75,7 +75,11 @@ export const EDGES = [
    "ko": "금리 인상은 시장의 돈줄을 조인다는 신호라서, 투자자들이 위험한 베팅을 줄이고 안전한 자산 쪽으로 물러선다.",
    "en": "Rate hikes signal that easy money is being withdrawn, so investors dial back risky bets and edge toward safety."
   },
-  "source": "BIS"
+  "source": "BIS",
+  "flip": {
+   "ko": "물가 불안이 극심할 때는 과감한 금리 인상이 '중앙은행이 물가를 확실히 잡는다'는 신뢰를 되살려, 오히려 투자 심리를 안정시키기도 합니다.",
+   "en": "When inflation fears run hot, a bold rate hike can restore faith that the central bank has prices under control, calming markets instead of scaring them."
+  }
  },
  {
   "from": "market_rate",
@@ -139,6 +143,10 @@ export const EDGES = [
   "note": {
    "ko": "금리가 '경기가 좋아서' 오르는 국면에는 이익 전망도 함께 밝아져, 주가가 금리와 나란히 오르기도 한다.",
    "en": "When rates rise because growth is strong, earnings outlooks brighten too, and stocks can climb alongside yields."
+  },
+  "flip": {
+   "ko": "경제가 강하게 성장해서 금리가 오를 때는 '기업이 돈을 더 잘 벌 것'이라는 기대가 이자 부담보다 커서, 금리와 주가가 나란히 오르기도 합니다.",
+   "en": "When rates are rising because the economy is booming, the promise of stronger profits outweighs the higher cost of borrowing, so rates and stocks can climb together."
   }
  },
  {
@@ -392,6 +400,10 @@ export const EDGES = [
   "note": {
    "ko": "임금이 물가를 따라잡으면 효과는 줄어든다. 물가가 급하게 뛸수록 타격이 크다.",
    "en": "If wages catch up with prices the effect fades; the faster the inflation, the bigger the hit."
+  },
+  "flip": {
+   "ko": "'물가가 앞으로 더 오를 것'이라는 기대가 퍼질 때는, 더 비싸지기 전에 미리 사자는 심리가 생겨 소비를 줄이기는커녕 오히려 앞당기기도 합니다.",
+   "en": "When people come to expect further price rises, they may buy now before things get more expensive, pulling consumption forward rather than cutting it back."
   }
  },
  {
@@ -495,6 +507,10 @@ export const EDGES = [
   "note": {
    "ko": "정유·조선처럼 유가 상승이 오히려 이득인 업종도 있다. 경제 전체로는 비용 부담 쪽이 더 크다.",
    "en": "Some sectors (refiners, shipbuilders) actually benefit; economy-wide, the cost burden dominates."
+  },
+  "flip": {
+   "ko": "정유·조선·에너지 기업에는 유가 상승이 오히려 호재가 되기도 합니다. 또 유가가 세계 경기 호조 때문에 오를 때는 수출기업 실적도 함께 좋아져, 두 변수가 같은 방향으로 움직입니다.",
+   "en": "For refiners, shipbuilders, and energy firms, higher oil prices can actually be good news. And when oil rises because global demand is strong, exporters' earnings improve too, so the two move in the same direction."
   }
  },
  {
@@ -564,6 +580,10 @@ export const EDGES = [
   "note": {
    "ko": "효과는 반년 넘게 걸리고, 초반엔 수입액부터 불어나 오히려 나빠 보일 수 있다(J커브). 글로벌 분업 시대엔 예전보다 약해졌다.",
    "en": "The boost takes 6+ months and can look negative at first as import bills swell (J-curve); global supply chains have weakened this channel."
+  },
+  "flip": {
+   "ko": "원화 약세가 세계 경기 침체 때문에 나타날 때는 해외 수요 자체가 얼어붙어 수출도 함께 줄어듭니다. 같은 원인이 환율은 올리고 수출은 줄여, 두 변수를 평소와 반대 방향으로 묶는 것입니다.",
+   "en": "When the won weakens because the global economy is slumping, overseas demand itself dries up and exports fall too. The same shock pushes the exchange rate up and exports down, flipping their usual relationship."
   }
  },
  {
@@ -723,6 +743,10 @@ export const EDGES = [
   "note": {
    "ko": "기계적으로 따라가진 않는다. 한국은행은 국내 물가와 경기를 먼저 보며, 금리차를 견딘 시기도 있다.",
    "en": "Not mechanical: the BOK weighs domestic inflation and growth first, and has at times tolerated a wide gap."
+  },
+  "flip": {
+   "ko": "국내 경기 부진이 깊을 때는 연준이 금리를 올려도 한국은행이 따라가지 않고 동결하거나 내리기도 합니다. 환율 부담을 감수하더라도 국내 경기를 먼저 살려야 하기 때문입니다.",
+   "en": "When Korea's economy is in a deep slump, the Bank of Korea may hold or even cut while the Fed hikes, accepting pressure on the won because the domestic downturn takes priority."
   }
  },
  {
@@ -1253,6 +1277,10 @@ export const EDGES = [
   "note": {
    "ko": "돈을 빌리는 그 순간에는 소비가 늘지만, 쌓인 빚은 시간이 갈수록 소비를 누른다. 단기 부양, 장기 부담이다.",
    "en": "Borrowing lifts spending at first; it is the accumulated stock of debt that weighs on consumption later: a short-run boost, a long-run drag."
+  },
+  "flip": {
+   "ko": "신용이 막 늘어나는 초기에는 대출받은 돈이 소비로 흘러들어 소비를 밀어올립니다(+). 하지만 부채가 오래 쌓인 뒤에는 원리금 상환 부담이 커져, 그때부터 소비를 짓누르기 시작합니다(-).",
+   "en": "Early in a credit boom, borrowed money flows straight into spending and lifts consumption (+). Only after debt has piled up do repayment burdens take over and start squeezing it (-)."
   }
  },
  {
@@ -1330,6 +1358,10 @@ export const EDGES = [
   "note": {
    "ko": "깊은 불황에서 중앙은행이 국채를 사주는 시기에는 이 '구축 효과'가 약해진다.",
    "en": "In deep recessions, when the central bank is buying bonds, this crowding-out effect weakens."
+  },
+  "flip": {
+   "ko": "침체기에 중앙은행이 국채를 사들이며 재정 확대를 뒷받침할 때는 금리가 오히려 눌립니다. 위기 국면에서 정부의 과감한 지출이 '경제를 구한다'는 신뢰로 읽히면, 불안이 가라앉으며 금리가 내리기도 합니다.",
+   "en": "In a recession, if the central bank buys government bonds alongside the fiscal expansion, rates get pinned down instead of pushed up. And in a crisis, decisive government spending can be read as a rescue that restores confidence, easing panic and pulling rates lower."
   }
  },
  {

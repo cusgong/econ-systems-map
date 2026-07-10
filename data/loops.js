@@ -144,5 +144,26 @@ export const LOOPS = [
    "ko": "2020년 코로나 위기 때 한국은 한 해에 네 차례 추경을 편성하고 전 국민 긴급재난지원금을 지급해 소비 절벽을 막았습니다. 2008년 글로벌 금융위기 때도 각국이 재정 지출을 크게 늘려 침체가 대공황 수준으로 깊어지는 것을 막았다는 평가를 받습니다.",
    "en": "During the 2020 COVID crisis, Korea passed four supplementary budgets in a single year and paid universal emergency relief to households, cushioning the collapse in spending. In the 2008 global financial crisis as well, fiscal expansion across countries is credited with keeping the recession from becoming another Great Depression."
   }
+ },
+ {
+  "id": "wealth_effect",
+  "name": {
+   "ko": "자산효과의 눈덩이",
+   "en": "The Wealth-Effect Snowball"
+  },
+  "type": "reinforcing",
+  "nodes": [
+   "stocks",
+   "consumption",
+   "earnings"
+  ],
+  "story": {
+   "ko": "주가가 오르면 주식을 가진 사람들은 아직 팔지 않았는데도 '내가 부유해졌다'고 느끼고, 그 기분에 지갑을 더 쉽게 엽니다. 소비가 늘면 기업의 매출과 이익이 좋아지고, 실적이 개선된 기업의 주가는 다시 한 번 오릅니다. 한 바퀴 돌 때마다 같은 방향으로 힘이 보태지기 때문에 눈덩이처럼 불어나는 강화 루프입니다. 다만 사람들이 불어난 자산을 그대로 다 쓰는 것은 아니어서, 한 바퀴마다 더해지는 힘은 생각보다 작습니다. 하락장에서는 똑같은 고리가 거꾸로 돌아 '가난해진 기분'이 소비를 위축시키는 역자산효과가 나타나며, 중앙은행은 경기가 과열되면 금리를 올리고 얼어붙으면 금리를 내리는 식으로 이 고리에 제동을 겁니다.",
+   "en": "When stock prices rise, people who own shares feel richer even before selling anything, and that feeling makes them open their wallets more easily. Higher spending lifts company sales and profits, and stronger earnings push stock prices up once more. Each turn of the cycle adds force in the same direction, which makes this a reinforcing loop that grows like a snowball. In practice, each turn adds less than you might think, because people spend only a small fraction of their paper gains. In a downturn the same loop spins in reverse, and feeling poorer makes households cut back, the reverse wealth effect; central banks lean against the loop by raising rates when the economy overheats and cutting them when it freezes up."
+  },
+  "example": {
+   "ko": "2000년대 중반 미국에서는 주택과 주식 가격 상승이 가계의 소비 붐을 떠받쳤지만, 2008년 금융위기로 자산 가격이 무너지자 같은 고리가 거꾸로 돌며 소비가 급격히 얼어붙었습니다. 금리가 가파르게 오르며 주식과 부동산이 함께 흔들린 2022년에도 미국과 한국에서 가계의 소비 심리가 크게 식었는데, 물가 급등과 겹친 역자산효과가 그 배경으로 꼽힙니다.",
+   "en": "In the mid-2000s United States, rising home and stock prices propped up a household spending boom, but when asset prices collapsed in the 2008 financial crisis, the same loop ran in reverse and consumption froze. Something similar appeared in 2022, when sharply rising interest rates rattled both stocks and housing: consumer sentiment cooled markedly in the US and Korea, with the reverse wealth effect compounding the squeeze from high inflation."
+  }
  }
 ];

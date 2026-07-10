@@ -6,7 +6,7 @@
 2차·3차 파급효과를 탐색하는 3D 경제 인과관계 지도로 시스템 사고를 훈련하는 웹앱.
 
 ## 지금 단계
-v1.3.1 라이브 배포 완료: https://econ-systems-map.vercel.app (개인 Vercel, cusgong). 상시 접속 가능.
+v2.0.0 라이브: https://econ-systems-map.vercel.app (개인 Vercel). 탐색 크로스링크·계기판·펄스/드래그 인터랙션·국면 반전·AI 채팅 탑재.
 
 ## Milestones  (상태는 매 작업·도달 시 갱신)
 - [x] M1 스캐폴드 + canonical 데이터 스키마/노드 정의
@@ -31,6 +31,7 @@ v1.3.1 라이브 배포 완료: https://econ-systems-map.vercel.app (개인 Verc
 - 라이브에 앱만 노출되게 `.vercelignore` 유지(Vercel CLI는 .gitignore 무시). GitHub push: cusgong 전환 + `git -c credential.helper= -c credential.helper="!gh auth git-credential" push` 후 5bu-gainge 복구.
 
 ## 최근 완료
+- v2.0.0 (Marcus 피드백 5건): ①탐색↔사례·루프 크로스링크(변수 선택 시 등장 사례·루프 버튼 + NOW 계기 스트립) ②핵심 변수 계기판(3D 라벨 실측값 6종) ③전파 시각화 혁신(시차 비례 펄스 파동, 도착 밀당 바운스, 레버 노드 상하 드래그 즉석 충격→시뮬레이터 자동 전환) ④국면 반전 8건(금색 엣지+⇄배지, 예: 성장발 금리 상승은 주가 호재) ⑤AI 채팅 탭(BYO Anthropic 키·스트리밍·프롬프트 캐시, 답변의 map 블록이 지도 하이라이트/시나리오 착색/사례·루프 점프 자동 실행) ⑥콘텐츠 추가: 닷컴 버블 사례(AI 슈퍼사이클 테마와 상호 연결)+자산효과 루프 — 저작→회의적 팩트체크 파이프라인(정정 10+건)
 - v1.3.1 다이얼로그 스크롤바 중복 수정 (Marcus 제보 "출처와 한계 창 스크롤바 2개"): `dialog`와 `.dlg-body`가 같은 `max-height: min(80dvh,720px)`를 가져 테두리(2px)만큼 내부가 넘쳐 둘 다 스크롤러가 됐다. 스크롤러를 하나(`.dlg-body`)로만: `dialog`에 `overflow:hidden`, 내부 상한을 `calc(var(--dlg-maxh) - 2*var(--dlg-border))`로 다이얼로그 안쪽에 정확히 맞춤. `min(80dvh,720px)`를 `--dlg-maxh` 변수로 뽑아 값 드리프트 방지. flex/퍼센트-높이 방식은 자동높이 부모에서 붕괴해 폐기. 온보딩 다이얼로그도 함께 수정, 검색 팔레트 무영향. 검증: 프리뷰 탭 0×0 뷰포트 아티팩트(dvh=0) 우회 위해 `--dlg-maxh`만 500px로 치환해 스크롤 메커니즘 실측 → dialog 스크롤 안 함(overflow hidden), body만 15px 스크롤바(단일 스크롤러) 확인.
 - v1.3.0 "지금" 모드 (Marcus 피드백 "실제 지금 정세 기반"): 검증 지표 17개(리서치 3 에이전트 + 독립 교차검증 1, 전부 출처·기준일 명기) + 지도 투영(최근 6개월 방향 틴트) + 현재 흐름 테마 5개(호르무즈 유가, AI 반도체, 미 관세, 집값·가계부채, 중국)와 인과 경로 하이라이트·닮은꼴 사례·관련 루프 연결. 스냅샷 4개월 경과 시 자동 경고. 갱신 경로 = data/situation.js 단일 파일
 - v1.2.0 편의 패키지 (Marcus 피드백 "검색 + UX"): Ctrl+K·/ 검색 팔레트(변수·사례·루프 통합, 초성 검색, 키보드 완결), URL 해시 딥링크+뒤로가기(#/v·#/case·#/loop·#/sim), 경로 체인 변수명 클릭 점프, 라벨 호버 툴팁(변수 설명), 처음 화면(⌖) 버튼, 도움말 단축키 안내
