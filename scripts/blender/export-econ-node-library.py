@@ -52,6 +52,13 @@ def _select_roots_and_descendants(roots: list[bpy.types.Object]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = _arguments(sys.argv[sys.argv.index("--") + 1 :] if argv is None and "--" in sys.argv else (argv or []))
+    try:
+        VALIDATOR.SPECS.require_blender_version(bpy.app.version[:3])
+    except VALIDATOR.SPECS.NodeSpecError as exc:
+        summary = VALIDATOR._fresh_summary(args.scope)
+        VALIDATOR._append_error(summary, str(exc))
+        VALIDATOR.emit_summary(summary)
+        return 1
     output = args.output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
 

@@ -50,6 +50,13 @@ class NodeSpecsContractTests(unittest.TestCase):
         with self.assertRaisesRegex(module.NodeSpecError, "unknown category"):
             module.validate_nodes_source(changed)
 
+    def test_runtime_contract_rejects_any_version_other_than_5_1_2(self):
+        module = load_node_specs()
+
+        module.require_blender_version((5, 1, 2))
+        with self.assertRaisesRegex(module.NodeSpecError, "requires Blender 5.1.2"):
+            module.require_blender_version((5, 1, 3))
+
 
 if __name__ == "__main__":
     unittest.main()

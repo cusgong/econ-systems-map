@@ -14,6 +14,18 @@ class NodeSpecError(ValueError):
     """Raised when data/nodes.js no longer matches the Blender asset contract."""
 
 
+BLENDER_VERSION = (5, 1, 2)
+
+
+def require_blender_version(version) -> None:
+    actual = tuple(int(part) for part in tuple(version)[:3])
+    if actual != BLENDER_VERSION:
+        rendered = ".".join(str(part) for part in actual)
+        raise NodeSpecError(
+            f"economic node pipeline requires Blender 5.1.2, found {rendered}"
+        )
+
+
 PROOF_IDS = ("policy_rate", "fx", "oil", "housing", "gdp", "risk_sentiment")
 
 NODE_MOTIONS = {

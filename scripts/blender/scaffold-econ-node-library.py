@@ -433,6 +433,7 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    SPECS.require_blender_version(bpy.app.version[:3])
     args = _arguments(sys.argv[sys.argv.index("--") + 1 :] if argv is None and "--" in sys.argv else (argv or []))
     output = args.output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)

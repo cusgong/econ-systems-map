@@ -13,7 +13,7 @@ from typing import Iterable
 
 import bmesh
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -58,10 +58,12 @@ def _append_error(summary: dict, message: str) -> None:
 
 
 def _is_identity_transform(obj: bpy.types.Object, tolerance: float = 1.0e-6) -> bool:
-    return (
-        obj.location.length <= tolerance
-        and all(abs(angle) <= tolerance for angle in obj.rotation_euler)
-        and all(abs(value - 1.0) <= tolerance for value in obj.scale)
+    identity = Matrix.Identity(4)
+    local = obj.matrix_local
+    return all(
+        abs(local[row][column] - identity[row][column]) <= tolerance
+        for row in range(4)
+        for column in range(4)
     )
 
 
@@ -101,34 +103,8 @@ def _scope_roots(roots: dict[str, bpy.types.Object], scope: str, summary: dict):
 
 
 def _check_global_scene_contract(summary: dict) -> dict[str, bpy.types.Object]:
-    object_names = [obj.name for obj in bpy.data.objects]
-    data_names = [mesh.name for mesh in bpy.data.meshes]
     material_names = [material.name for material in bpy.data.materials]
     collection_names = [collection.name for collection in bpy.data.collections]
-    all_names = object_names + data_names + material_names + collection_names
-    suffixed = sorted(name for name in all_names if re_suffix(name))
-    if suffixed:
-        _append_error(summary, f"forbidden numeric name suffixes: {suffixed}")
-
-    duplicates = sorted(
-        name for name in set(object_names) if object_names.count(name) > 1
-    )
-    if duplicates:
-        _append_error(summary, f"duplicate object names: {duplicates}")
-
-    top_level = {obj.name: obj for obj in bpy.data.objects if obj.parent is None}
-    actual_ids = set(top_level)
-    expected_ids = set(SPECS.CANONICAL_IDS)
-    if actual_ids != expected_ids:
-        missing = sorted(expected_ids - actual_ids)
-        extra = sorted(actual_ids - expected_ids)
-        _append_error(
-            summary,
-            f"canonical root mismatch: missing={missing}, extra={extra}",
-        )
-
-    roots = {node_id: top_level[node_id] for node_id in SPECS.CANONICAL_IDS if node_id in top_level}
-
     expected_collections = {
         "MASTER__ECON_NODE_LIBRARY",
         "00_ASSETS",
@@ -141,6 +117,93 @@ def _check_global_scene_contract(summary: dict) -> dict[str, bpy.types.Object]:
         missing = sorted(expected_collections - actual_collections)
         extra = sorted(actual_collections - expected_collections)
         _append_error(summary, f"collection contract mismatch: missing={missing}, extra={extra}")
+
+    master = bpy.data.collections.get("MASTER__ECON_NODE_LIBRARY")
+    assets = bpy.data.collections.get("00_ASSETS")
+    wip = bpy.data.collections.get("10_WIP")
+    qa = bpy.data.collections.get("90_QA")
+    if master is not None and master.name not in {
+        child.name for child in bpy.context.scene.collection.children
+    }:
+        _append_error(summary, "MASTER__ECON_NODE_LIBRARY is not linked to the active scene")
+    if master is not None:
+        master_children = {child.name for child in master.children}
+        expected_master_children = {"00_ASSETS", "10_WIP", "90_QA"}
+        if master_children != expected_master_children:
+            _append_error(
+                summary,
+                "master collection children mismatch: "
+                f"expected={sorted(expected_master_children)}, actual={sorted(master_children)}",
+            )
+
+    roots: dict[str, bpy.types.Object] = {}
+    asset_top_level: list[str] = []
+    if assets is not None:
+        expected_node_collections = {f"NODE__{node_id}" for node_id in SPECS.CANONICAL_IDS}
+        actual_node_collections = {child.name for child in assets.children}
+        if actual_node_collections != expected_node_collections:
+            _append_error(
+                summary,
+                "asset node collection mismatch: "
+                f"missing={sorted(expected_node_collections - actual_node_collections)}, "
+                f"extra={sorted(actual_node_collections - expected_node_collections)}",
+            )
+        if assets.objects:
+            _append_error(
+                summary,
+                f"00_ASSETS must not contain direct objects: {sorted(obj.name for obj in assets.objects)}",
+            )
+        for node_id in SPECS.CANONICAL_IDS:
+            node_collection = bpy.data.collections.get(f"NODE__{node_id}")
+            if node_collection is None:
+                continue
+            candidates = [obj for obj in node_collection.objects if obj.parent is None]
+            asset_top_level.extend(obj.name for obj in candidates)
+            matching = [obj for obj in candidates if obj.name == node_id]
+            if len(candidates) != 1 or len(matching) != 1:
+                _append_error(
+                    summary,
+                    f"{node_id}: NODE collection must contain exactly its canonical top-level root, "
+                    f"found={sorted(obj.name for obj in candidates)}",
+                )
+                continue
+            roots[node_id] = matching[0]
+
+    expected_ids = set(SPECS.CANONICAL_IDS)
+    actual_ids = set(asset_top_level)
+    if actual_ids != expected_ids:
+        _append_error(
+            summary,
+            "canonical root mismatch: "
+            f"missing={sorted(expected_ids - actual_ids)}, extra={sorted(actual_ids - expected_ids)}",
+        )
+
+    asset_objects = set(assets.all_objects) if assets is not None else set()
+    support_objects = set()
+    if wip is not None:
+        support_objects.update(wip.all_objects)
+    if qa is not None:
+        support_objects.update(qa.all_objects)
+    assigned_objects = asset_objects | support_objects
+    unassigned = sorted(obj.name for obj in bpy.data.objects if obj not in assigned_objects)
+    if unassigned:
+        _append_error(summary, f"objects outside asset/WIP/QA zones: {unassigned}")
+
+    asset_object_names = [obj.name for obj in asset_objects]
+    asset_data_names = [
+        obj.data.name for obj in asset_objects if obj.type == "MESH" and obj.data is not None
+    ]
+    protected_names = asset_object_names + asset_data_names + material_names + collection_names
+    suffixed = sorted(name for name in protected_names if re_suffix(name))
+    if suffixed:
+        _append_error(summary, f"forbidden numeric name suffixes: {suffixed}")
+
+    duplicates = sorted(
+        name for name in set(asset_object_names) if asset_object_names.count(name) > 1
+    )
+    if duplicates:
+        _append_error(summary, f"duplicate asset object names: {duplicates}")
+
     for node_id, root in roots.items():
         if root.type != "EMPTY":
             _append_error(summary, f"{node_id}: canonical root must be EMPTY, found {root.type}")
@@ -177,10 +240,20 @@ def _check_global_scene_contract(summary: dict) -> dict[str, bpy.types.Object]:
         extra = sorted(actual_materials - expected_materials)
         _append_error(summary, f"material library mismatch: missing={missing}, extra={extra}")
 
-    if bpy.data.cameras:
-        _append_error(summary, f"scene contains cameras: {[item.name for item in bpy.data.cameras]}")
-    if bpy.data.lights:
-        _append_error(summary, f"scene contains lights: {[item.name for item in bpy.data.lights]}")
+    unsupported_cameras = sorted(
+        obj.name
+        for obj in bpy.data.objects
+        if obj.type == "CAMERA" and obj not in support_objects
+    )
+    if unsupported_cameras:
+        _append_error(summary, f"asset scene contains cameras: {unsupported_cameras}")
+    unsupported_lights = sorted(
+        obj.name
+        for obj in bpy.data.objects
+        if obj.type == "LIGHT" and obj not in support_objects
+    )
+    if unsupported_lights:
+        _append_error(summary, f"asset scene contains lights: {unsupported_lights}")
     if bpy.data.actions:
         _append_error(summary, f"scene contains animations: {[item.name for item in bpy.data.actions]}")
     external_images = [
@@ -376,6 +449,11 @@ def _validate_model(
 
 def validate_scene(scope: str) -> tuple[dict, list[bpy.types.Object]]:
     summary = _fresh_summary(scope)
+    try:
+        SPECS.require_blender_version(bpy.app.version[:3])
+    except SPECS.NodeSpecError as exc:
+        _append_error(summary, str(exc))
+        return summary, []
     if bpy.context.scene.name != "SCENE__ECON_NODE_LIBRARY":
         _append_error(
             summary,
@@ -452,6 +530,25 @@ def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | N
         _append_error(summary, f"GLB contains duplicate node names: {duplicates}")
 
     expected_ids = tuple(expected_ids)
+    active_scene_index = gltf.get("scene", 0)
+    scenes = gltf.get("scenes", [])
+    active_root_indices: list[int] = []
+    if not isinstance(active_scene_index, int) or not 0 <= active_scene_index < len(scenes):
+        _append_error(summary, f"GLB has invalid active scene index {active_scene_index!r}")
+    else:
+        active_root_indices = scenes[active_scene_index].get("nodes", [])
+    active_root_names = {
+        nodes[index].get("name")
+        for index in active_root_indices
+        if isinstance(index, int) and 0 <= index < len(nodes)
+    }
+    if active_root_names != set(expected_ids) or len(active_root_indices) != len(expected_ids):
+        _append_error(
+            summary,
+            "GLB active scene root mismatch: "
+            f"expected={sorted(expected_ids)}, actual={sorted(str(name) for name in active_root_names)}",
+        )
+
     roots_by_name = {
         node.get("name"): index
         for index, node in enumerate(nodes)
@@ -464,6 +561,7 @@ def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | N
         )
 
     meshes = gltf.get("meshes", [])
+    materials = gltf.get("materials", [])
     primitive_count = 0
     glb_triangles = 0
     accessors = gltf.get("accessors", [])
@@ -471,9 +569,61 @@ def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | N
         if node_id not in roots_by_name:
             continue
         root_index = roots_by_name[node_id]
-        root_extras = nodes[root_index].get("extras", {})
-        if root_extras.get("econ_id") != node_id or root_extras.get("econ_ready") is not True:
-            _append_error(summary, f"GLB {node_id}: missing canonical ready extras")
+        root_node = nodes[root_index]
+        root_extras = root_node.get("extras", {})
+        signature, axis, amount = SPECS.NODE_MOTIONS[node_id]
+        expected_extras = {
+            "econ_schema_version": 1,
+            "econ_id": node_id,
+            "econ_ready": True,
+            "econ_signature": signature,
+            "econ_axis": axis,
+            "econ_amount": amount,
+        }
+        for key, expected in expected_extras.items():
+            actual = root_extras.get(key)
+            if isinstance(expected, float):
+                valid = isinstance(actual, (int, float)) and math.isclose(
+                    float(actual), expected, rel_tol=0.0, abs_tol=1.0e-6
+                )
+            else:
+                valid = actual == expected
+            if not valid:
+                _append_error(
+                    summary,
+                    f"GLB {node_id}: {key} expected {expected!r}, found {actual!r}",
+                )
+        duration = root_extras.get("econ_duration")
+        if not isinstance(duration, (int, float)) or not 0.16 <= float(duration) <= 0.32:
+            _append_error(summary, f"GLB {node_id}: econ_duration must be within 0.16..0.32")
+
+        identity_components = {
+            "translation": [0.0, 0.0, 0.0],
+            "rotation": [0.0, 0.0, 0.0, 1.0],
+            "scale": [1.0, 1.0, 1.0],
+        }
+        if "matrix" in root_node:
+            expected_matrix = [
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, 1.0, 0.0,
+                0.0, 0.0, 0.0, 1.0,
+            ]
+            if any(
+                not math.isclose(float(actual), expected, rel_tol=0.0, abs_tol=1.0e-6)
+                for actual, expected in zip(root_node.get("matrix", []), expected_matrix)
+            ) or len(root_node.get("matrix", [])) != 16:
+                _append_error(summary, f"GLB {node_id}: root matrix is not identity")
+        for key, expected in identity_components.items():
+            if key in root_node and (
+                len(root_node[key]) != len(expected)
+                or any(
+                    not math.isclose(float(actual), wanted, rel_tol=0.0, abs_tol=1.0e-6)
+                    for actual, wanted in zip(root_node[key], expected)
+                )
+            ):
+                _append_error(summary, f"GLB {node_id}: root {key} is not identity")
+
         mesh_nodes = [
             index
             for index in _node_descendants(nodes, root_index)
@@ -481,13 +631,21 @@ def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | N
         ]
         if len(mesh_nodes) != 2:
             _append_error(summary, f"GLB {node_id}: expected 2 descendant mesh nodes, found {len(mesh_nodes)}")
+        mesh_node_names = {nodes[index].get("name") for index in mesh_nodes}
+        expected_mesh_node_names = {f"{node_id}__body", f"{node_id}__accent"}
+        if mesh_node_names != expected_mesh_node_names:
+            _append_error(
+                summary,
+                f"GLB {node_id}: mesh node names expected={sorted(expected_mesh_node_names)}, "
+                f"actual={sorted(str(name) for name in mesh_node_names)}",
+            )
         roles = []
         for node_index in mesh_nodes:
             node = nodes[node_index]
             role = node.get("extras", {}).get("econ_role")
             roles.append(role)
             mesh_index = node["mesh"]
-            if not 0 <= mesh_index < len(meshes):
+            if not isinstance(mesh_index, int) or not 0 <= mesh_index < len(meshes):
                 _append_error(summary, f"GLB {node_id}: invalid mesh index {mesh_index}")
                 continue
             primitives = meshes[mesh_index].get("primitives", [])
@@ -495,14 +653,45 @@ def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | N
             if len(primitives) != 1:
                 _append_error(summary, f"GLB {node_id}/{role}: expected 1 primitive, found {len(primitives)}")
             for primitive in primitives:
-                if "material" not in primitive:
-                    _append_error(summary, f"GLB {node_id}/{role}: primitive has no material")
+                expected_material = (
+                    "MAT__DARK_TITANIUM"
+                    if role == "body"
+                    else SPECS.CATEGORY_MATERIALS[SPECS.NODE_CATEGORIES[node_id]]
+                    if role == "accent"
+                    else None
+                )
+                material_index = primitive.get("material")
+                if not isinstance(material_index, int) or not 0 <= material_index < len(materials):
+                    _append_error(summary, f"GLB {node_id}/{role}: primitive has invalid material")
+                elif expected_material is not None:
+                    actual_material = materials[material_index].get("name")
+                    if actual_material != expected_material:
+                        _append_error(
+                            summary,
+                            f"GLB {node_id}/{role}: material expected {expected_material}, "
+                            f"found {actual_material}",
+                        )
                 attributes = set(primitive.get("attributes", {}))
                 if attributes != {"POSITION", "NORMAL"}:
                     _append_error(summary, f"GLB {node_id}/{role}: unexpected attributes {sorted(attributes)}")
+                mode = primitive.get("mode", 4)
+                if mode != 4:
+                    _append_error(summary, f"GLB {node_id}/{role}: primitive mode expected 4, found {mode}")
                 index_accessor = primitive.get("indices")
-                if isinstance(index_accessor, int) and 0 <= index_accessor < len(accessors):
-                    glb_triangles += int(accessors[index_accessor].get("count", 0)) // 3
+                if not isinstance(index_accessor, int) or not 0 <= index_accessor < len(accessors):
+                    _append_error(summary, f"GLB {node_id}/{role}: invalid index accessor {index_accessor!r}")
+                    continue
+                accessor = accessors[index_accessor]
+                count = accessor.get("count")
+                if not isinstance(count, int) or count <= 0 or count % 3 != 0:
+                    _append_error(
+                        summary,
+                        f"GLB {node_id}/{role}: index accessor count {count!r} must be positive and divisible by 3",
+                    )
+                else:
+                    glb_triangles += count // 3
+                if accessor.get("type") != "SCALAR" or accessor.get("componentType") not in {5121, 5123, 5125}:
+                    _append_error(summary, f"GLB {node_id}/{role}: invalid index accessor format")
         if set(roles) != {"body", "accent"}:
             _append_error(summary, f"GLB {node_id}: econ_role set is {sorted(str(role) for role in roles)}")
 

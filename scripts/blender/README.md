@@ -1,6 +1,6 @@
 # Blender economic node library
 
-`econ-node-library.blend` is the authored source of truth. The GLB is a validated runtime derivative. This slice intentionally contains one ready model, `policy_rate`; the other 29 canonical roots remain scaffolded with `econ_ready=false`. There is no Three.js integration in this task.
+`econ-node-library.blend` is the authored source of truth. The GLB is a validated runtime derivative. This slice intentionally contains one ready model, `policy_rate`; the other 29 canonical roots remain scaffolded with `econ_ready=false`. There is no Three.js integration in this task. Every entry point fails unless `bpy.app.version` is exactly `5.1.2`.
 
 ## Pinned runtime
 
@@ -24,7 +24,7 @@ The SHA-256 matches Blender's official `blender-5.1.2.sha256` manifest. The Micr
 
 - `node-specs.py`: imports the canonical 30 IDs/categories from `data/nodes.js` and fails at import if the motion map drifts.
 - `scaffold-econ-node-library.py`: creates the collection/material/root contract idempotently and never replaces an existing non-empty mesh.
-- `validate-econ-node-library.py`: validates evaluated Blender geometry and, optionally, a parsed GLB JSON chunk.
+- `validate-econ-node-library.py`: validates evaluated Blender geometry and, optionally, a parsed GLB JSON chunk. Asset discovery is collection-aware: `10_WIP` cutters/references and `90_QA` cameras/lights are allowed in the source but never selected or exported.
 - `export-econ-node-library.py`: validates first, exports to a same-directory temporary GLB, post-validates it, and only then uses `os.replace`.
 - `econ-node-library.blend`: authored source scene.
 - `../../data/models/econ-node-library.glb`: runtime derivative.
