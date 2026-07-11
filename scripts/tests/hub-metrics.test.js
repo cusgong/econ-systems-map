@@ -44,19 +44,21 @@ test('second and third hops each receive 0.68 decay', () => {
   assertClose(metrics.get('a').outInfluence, 1 + 0.68 + 0.68 ** 2);
 });
 
-test('only the strongest path to a destination contributes', () => {
+test('a later stronger path replaces an earlier weaker path to the same destination', () => {
   const graph = syntheticGraph(
     ['a', 'b', 'c', 'd'],
     [
       { from: 'a', to: 'b' },
       { from: 'a', to: 'c' },
-      { from: 'b', to: 'd' },
+      { from: 'b', to: 'd', strength: 1 },
       { from: 'c', to: 'd' },
     ],
   );
   const metrics = computeHubMetrics(graph, { maxDepth: 2, decay: 0.68 });
+  const directReach = 1 + 1;
+  const strongerSharedReach = 0.68;
 
-  assertClose(metrics.get('a').outInfluence, 1 + 1 + 0.68);
+  assertClose(metrics.get('a').outInfluence - directReach, strongerSharedReach);
 });
 
 test('causal paths do not revisit a node', () => {
