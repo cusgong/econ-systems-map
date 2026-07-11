@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from pathlib import Path
+import shutil
 import struct
 import subprocess
 import tempfile
@@ -495,6 +497,137 @@ class BlenderPipelineContractTests(unittest.TestCase):
             self.assertEqual(2, exported["primitives"])
             self.assertLess(exported["bytes"], 200_000)
             self.assertEqual(b"glTF", output_glb.read_bytes()[:4])
+
+    def test_proof_scope_exports_exact_six_models_deterministically(self):
+        proof_ids = {
+            "policy_rate",
+            "fx",
+            "oil",
+            "housing",
+            "gdp",
+            "risk_sentiment",
+        }
+        triangle_bands = {
+            "policy_rate": (2500, 2750),
+            "fx": (2200, 2600),
+            "oil": (1800, 2200),
+            "housing": (1500, 1900),
+            "gdp": (1800, 2200),
+            "risk_sentiment": (1500, 1900),
+        }
+        library_blend = BLENDER_DIR / "econ-node-library.blend"
+        author_source = BLENDER_DIR / "author-proof-models.py"
+
+        validation = run_blender(
+            str(library_blend),
+            "--python-exit-code",
+            "1",
+            "--python",
+            str(BLENDER_DIR / "validate-econ-node-library.py"),
+            "--",
+            "--scope",
+            "proof",
+        )
+        self.assertEqual(0, validation.returncode, validation.stdout)
+        self.assertTrue(author_source.is_file(), f"missing reproducible proof authoring source: {author_source}")
+        summary = summary_from(validation.stdout)
+        self.assertEqual([], summary["errors"])
+        self.assertEqual(6, summary["readyCount"])
+        self.assertEqual(24, summary["fallbackCount"])
+        self.assertEqual(12, summary["primitives"])
+        self.assertEqual(proof_ids, set(summary["models"]))
+        self.assertGreaterEqual(summary["triangles"], 10_600)
+        self.assertLessEqual(summary["triangles"], 13_000)
+        self.assertLessEqual(summary["triangles"], 18_000)
+
+        silhouette_signatures = []
+        for node_id, (minimum, maximum) in triangle_bands.items():
+            model = summary["models"][node_id]
+            self.assertGreaterEqual(model["triangles"], minimum, node_id)
+            self.assertLessEqual(model["triangles"], maximum, node_id)
+            self.assertEqual(2, model["primitives"], node_id)
+            self.assertGreaterEqual(model["accentAreaRatio"], 0.10, node_id)
+            self.assertLessEqual(model["accentAreaRatio"], 0.20, node_id)
+            self.assertGreaterEqual(model["radius"], 0.98, node_id)
+            self.assertLessEqual(model["radius"], 1.02, node_id)
+            self.assertLessEqual(model["centerError"], 0.05, node_id)
+            signature = model.get("silhouetteSignature")
+            self.assertIsInstance(signature, str, node_id)
+            self.assertEqual(3, len(signature.split(";")), node_id)
+            silhouette_signatures.append(signature)
+        self.assertEqual(6, len(set(silhouette_signatures)))
+
+        with tempfile.TemporaryDirectory(prefix="econ-blender-proof-export-") as temp_dir:
+            first_glb = Path(temp_dir) / "proof-a.glb"
+            second_glb = Path(temp_dir) / "proof-b.glb"
+            exports = []
+            for output in (first_glb, second_glb):
+                result = run_blender(
+                    str(library_blend),
+                    "--python-exit-code",
+                    "1",
+                    "--python",
+                    str(BLENDER_DIR / "export-econ-node-library.py"),
+                    "--",
+                    "--scope",
+                    "proof",
+                    "--output",
+                    str(output),
+                )
+                self.assertEqual(0, result.returncode, result.stdout)
+                exported = summary_from(result.stdout)
+                self.assertEqual([], exported["errors"])
+                self.assertEqual(12, exported["primitives"])
+                self.assertLessEqual(exported["bytes"], 600_000)
+                exports.append(hashlib.sha256(output.read_bytes()).hexdigest())
+                document = glb_json(output)
+                active_scene = document.get("scene", 0)
+                root_names = {
+                    document["nodes"][index].get("name")
+                    for index in document["scenes"][active_scene].get("nodes", [])
+                }
+                self.assertEqual(proof_ids, root_names)
+            self.assertEqual(exports[0], exports[1], "proof GLB export must be byte-deterministic")
+
+    def test_proof_authoring_is_idempotent_at_the_export_boundary(self):
+        source_blend = BLENDER_DIR / "econ-node-library.blend"
+        author_script = BLENDER_DIR / "author-proof-models.py"
+        with tempfile.TemporaryDirectory(prefix="econ-proof-author-idempotent-") as temp_dir:
+            temp = Path(temp_dir)
+            authored_blend = temp / "proof.blend"
+            shutil.copy2(source_blend, authored_blend)
+            hashes = []
+            for iteration in range(2):
+                author = run_blender(
+                    str(authored_blend),
+                    "--python-exit-code",
+                    "1",
+                    "--python",
+                    str(author_script),
+                    "--",
+                    "--output",
+                    str(authored_blend),
+                )
+                self.assertEqual(0, author.returncode, author.stdout)
+                self.assertIn('"readyCount":6', author.stdout)
+
+                output_glb = temp / f"proof-{iteration}.glb"
+                export = run_blender(
+                    str(authored_blend),
+                    "--python-exit-code",
+                    "1",
+                    "--python",
+                    str(BLENDER_DIR / "export-econ-node-library.py"),
+                    "--",
+                    "--scope",
+                    "proof",
+                    "--output",
+                    str(output_glb),
+                )
+                self.assertEqual(0, export.returncode, export.stdout)
+                self.assertEqual([], summary_from(export.stdout)["errors"])
+                hashes.append(hashlib.sha256(output_glb.read_bytes()).hexdigest())
+            self.assertEqual(hashes[0], hashes[1], "reauthoring changed proof GLB bytes")
 
 
 if __name__ == "__main__":

@@ -16,7 +16,14 @@ const COLOR_DOWN = new THREE.Color('#6fb5ff');
 const COLOR_SELECTION = new THREE.Color('#dbe5ef');
 const NEUTRAL_HUB_METRIC = Object.freeze({ hubScore: 0.5, score100: 50, radiusScale: 1 });
 const VERTICAL_SLICE_ANCHOR_ID = 'policy_rate';
-const VERTICAL_SLICE_MODEL_IDS = new Set([VERTICAL_SLICE_ANCHOR_ID]);
+const VERTICAL_SLICE_MODEL_IDS = new Set([
+  'policy_rate',
+  'fx',
+  'oil',
+  'housing',
+  'gdp',
+  'risk_sentiment',
+]);
 const BASE_VISUAL_RADIUS = 1.82;
 const LABEL_GAP = 0.62;
 const MAX_MODEL_TRIANGLES = 3000;
@@ -553,8 +560,8 @@ export function createNodeVisualSystem(options) {
         }
       }
 
-      // The current GLB contains only policy_rate. The generic path intentionally
-      // accepts later proof/full libraries without another runtime rewrite.
+      // Deliberately absent non-proof IDs remain quiet sphere fallbacks. Contract
+      // issues for the six proof instruments still surface as one aggregate warning.
       disposeTree(gltf.scene, ownedMaterials);
       const fallbackIds = expectedIds.filter((id) => !loadedIds.includes(id));
       modelIssues = [...issueSummary(contract), ...modelIssues];

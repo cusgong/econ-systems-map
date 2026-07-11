@@ -20,6 +20,18 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 MAX_MODEL_TRIANGLES = 3_000
 MAX_TOTAL_TRIANGLES = 100_000
 MAX_GLB_BYTES = 3_000_000
+PROOF_MAX_GLB_BYTES = 600_000
+PROOF_TOTAL_TRIANGLES_MIN = 10_600
+PROOF_TOTAL_TRIANGLES_MAX = 13_000
+PROOF_HARD_TRIANGLES_MAX = 18_000
+PROOF_TRIANGLE_BANDS = {
+    "policy_rate": (2_500, 2_750),
+    "fx": (2_200, 2_600),
+    "oil": (1_800, 2_200),
+    "housing": (1_500, 1_900),
+    "gdp": (1_800, 2_200),
+    "risk_sentiment": (1_500, 1_900),
+}
 NORMALIZED_RADIUS_MIN = 0.98
 NORMALIZED_RADIUS_MAX = 1.02
 CENTER_ERROR_RATIO = 0.05
@@ -428,6 +440,13 @@ def _validate_model(
             summary,
             f"policy_rate: body triangles {body['triangles']} outside 1800..2200",
         )
+    if node_id in PROOF_TRIANGLE_BANDS:
+        minimum, maximum = PROOF_TRIANGLE_BANDS[node_id]
+        if not minimum <= model_triangles <= maximum:
+            _append_error(
+                summary,
+                f"{node_id}: triangles {model_triangles} outside proof band {minimum}..{maximum}",
+            )
 
     all_vertices = body["vertices"] + accent["vertices"]
     if all_vertices:
@@ -463,6 +482,14 @@ def _validate_model(
         if bevel_segments != 3:
             _append_error(summary, f"{node_id}: bevel segments must equal 3")
 
+    silhouette = root.get("econ_silhouette")
+    if not isinstance(silhouette, str) or len(silhouette.split(";")) != 3:
+        _append_error(
+            summary,
+            f"{node_id}: econ_silhouette must contain three semicolon-delimited view clauses",
+        )
+        silhouette = ""
+
     summary["models"][node_id] = {
         "bodyTriangles": int(body["triangles"]),
         "accentTriangles": int(accent["triangles"]),
@@ -471,6 +498,7 @@ def _validate_model(
         "radius": round(float(radius), 6),
         "centerError": round(float(center.length), 6),
         "primitives": 2,
+        "silhouetteSignature": silhouette,
     }
     summary["triangles"] += model_triangles
     summary["primitives"] += 2
@@ -498,6 +526,25 @@ def validate_scene(scope: str) -> tuple[dict, list[bpy.types.Object]]:
             summary,
             f"total triangles {summary['triangles']} exceed {MAX_TOTAL_TRIANGLES}",
         )
+    if scope == "proof":
+        if summary["triangles"] > PROOF_HARD_TRIANGLES_MAX:
+            _append_error(
+                summary,
+                f"proof triangles {summary['triangles']} exceed hard cap {PROOF_HARD_TRIANGLES_MAX}",
+            )
+        if not PROOF_TOTAL_TRIANGLES_MIN <= summary["triangles"] <= PROOF_TOTAL_TRIANGLES_MAX:
+            _append_error(
+                summary,
+                "proof triangles "
+                f"{summary['triangles']} outside {PROOF_TOTAL_TRIANGLES_MIN}..{PROOF_TOTAL_TRIANGLES_MAX}",
+            )
+        signatures = [
+            summary["models"].get(node_id, {}).get("silhouetteSignature")
+            for node_id in SPECS.PROOF_IDS
+        ]
+        usable = [signature for signature in signatures if signature]
+        if len(usable) != len(SPECS.PROOF_IDS) or len(set(usable)) != len(usable):
+            _append_error(summary, "proof silhouette signatures must be present and pairwise unique")
     return summary, selected_roots
 
 
@@ -699,6 +746,11 @@ def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | N
         return summary
     if summary["bytes"] > MAX_GLB_BYTES:
         _append_error(summary, f"GLB bytes {summary['bytes']} exceed {MAX_GLB_BYTES}")
+    if summary.get("scope") == "proof" and summary["bytes"] > PROOF_MAX_GLB_BYTES:
+        _append_error(
+            summary,
+            f"proof GLB bytes {summary['bytes']} exceed {PROOF_MAX_GLB_BYTES}",
+        )
     try:
         gltf, bin_payload = _read_glb(path)
     except Exception as exc:
@@ -795,6 +847,16 @@ def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | N
         duration = root_extras.get("econ_duration")
         if not isinstance(duration, (int, float)) or not 0.16 <= float(duration) <= 0.32:
             _append_error(summary, f"GLB {node_id}: econ_duration must be within 0.16..0.32")
+        expected_silhouette = summary.get("models", {}).get(node_id, {}).get(
+            "silhouetteSignature"
+        )
+        actual_silhouette = root_extras.get("econ_silhouette")
+        if expected_silhouette and actual_silhouette != expected_silhouette:
+            _append_error(
+                summary,
+                f"GLB {node_id}: econ_silhouette expected {expected_silhouette!r}, "
+                f"found {actual_silhouette!r}",
+            )
 
         identity_components = {
             "translation": [0.0, 0.0, 0.0],
