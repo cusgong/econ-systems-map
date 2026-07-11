@@ -156,10 +156,14 @@ export const UI_DICT_EN = {
   '아래 지표의 최근 방향(약 6개월)을 지도 위 색으로 비춥니다. 예측이 아니라, 오늘의 배치도입니다.':
     'The recent direction (about 6 months) of each indicator is projected onto the map as color. Not a forecast: a layout of today.',
   '기준': 'as of',
+  '수치': 'data',
+  '해설': 'analysis',
   '지도에 비추기': 'Project onto the map',
   '지도 비추기 끄기': 'Turn off projection',
-  '이 상황판은': 'This board is a snapshot from about',
-  '개월 전 스냅샷입니다. 최신 수치는 각 출처에서 확인하세요.': ' months ago. Check each source for the latest numbers.',
+  '흐름 해설이': 'The storyline analysis is about',
+  '개월 전 것입니다. 그 사이의 사건은 반영되지 않았을 수 있습니다.': ' months old. Events since then may not be reflected.',
+  '지표 수치의 자동 갱신이': 'Automatic indicator updates have been stalled for about',
+  '개월째 멈춰 있습니다. 각 출처에서 직접 확인하세요.': ' months. Check each source directly.',
   '주요 지표': 'Key indicators',
   '지금 주요 흐름': 'Current storylines',
   '지금 목록': 'Back to Now',
@@ -168,8 +172,8 @@ export const UI_DICT_EN = {
   '상승': 'rising',
   '하락': 'falling',
   '보합': 'flat',
-  '이 상황판은 자동 갱신되지 않는 수동 스냅샷입니다. 각 항목의 출처와 기준일을 함께 표기했습니다.':
-    'This board is a manually updated snapshot, not a live feed. Every item carries its source and data date.',
+  '지표 수치는 공식 통계에서 자동 갱신되고, 흐름 해설은 주간 검증 파이프라인이 갱신합니다. 각 항목에 출처와 기준일을 표기했습니다.':
+    'Indicator values refresh automatically from official statistics; the storylines are refreshed by a weekly verification pipeline. Every item carries its source and data date.',
 
   // v2: regime flips, cross-links, instrument strip
   '국면 반전': 'Regime flip',

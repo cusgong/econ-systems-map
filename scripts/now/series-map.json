@@ -1,0 +1,92 @@
+{
+  "policy_rate": {
+    "provider": "ecos", "statCode": "722Y001", "itemCodes": ["0101000"], "cycle": "D",
+    "transform": "latest", "sane": [0, 10], "trendEps": 0.1,
+    "sourceLabel": "한국은행 (ECOS)",
+    "_verified": "2026-07-11 live: 2.50, daily forward-fill lags 1-2 business days"
+  },
+  "market_rate": {
+    "provider": "ecos", "statCode": "817Y002", "itemCodes": ["010210000"], "cycle": "D",
+    "transform": "latest", "sane": [0, 12], "trendEps": 0.15,
+    "sourceLabel": "국고채 10년 (ECOS)",
+    "_verified": "2026-07-11 live: 4.230 on 20260710"
+  },
+  "cpi": {
+    "provider": "ecos", "statCode": "901Y009", "itemCodes": ["0"], "cycle": "M",
+    "transform": "yoy_pct", "sane": [-3, 15], "trendEps": 0.2,
+    "sourceLabel": "국가데이터처 (ECOS)",
+    "_verified": "2026-07-11 live: 202606 119.99 / 202506 116.31 = +3.16%"
+  },
+  "inflation_exp": {
+    "provider": "ecos", "statCode": "511Y003", "itemCodes": ["FMB"], "cycle": "M",
+    "transform": "latest", "sane": [0, 10], "trendEps": 0.1,
+    "sourceLabel": "한국은행 소비자동향조사",
+    "_verified": "2026-07-11 live: 202606 = 2.8 (향후 1년)"
+  },
+  "fx": {
+    "provider": "ecos", "statCode": "731Y003", "itemCodes": ["0000003"], "cycle": "D",
+    "transform": "latest", "sane": [800, 2500], "trendEps": 15,
+    "sourceLabel": "서울외환시장 종가 (ECOS)",
+    "_verified": "2026-07-11 live: 1501.4 on 20260710 (종가 15:30)"
+  },
+  "oil": {
+    "provider": "fred", "seriesId": "DCOILBRENTEU",
+    "transform": "latest", "sane": [20, 250], "trendEps": 5,
+    "sourceLabel": "브렌트 현물 (FRED·EIA)",
+    "_verified": "2026-07-11 live: 69.56 on 2026-07-06 (daily, few-day lag)"
+  },
+  "fed_rate": {
+    "provider": "fred", "seriesId": "DFEDTARU",
+    "transform": "latest", "sane": [0, 10], "trendEps": 0.1,
+    "sourceLabel": "Fed 목표 상단 (FRED)",
+    "_verified": "2026-07-11 live: 3.75 on 2026-07-10 (target range upper)"
+  },
+  "stocks": {
+    "provider": "ecos", "statCode": "802Y001", "itemCodes": ["0001000"], "cycle": "D",
+    "transform": "latest", "sane": [1000, 20000], "trendEps": 150,
+    "sourceLabel": "한국거래소 종가 (ECOS)",
+    "_verified": "2026-07-11 live: 7475.94 on 20260710"
+  },
+  "housing": {
+    "provider": "ecos", "statCode": "901Y062", "itemCodes": ["P63ACA"], "cycle": "M",
+    "transform": "mom_pct", "sane": [-5, 5], "trendEps": 0.15,
+    "sourceLabel": "KB 서울 아파트 (ECOS)",
+    "_verified": "2026-07-11 live: 202606 105.798, +1.07% MoM. 부동산원 ECOS(901Y113)는 5개월 지연이라 배제"
+  },
+  "household_debt": {
+    "provider": "ecos", "statCode": "151Y002", "itemCodes": ["1110000"], "cycle": "M",
+    "transform": "mom_delta", "scale": 0.001, "sane": [-40, 40], "trendEps": 1.5,
+    "sourceLabel": "예금취급기관 가계대출 (ECOS)",
+    "_verified": "2026-07-11 live: 202604 +4.0조 (십억원→조원 scale). 금융위 전금융권 속보와 커버리지 다름, ~2.5개월 시차"
+  },
+  "exports": {
+    "provider": "ecos", "statCode": "901Y118", "itemCodes": ["T002"], "cycle": "M",
+    "transform": "yoy_pct", "sane": [-40, 120], "trendEps": 3,
+    "sourceLabel": "관세청 통관기준 (ECOS)",
+    "_verified": "2026-07-11 live: 202605 +53.4% YoY. ECOS는 익월 중순 적재(~1개월 지연 가능)"
+  },
+  "current_account": {
+    "provider": "ecos", "statCode": "301Y013", "itemCodes": ["000000"], "cycle": "M",
+    "transform": "latest", "scale": 0.01, "sane": [-150, 600], "trendEps": 30,
+    "sourceLabel": "한국은행 국제수지 (잠정)",
+    "_verified": "2026-07-11 live: 202605 38,607.4백만달러 = 386.1억 달러 (백만달러→억달러 scale)"
+  },
+  "employment": {
+    "provider": "ecos", "statCode": "901Y027", "itemCodes": ["I61BA", "I28A"], "cycle": "M",
+    "transform": "yoy_delta", "scale": 0.1, "sane": [-150, 150], "trendEps": 5,
+    "sourceLabel": "국가데이터처 고용동향 (ECOS)",
+    "_verified": "2026-07-11 live: 202605 29,120천명, YoY -4.0만 명. itemCode2 I28A(원계열) 필수"
+  },
+  "wages": {
+    "provider": "ecos", "statCode": "901Y052", "itemCodes": ["A", "I72BI", "1"], "cycle": "M",
+    "transform": "yoy_pct", "sane": [-10, 20], "trendEps": 0.5,
+    "sourceLabel": "고용노동부 사업체노동력조사 (ECOS)",
+    "_verified": "2026-07-11 live: 202512 +3.1% YoY. ECOS 적재가 수개월 지연될 수 있음(테이블이 202512에서 멈춰 있었음)"
+  },
+  "gdp": {
+    "provider": "ecos", "statCode": "200Y104", "itemCodes": ["1400"], "cycle": "Q",
+    "transform": "qoq_pct", "sane": [-6, 6], "trendEps": 0.3,
+    "sourceLabel": "한국은행 국민계정 (계절조정 실질)",
+    "_verified": "2026-07-11 live: 2026Q1 +1.83% QoQ (902Y015/KOR 교차검증 일치)"
+  }
+}

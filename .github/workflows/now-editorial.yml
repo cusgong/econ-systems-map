@@ -1,0 +1,71 @@
+# Weekly NOW-board editorial refresh: a Claude agent re-verifies notes/themes via web research
+# under scripts/now/EDITORIAL-PROTOCOL.md, then deterministic steps validate, commit, deploy.
+# The agent edits ONLY scripts/now/editorial.json; it has no git tools.
+name: now-editorial
+
+on:
+  schedule:
+    - cron: "0 22 * * 0" # Monday 07:00 KST
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: now-board-writers
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Editorial refresh agent
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            Read scripts/now/EDITORIAL-PROTOCOL.md and execute it exactly.
+            You are the weekly unattended editorial refresh for the MacroScope NOW board.
+            Today's date: use the runner clock, KST.
+            Deliverable: scripts/now/editorial.json updated per the protocol, and
+            `python scripts/now/build_situation.py` exiting 0. Do not run git commands;
+            a later workflow step commits for you. Do not edit any other file.
+          claude_args: |
+            --model opus
+            --max-turns 80
+            --permission-mode acceptEdits
+            --allowedTools "WebSearch,WebFetch,Read,Glob,Grep,Edit,Write,Bash(python:*),Bash(python3:*)"
+
+      - name: Validate (independent of the agent)
+        run: |
+          git checkout -- data/situation.js || true
+          python scripts/now/build_situation.py
+
+      - name: Commit if changed
+        id: commit
+        run: |
+          # Verified author email required: Vercel blocks deployments whose commit
+          # author cannot be matched (github-actions[bot] noreply fails validation).
+          git config user.name "MacroScope Bot"
+          git config user.email "globin0806@gmail.com"
+          git add scripts/now/editorial.json data/situation.js
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "no editorial changes"
+          else
+            git commit -m "chore(now): weekly editorial refresh $(TZ=Asia/Seoul date +%F)"
+            git pull --rebase origin main
+            git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy to Vercel
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: npx --yes vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }}

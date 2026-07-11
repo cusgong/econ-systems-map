@@ -1,0 +1,140 @@
+{
+  "fetchedAt": "2026-07-10",
+  "readings": {
+    "policy_rate": {
+      "trend": 0,
+      "value": {
+        "ko": "연 2.50%",
+        "en": "2.50%"
+      },
+      "source": "한국은행 금융통화위원회",
+      "date": "2026-05-28"
+    },
+    "fed_rate": {
+      "trend": 0,
+      "value": {
+        "ko": "상단 3.75%",
+        "en": "3.75% upper"
+      },
+      "source": "Fed FOMC · BLS",
+      "date": "2026-06-17"
+    },
+    "market_rate": {
+      "trend": 1,
+      "value": {
+        "ko": "국고 10년 약 4.2%",
+        "en": "10y KTB ~4.2%"
+      },
+      "source": "Trading Economics",
+      "date": "2026-07-06"
+    },
+    "cpi": {
+      "trend": 1,
+      "value": {
+        "ko": "3.2% (6월, 전년比)",
+        "en": "3.2% YoY (Jun)"
+      },
+      "source": "통계청 소비자물가동향",
+      "date": "2026-06"
+    },
+    "inflation_exp": {
+      "trend": 1,
+      "value": {
+        "ko": "2.8% (향후 1년)",
+        "en": "2.8% (1y ahead)"
+      },
+      "source": "한국은행 소비자동향조사",
+      "date": "2026-06"
+    },
+    "fx": {
+      "trend": 1,
+      "value": {
+        "ko": "약 1,506원",
+        "en": "~1,506 KRW/USD"
+      },
+      "source": "서울외환시장 종가",
+      "date": "2026-07-09"
+    },
+    "oil": {
+      "trend": 1,
+      "value": {
+        "ko": "브렌트 약 77달러",
+        "en": "Brent ~$77"
+      },
+      "source": "Trading Economics",
+      "date": "2026-07-09"
+    },
+    "stocks": {
+      "trend": 1,
+      "value": {
+        "ko": "KOSPI 약 7,290",
+        "en": "KOSPI ~7,290"
+      },
+      "source": "한국거래소 종가",
+      "date": "2026-07-09"
+    },
+    "housing": {
+      "trend": 1,
+      "value": {
+        "ko": "서울 주간 +0.25%",
+        "en": "Seoul +0.25%/wk"
+      },
+      "source": "한국부동산원",
+      "date": "2026-06"
+    },
+    "household_debt": {
+      "trend": 1,
+      "value": {
+        "ko": "6월 +8.3조 원",
+        "en": "+8.3tn KRW (Jun)"
+      },
+      "source": "금융위원회",
+      "date": "2026-06"
+    },
+    "exports": {
+      "trend": 1,
+      "value": {
+        "ko": "6월 +70.9%",
+        "en": "+70.9% YoY (Jun)"
+      },
+      "source": "산업통상자원부",
+      "date": "2026-06"
+    },
+    "current_account": {
+      "trend": 1,
+      "value": {
+        "ko": "5월 +386억 달러",
+        "en": "+$38.6B (May)"
+      },
+      "source": "한국은행 국제수지(잠정)",
+      "date": "2026-05"
+    },
+    "employment": {
+      "trend": -1,
+      "value": {
+        "ko": "취업자 -4만 명 (5월)",
+        "en": "-40k jobs (May)"
+      },
+      "source": "통계청 고용동향",
+      "date": "2026-05"
+    },
+    "wages": {
+      "trend": -1,
+      "value": {
+        "ko": "+1.5% (4월, 명목)",
+        "en": "+1.5% nominal (Apr)"
+      },
+      "source": "고용노동부 사업체노동력조사",
+      "date": "2026-04"
+    },
+    "gdp": {
+      "trend": 1,
+      "value": {
+        "ko": "올해 2.6% 전망",
+        "en": "2.6% forecast (2026)"
+      },
+      "source": "IMF 7월 수정전망 · 한국은행",
+      "date": "2026-07"
+    }
+  }
+}

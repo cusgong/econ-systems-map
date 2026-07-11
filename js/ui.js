@@ -888,7 +888,8 @@ export function createUI(deps) {
       h('h3', {}, t('지금의 경제, 한눈에')),
       h('p', {}, t('아래 지표의 최근 방향(약 6개월)을 지도 위 색으로 비춥니다. 예측이 아니라, 오늘의 배치도입니다.')),
       h('div', { class: 'presets', style: 'margin-top:10px' },
-        h('span', { class: 'asof-chip' }, situation.asOf + ' ' + t('기준')),
+        h('span', { class: 'asof-chip' },
+          t('수치') + ' ' + (situation.readingsAsOf || situation.asOf) + ' · ' + t('해설') + ' ' + (situation.themesAsOf || situation.asOf) + ' ' + t('기준')),
         h('button', {
           class: 'preset-btn', 'data-fkey': 'now-project', 'aria-pressed': String(state.nowProjected),
           onclick: () => { state.nowProjected = !state.nowProjected; applyNowTints(); renderPanel(); },
@@ -896,10 +897,15 @@ export function createUI(deps) {
       ),
     ));
 
-    const age = monthsSince(situation.asOf);
-    if (age > 4) {
+    const themeAge = monthsSince(situation.themesAsOf || situation.asOf);
+    if (themeAge > 4) {
       b.append(h('div', { class: 'card stale-warn' },
-        h('p', {}, t('이 상황판은') + ' ' + Math.round(age) + t('개월 전 스냅샷입니다. 최신 수치는 각 출처에서 확인하세요.'))));
+        h('p', {}, t('흐름 해설이') + ' ' + Math.round(themeAge) + t('개월 전 것입니다. 그 사이의 사건은 반영되지 않았을 수 있습니다.'))));
+    }
+    const readingAge = monthsSince(situation.readingsAsOf || situation.asOf);
+    if (readingAge > 1) {
+      b.append(h('div', { class: 'card stale-warn' },
+        h('p', {}, t('지표 수치의 자동 갱신이') + ' ' + Math.round(readingAge) + t('개월째 멈춰 있습니다. 각 출처에서 직접 확인하세요.'))));
     }
 
     b.append(h('div', { class: 'order-h' }, h('span', { class: 'n' }, '◉'), t('주요 지표')));
@@ -929,7 +935,7 @@ export function createUI(deps) {
     }
 
     b.append(h('div', { class: 'card' }, h('p', {},
-      t('이 상황판은 자동 갱신되지 않는 수동 스냅샷입니다. 각 항목의 출처와 기준일을 함께 표기했습니다.'),
+      t('지표 수치는 공식 통계에서 자동 갱신되고, 흐름 해설은 주간 검증 파이프라인이 갱신합니다. 각 항목에 출처와 기준일을 표기했습니다.'),
       ' ', h('button', { class: 'btn sm', onclick: openSources }, t('출처와 한계')))));
   }
 
@@ -1122,7 +1128,7 @@ export function createUI(deps) {
     for (const lp of loops) s.push(lp.id + ' (' + (lp.type === 'reinforcing' ? '강화' : '균형') + '): ' + lp.nodes.join('->') + ' - ' + lp.name.ko);
     s.push('### 역사 사례');
     for (const c of cases) s.push(c.id + ': ' + c.title.ko + ' (' + c.period + ')');
-    s.push('### 지금 상황판 (수동 스냅샷, 기준 ' + situation.asOf + ' - 이 날짜 이후는 알 수 없음을 밝히세요)');
+    s.push('### 지금 상황판 (수치 기준 ' + (situation.readingsAsOf || situation.asOf) + ' · 해설 기준 ' + (situation.themesAsOf || situation.asOf) + ' - 이후는 알 수 없음을 밝히세요)');
     for (const r of situation.readings) {
       s.push(r.node + ': ' + r.value.ko + ' ' + (r.trend > 0 ? '↑' : r.trend < 0 ? '↓' : '→') + ' - ' + r.note.ko + ' (' + r.source + ', ' + r.date + ')');
     }

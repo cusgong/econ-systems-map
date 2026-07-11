@@ -1,112 +1,26 @@
-// GENERATED FILE - do not edit by hand.
-// Sources of truth: scripts/now/readings-live.json (machine-fed values, daily cron)
-//                 + scripts/now/editorial.json (notes/themes, weekly editorial job).
-// Rebuild: python scripts/now/build_situation.py
-export const SITUATION = {
+{
   "asOf": "2026-07-10",
-  "readingsAsOf": "2026-07-10",
-  "themesAsOf": "2026-07-10",
-  "readings": [
-    {
-      "node": "policy_rate",
-      "trend": 0,
-      "value": {
-        "ko": "연 2.50%",
-        "en": "2.50%"
-      },
-      "note": {
-        "ko": "2025년 5월 인하 후 8회 연속 동결. 다만 5월 금통위에서 2명이 인상 소수의견을 냈습니다.",
-        "en": "On hold for 8 straight meetings since the May 2025 cut, but two board members dissented for a hike in May."
-      },
-      "source": "한국은행 금융통화위원회",
-      "date": "2026-05-28"
-    },
-    {
-      "node": "fed_rate",
-      "trend": 0,
-      "value": {
-        "ko": "상단 3.75%",
-        "en": "3.75% upper"
-      },
-      "note": {
-        "ko": "4회 연속 동결. 미국 물가가 5월 4.2%로 다시 뛰며 6월 점도표에서는 인하 전망이 사라지고 인상 가능성이 시사됐습니다.",
-        "en": "Held for a 4th meeting. With US CPI back up to 4.2% in May, the June dot plot dropped cuts and hinted at hikes."
-      },
-      "source": "Fed FOMC · BLS",
-      "date": "2026-06-17"
-    },
-    {
-      "node": "market_rate",
-      "trend": 1,
-      "value": {
-        "ko": "국고 10년 약 4.2%",
-        "en": "10y KTB ~4.2%"
-      },
-      "note": {
-        "ko": "1년 전보다 약 1.4%p 높고, 6월 초 4.33%까지 올라 2023년 11월 이후 최고치를 기록했습니다.",
-        "en": "About 1.4%p higher than a year ago; touched 4.33% in early June, the highest since Nov 2023."
-      },
-      "source": "Trading Economics",
-      "date": "2026-07-06"
-    },
-    {
-      "node": "cpi",
-      "trend": 1,
-      "value": {
-        "ko": "3.2% (6월, 전년比)",
-        "en": "3.2% YoY (Jun)"
-      },
-      "note": {
-        "ko": "석유류가 24.7% 급등하며 두 달 연속 3%대, 2년 6개월 만의 최고 상승률입니다.",
-        "en": "Fuel prices jumped 24.7%, keeping inflation in the 3% range for a 2nd month, a 2.5-year high."
-      },
-      "source": "통계청 소비자물가동향",
-      "date": "2026-06"
-    },
-    {
-      "node": "inflation_exp",
-      "trend": 1,
-      "value": {
-        "ko": "2.8% (향후 1년)",
-        "en": "2.8% (1y ahead)"
-      },
-      "note": {
-        "ko": "3월 2.7%에서 오른 뒤 두 달 연속 2.8%로, 기대가 조금씩 높아진 상태입니다.",
-        "en": "Up from 2.7% in March and holding at 2.8%, expectations have crept higher."
-      },
-      "source": "한국은행 소비자동향조사",
-      "date": "2026-06"
-    },
-    {
-      "node": "fx",
-      "trend": 1,
-      "value": {
-        "ko": "약 1,506원",
-        "en": "~1,506 KRW/USD"
-      },
-      "note": {
-        "ko": "1월 1,420원대에서 올라 1,500원 안팎의 고환율이 이어지고 있습니다. 중동발 유가 상승이 원화 약세 압력입니다.",
-        "en": "Up from the 1,420s in January to around 1,500. Middle East oil pressure is weighing on the won."
-      },
-      "source": "서울외환시장 종가",
-      "date": "2026-07-09"
-    },
-    {
-      "node": "oil",
-      "trend": 1,
-      "value": {
-        "ko": "브렌트 약 77달러",
-        "en": "Brent ~$77"
-      },
-      "note": {
-        "ko": "3월 호르무즈 봉쇄로 120달러 선까지 치솟았다가 6월 종전 합의 후 내렸지만, 7월 초 충돌 재점화로 73~79달러 사이에서 출렁입니다.",
-        "en": "Spiked to ~$120 during the March Hormuz blockade, fell after the June accord, now swinging $73-79 on renewed clashes."
-      },
-      "source": "Trading Economics",
-      "date": "2026-07-09"
-    },
-    {
-      "node": "geopolitics",
+  "readingOrder": [
+    "policy_rate",
+    "fed_rate",
+    "market_rate",
+    "cpi",
+    "inflation_exp",
+    "fx",
+    "oil",
+    "geopolitics",
+    "stocks",
+    "housing",
+    "household_debt",
+    "exports",
+    "current_account",
+    "employment",
+    "wages",
+    "gdp",
+    "global_growth"
+  ],
+  "readings": {
+    "geopolitics": {
       "trend": 1,
       "value": {
         "ko": "높음 (중동 전쟁 진행)",
@@ -119,120 +33,7 @@ export const SITUATION = {
       "source": "IEA · CRS · Al Jazeera",
       "date": "2026-07"
     },
-    {
-      "node": "stocks",
-      "trend": 1,
-      "value": {
-        "ko": "KOSPI 약 7,290",
-        "en": "KOSPI ~7,290"
-      },
-      "note": {
-        "ko": "1월 사상 첫 5,000 돌파 후 8,200선까지 올랐다가, 중동 리스크와 외국인 13거래일 연속 순매도로 7,200선대로 조정됐습니다.",
-        "en": "First-ever 5,000 in January, ran past 8,200, then corrected to the 7,200s on Mideast risk and 13 straight days of foreign selling."
-      },
-      "source": "한국거래소 종가",
-      "date": "2026-07-09"
-    },
-    {
-      "node": "housing",
-      "trend": 1,
-      "value": {
-        "ko": "서울 주간 +0.25%",
-        "en": "Seoul +0.25%/wk"
-      },
-      "note": {
-        "ko": "서울 아파트값이 16주 연속 상승, 최근 1년간 약 15% 올랐습니다. 지방은 보합입니다.",
-        "en": "Seoul apartments up 16 weeks in a row, roughly +15% over the past year; the rest of the country is flat."
-      },
-      "source": "한국부동산원",
-      "date": "2026-06"
-    },
-    {
-      "node": "household_debt",
-      "trend": 1,
-      "value": {
-        "ko": "6월 +8.3조 원",
-        "en": "+8.3tn KRW (Jun)"
-      },
-      "note": {
-        "ko": "전 금융권 가계대출이 6개월 연속 증가했고, 은행권 증가폭은 22개월 만에 최대입니다.",
-        "en": "Household lending rose for a 6th straight month; the bank-sector increase was the largest in 22 months."
-      },
-      "source": "금융위원회",
-      "date": "2026-06"
-    },
-    {
-      "node": "exports",
-      "trend": 1,
-      "value": {
-        "ko": "6월 +70.9%",
-        "en": "+70.9% YoY (Jun)"
-      },
-      "note": {
-        "ko": "반도체 수출이 3배(+199.5%)로 뛰며 사상 첫 월 1,000억 달러를 돌파했습니다. 무역흑자도 사상 최대입니다.",
-        "en": "Chip exports tripled (+199.5%), pushing monthly exports past $100B for the first time ever, with a record trade surplus."
-      },
-      "source": "산업통상자원부",
-      "date": "2026-06"
-    },
-    {
-      "node": "current_account",
-      "trend": 1,
-      "value": {
-        "ko": "5월 +386억 달러",
-        "en": "+$38.6B (May)"
-      },
-      "note": {
-        "ko": "역대 최대 월간 흑자로 37개월 연속 흑자입니다. 연간 흑자가 전망치 2,500억 달러를 넘을 가능성이 커졌습니다.",
-        "en": "A record monthly surplus, the 37th in a row; the annual surplus may exceed the $250B forecast."
-      },
-      "source": "한국은행 국제수지(잠정)",
-      "date": "2026-05"
-    },
-    {
-      "node": "employment",
-      "trend": -1,
-      "value": {
-        "ko": "취업자 -4만 명 (5월)",
-        "en": "-40k jobs (May)"
-      },
-      "note": {
-        "ko": "취업자 수가 1년 5개월 만에 감소로 돌아섰습니다. 광공업·건설 부진에 청년 고용률도 하락했습니다.",
-        "en": "Employment fell for the first time in 17 months, dragged by manufacturing and construction; youth employment slipped too."
-      },
-      "source": "통계청 고용동향",
-      "date": "2026-05"
-    },
-    {
-      "node": "wages",
-      "trend": -1,
-      "value": {
-        "ko": "+1.5% (4월, 명목)",
-        "en": "+1.5% nominal (Apr)"
-      },
-      "note": {
-        "ko": "임금 상승률이 물가 상승률(3% 안팎)을 크게 밑돌아, 실질임금은 줄어드는 국면입니다.",
-        "en": "Wage growth is running well below ~3% inflation, so real wages are shrinking."
-      },
-      "source": "고용노동부 사업체노동력조사",
-      "date": "2026-04"
-    },
-    {
-      "node": "gdp",
-      "trend": 1,
-      "value": {
-        "ko": "올해 2.6% 전망",
-        "en": "2.6% forecast (2026)"
-      },
-      "note": {
-        "ko": "1분기 성장률이 전기 대비 1.8%로 강했고, IMF와 한국은행 모두 올해 전망을 2.6%로 올렸습니다. 다만 반도체 쏠림이 큽니다.",
-        "en": "Q1 grew 1.8% QoQ, and both the IMF and BOK raised this year's forecast to 2.6%, though heavily chip-driven."
-      },
-      "source": "IMF 7월 수정전망 · 한국은행",
-      "date": "2026-07"
-    },
-    {
-      "node": "global_growth",
+    "global_growth": {
       "trend": -1,
       "value": {
         "ko": "세계 3.0% 전망",
@@ -245,7 +46,69 @@ export const SITUATION = {
       "source": "IMF WEO 7월 수정",
       "date": "2026-07"
     }
-  ],
+  },
+  "notes": {
+    "policy_rate": {
+      "ko": "2025년 5월 인하 후 8회 연속 동결. 다만 5월 금통위에서 2명이 인상 소수의견을 냈습니다.",
+      "en": "On hold for 8 straight meetings since the May 2025 cut, but two board members dissented for a hike in May."
+    },
+    "fed_rate": {
+      "ko": "4회 연속 동결. 미국 물가가 5월 4.2%로 다시 뛰며 6월 점도표에서는 인하 전망이 사라지고 인상 가능성이 시사됐습니다.",
+      "en": "Held for a 4th meeting. With US CPI back up to 4.2% in May, the June dot plot dropped cuts and hinted at hikes."
+    },
+    "market_rate": {
+      "ko": "1년 전보다 약 1.4%p 높고, 6월 초 4.33%까지 올라 2023년 11월 이후 최고치를 기록했습니다.",
+      "en": "About 1.4%p higher than a year ago; touched 4.33% in early June, the highest since Nov 2023."
+    },
+    "cpi": {
+      "ko": "석유류가 24.7% 급등하며 두 달 연속 3%대, 2년 6개월 만의 최고 상승률입니다.",
+      "en": "Fuel prices jumped 24.7%, keeping inflation in the 3% range for a 2nd month, a 2.5-year high."
+    },
+    "inflation_exp": {
+      "ko": "3월 2.7%에서 오른 뒤 두 달 연속 2.8%로, 기대가 조금씩 높아진 상태입니다.",
+      "en": "Up from 2.7% in March and holding at 2.8%, expectations have crept higher."
+    },
+    "fx": {
+      "ko": "1월 1,420원대에서 올라 1,500원 안팎의 고환율이 이어지고 있습니다. 중동발 유가 상승이 원화 약세 압력입니다.",
+      "en": "Up from the 1,420s in January to around 1,500. Middle East oil pressure is weighing on the won."
+    },
+    "oil": {
+      "ko": "3월 호르무즈 봉쇄로 120달러 선까지 치솟았다가 6월 종전 합의 후 내렸지만, 7월 초 충돌 재점화로 73~79달러 사이에서 출렁입니다.",
+      "en": "Spiked to ~$120 during the March Hormuz blockade, fell after the June accord, now swinging $73-79 on renewed clashes."
+    },
+    "stocks": {
+      "ko": "1월 사상 첫 5,000 돌파 후 8,200선까지 올랐다가, 중동 리스크와 외국인 13거래일 연속 순매도로 7,200선대로 조정됐습니다.",
+      "en": "First-ever 5,000 in January, ran past 8,200, then corrected to the 7,200s on Mideast risk and 13 straight days of foreign selling."
+    },
+    "housing": {
+      "ko": "서울 아파트값이 16주 연속 상승, 최근 1년간 약 15% 올랐습니다. 지방은 보합입니다.",
+      "en": "Seoul apartments up 16 weeks in a row, roughly +15% over the past year; the rest of the country is flat."
+    },
+    "household_debt": {
+      "ko": "전 금융권 가계대출이 6개월 연속 증가했고, 은행권 증가폭은 22개월 만에 최대입니다.",
+      "en": "Household lending rose for a 6th straight month; the bank-sector increase was the largest in 22 months."
+    },
+    "exports": {
+      "ko": "반도체 수출이 3배(+199.5%)로 뛰며 사상 첫 월 1,000억 달러를 돌파했습니다. 무역흑자도 사상 최대입니다.",
+      "en": "Chip exports tripled (+199.5%), pushing monthly exports past $100B for the first time ever, with a record trade surplus."
+    },
+    "current_account": {
+      "ko": "역대 최대 월간 흑자로 37개월 연속 흑자입니다. 연간 흑자가 전망치 2,500억 달러를 넘을 가능성이 커졌습니다.",
+      "en": "A record monthly surplus, the 37th in a row; the annual surplus may exceed the $250B forecast."
+    },
+    "employment": {
+      "ko": "취업자 수가 1년 5개월 만에 감소로 돌아섰습니다. 광공업·건설 부진에 청년 고용률도 하락했습니다.",
+      "en": "Employment fell for the first time in 17 months, dragged by manufacturing and construction; youth employment slipped too."
+    },
+    "wages": {
+      "ko": "임금 상승률이 물가 상승률(3% 안팎)을 크게 밑돌아, 실질임금은 줄어드는 국면입니다.",
+      "en": "Wage growth is running well below ~3% inflation, so real wages are shrinking."
+    },
+    "gdp": {
+      "ko": "1분기 성장률이 전기 대비 1.8%로 강했고, IMF와 한국은행 모두 올해 전망을 2.6%로 올렸습니다. 다만 반도체 쏠림이 큽니다.",
+      "en": "Q1 grew 1.8% QoQ, and both the IMF and BOK raised this year's forecast to 2.6%, though heavily chip-driven."
+    }
+  },
   "themes": [
     {
       "id": "hormuz-oil-shock",
@@ -463,4 +326,4 @@ export const SITUATION = {
       ]
     }
   ]
-};
+}

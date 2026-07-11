@@ -1,6 +1,7 @@
 # Only the app itself is served (index.html + css/ + js/ + data/ + vendor/).
 # Everything below is repo scaffolding or internal notes, not part of the site.
 .git
+.github
 .gitignore
 .claude
 docs

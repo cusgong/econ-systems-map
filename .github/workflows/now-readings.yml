@@ -1,0 +1,56 @@
+# Daily NOW-board numeric feed: ECOS/FRED -> readings-live.json -> situation.js -> deploy.
+# Editorial layer (notes/themes) is untouched; see now-editorial.yml for the weekly refresh.
+name: now-readings
+
+on:
+  schedule:
+    - cron: "5 10 * * *" # 19:05 KST daily (after KRX/FX close and morning stat releases)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+# shared with now-editorial.yml: both write the same generated file, never in parallel
+concurrency:
+  group: now-board-writers
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch official series and rebuild situation.js
+        env:
+          ECOS_API_KEY: ${{ secrets.ECOS_API_KEY }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: |
+          python scripts/now/fetch_readings.py
+          python scripts/now/build_situation.py
+
+      - name: Commit if changed
+        id: commit
+        run: |
+          # Vercel validates the commit author email even on CLI deploys
+          # (github-actions[bot] noreply gets deployments BLOCKED) - use the verified address.
+          git config user.name "MacroScope Bot"
+          git config user.email "globin0806@gmail.com"
+          git add scripts/now/readings-live.json data/situation.js
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "no data changes"
+          else
+            git commit -m "chore(now): daily readings update $(TZ=Asia/Seoul date +%F)"
+            git pull --rebase origin main
+            git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy to Vercel
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: npx --yes vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
