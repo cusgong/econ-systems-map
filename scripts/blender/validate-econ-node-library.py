@@ -24,6 +24,25 @@ NORMALIZED_RADIUS_MIN = 0.98
 NORMALIZED_RADIUS_MAX = 1.02
 CENTER_ERROR_RATIO = 0.05
 ZERO_EPSILON = 1.0e-10
+JSON_CHUNK_TYPE = 0x4E4F534A
+BIN_CHUNK_TYPE = 0x004E4942
+COMPONENT_SIZES = {
+    5120: 1,
+    5121: 1,
+    5122: 2,
+    5123: 2,
+    5125: 4,
+    5126: 4,
+}
+TYPE_COMPONENTS = {
+    "SCALAR": 1,
+    "VEC2": 2,
+    "VEC3": 3,
+    "VEC4": 4,
+    "MAT2": 4,
+    "MAT3": 9,
+    "MAT4": 16,
+}
 
 
 def _load_specs():
@@ -239,6 +258,16 @@ def _check_global_scene_contract(summary: dict) -> dict[str, bpy.types.Object]:
         missing = sorted(expected_materials - actual_materials)
         extra = sorted(actual_materials - expected_materials)
         _append_error(summary, f"material library mismatch: missing={missing}, extra={extra}")
+    non_culled_materials = sorted(
+        material.name
+        for material in bpy.data.materials
+        if material.name in expected_materials and not material.use_backface_culling
+    )
+    if non_culled_materials:
+        _append_error(
+            summary,
+            f"opaque closed materials must enable backface culling: {non_culled_materials}",
+        )
 
     unsupported_cameras = sorted(
         obj.name
@@ -472,7 +501,7 @@ def validate_scene(scope: str) -> tuple[dict, list[bpy.types.Object]]:
     return summary, selected_roots
 
 
-def _read_glb_json(path: Path) -> dict:
+def _read_glb(path: Path) -> tuple[dict, bytes]:
     raw = path.read_bytes()
     if len(raw) < 20:
         raise ValueError("GLB is shorter than its header and JSON chunk")
@@ -481,21 +510,185 @@ def _read_glb_json(path: Path) -> dict:
         raise ValueError(
             f"invalid GLB header magic={magic!r}, version={version}, declared={declared_length}, actual={len(raw)}"
         )
-    chunk_length, chunk_type = struct.unpack_from("<II", raw, 12)
-    if chunk_type != 0x4E4F534A:
+    chunks: list[tuple[int, bytes]] = []
+    offset = 12
+    while offset < len(raw):
+        if offset + 8 > len(raw):
+            raise ValueError(f"truncated GLB chunk header at byte {offset}")
+        chunk_length, chunk_type = struct.unpack_from("<II", raw, offset)
+        if chunk_length % 4 != 0:
+            raise ValueError(f"GLB chunk length {chunk_length} is not 4-byte aligned")
+        start = offset + 8
+        end = start + chunk_length
+        if end > len(raw):
+            raise ValueError(
+                f"GLB chunk at byte {offset} declares {chunk_length} bytes beyond file length"
+            )
+        chunks.append((chunk_type, raw[start:end]))
+        offset = end
+    if offset != len(raw):
+        raise ValueError(f"GLB chunk parsing stopped at {offset}, file length is {len(raw)}")
+    if not chunks or chunks[0][0] != JSON_CHUNK_TYPE:
         raise ValueError("first GLB chunk is not JSON")
-    payload = raw[20 : 20 + chunk_length].rstrip(b" \t\r\n\x00")
-    return json.loads(payload.decode("utf-8"))
+    json_chunks = [payload for chunk_type, payload in chunks if chunk_type == JSON_CHUNK_TYPE]
+    bin_chunks = [payload for chunk_type, payload in chunks if chunk_type == BIN_CHUNK_TYPE]
+    unknown_types = sorted(
+        {chunk_type for chunk_type, _payload in chunks}
+        - {JSON_CHUNK_TYPE, BIN_CHUNK_TYPE}
+    )
+    if len(json_chunks) != 1:
+        raise ValueError(f"expected exactly one JSON chunk, found {len(json_chunks)}")
+    if len(bin_chunks) != 1:
+        raise ValueError(f"expected exactly one BIN chunk, found {len(bin_chunks)}")
+    if unknown_types:
+        raise ValueError(f"unexpected GLB chunk types: {unknown_types}")
+    payload = json_chunks[0].rstrip(b" \t\r\n\x00")
+    return json.loads(payload.decode("utf-8")), bin_chunks[0]
 
 
-def _node_descendants(nodes: list[dict], root_index: int) -> list[int]:
+def _node_descendants(
+    nodes: list[dict],
+    root_index: int,
+    summary: dict,
+    label: str,
+) -> list[int]:
     result: list[int] = []
-    stack = list(nodes[root_index].get("children", []))
-    while stack:
-        index = stack.pop()
-        result.append(index)
-        stack.extend(nodes[index].get("children", []))
+    visited = {root_index}
+
+    def visit(index: int, ancestors: set[int]) -> None:
+        children = nodes[index].get("children", [])
+        if not isinstance(children, list):
+            _append_error(summary, f"GLB {label}: node {index} children must be an array")
+            return
+        for child in children:
+            if not isinstance(child, int) or not 0 <= child < len(nodes):
+                _append_error(summary, f"GLB {label}: invalid child index {child!r} on node {index}")
+                continue
+            if child in ancestors:
+                _append_error(summary, f"GLB {label}: cyclic node graph at child {child}")
+                continue
+            if child in visited:
+                _append_error(summary, f"GLB {label}: node {child} is reused in the node graph")
+                continue
+            visited.add(child)
+            result.append(child)
+            visit(child, ancestors | {child})
+
+    if not isinstance(root_index, int) or not 0 <= root_index < len(nodes):
+        _append_error(summary, f"GLB {label}: invalid root index {root_index!r}")
+        return result
+    visit(root_index, {root_index})
     return result
+
+
+def _validate_binary_layout(gltf: dict, bin_payload: bytes, summary: dict) -> None:
+    buffers = gltf.get("buffers", [])
+    if not isinstance(buffers, list) or len(buffers) != 1:
+        _append_error(summary, f"GLB expected exactly one buffer, found {len(buffers) if isinstance(buffers, list) else 'invalid'}")
+        return
+    buffer = buffers[0]
+    if buffer.get("uri") is not None:
+        _append_error(summary, "GLB buffer 0 must use the embedded BIN chunk, not a URI")
+    declared_length = buffer.get("byteLength")
+    if not isinstance(declared_length, int) or declared_length <= 0:
+        _append_error(summary, f"GLB buffer byteLength must be a positive integer, found {declared_length!r}")
+        return
+    if declared_length > len(bin_payload):
+        _append_error(
+            summary,
+            f"GLB buffer byteLength {declared_length} exceeds BIN payload {len(bin_payload)}",
+        )
+    if len(bin_payload) - declared_length not in {0, 1, 2, 3}:
+        _append_error(
+            summary,
+            f"GLB BIN padding is invalid: declared={declared_length}, payload={len(bin_payload)}",
+        )
+
+    buffer_views = gltf.get("bufferViews", [])
+    if not isinstance(buffer_views, list):
+        _append_error(summary, "GLB bufferViews must be an array")
+        return
+    for view_index, view in enumerate(buffer_views):
+        buffer_index = view.get("buffer")
+        byte_offset = view.get("byteOffset", 0)
+        byte_length = view.get("byteLength")
+        if buffer_index != 0:
+            _append_error(summary, f"GLB bufferView {view_index} references invalid buffer {buffer_index!r}")
+        if not isinstance(byte_offset, int) or byte_offset < 0:
+            _append_error(summary, f"GLB bufferView {view_index} has invalid byteOffset {byte_offset!r}")
+            continue
+        if not isinstance(byte_length, int) or byte_length <= 0:
+            _append_error(summary, f"GLB bufferView {view_index} has invalid byteLength {byte_length!r}")
+            continue
+        if byte_offset + byte_length > declared_length:
+            _append_error(
+                summary,
+                f"GLB bufferView {view_index} range {byte_offset}..{byte_offset + byte_length} "
+                f"exceeds buffer byteLength {declared_length}",
+            )
+        if byte_offset + byte_length > len(bin_payload):
+            _append_error(
+                summary,
+                f"GLB bufferView {view_index} range exceeds actual BIN payload {len(bin_payload)}",
+            )
+        stride = view.get("byteStride")
+        if stride is not None and (
+            not isinstance(stride, int)
+            or stride < 4
+            or stride > 252
+            or stride % 4 != 0
+        ):
+            _append_error(summary, f"GLB bufferView {view_index} has invalid byteStride {stride!r}")
+
+    accessors = gltf.get("accessors", [])
+    if not isinstance(accessors, list):
+        _append_error(summary, "GLB accessors must be an array")
+        return
+    for accessor_index, accessor in enumerate(accessors):
+        view_index = accessor.get("bufferView")
+        if not isinstance(view_index, int) or not 0 <= view_index < len(buffer_views):
+            _append_error(summary, f"GLB accessor {accessor_index} references invalid bufferView {view_index!r}")
+            continue
+        view = buffer_views[view_index]
+        component_type = accessor.get("componentType")
+        accessor_type = accessor.get("type")
+        count = accessor.get("count")
+        byte_offset = accessor.get("byteOffset", 0)
+        component_size = COMPONENT_SIZES.get(component_type)
+        component_count = TYPE_COMPONENTS.get(accessor_type)
+        if component_size is None:
+            _append_error(summary, f"GLB accessor {accessor_index} has invalid componentType {component_type!r}")
+            continue
+        if component_count is None:
+            _append_error(summary, f"GLB accessor {accessor_index} has invalid type {accessor_type!r}")
+            continue
+        if not isinstance(count, int) or count <= 0:
+            _append_error(summary, f"GLB accessor {accessor_index} has invalid count {count!r}")
+            continue
+        if not isinstance(byte_offset, int) or byte_offset < 0:
+            _append_error(summary, f"GLB accessor {accessor_index} has invalid byteOffset {byte_offset!r}")
+            continue
+        element_size = component_size * component_count
+        stride = view.get("byteStride", element_size)
+        if not isinstance(stride, int) or stride < element_size or stride % component_size != 0:
+            _append_error(
+                summary,
+                f"GLB accessor {accessor_index} has invalid stride {stride!r} for element size {element_size}",
+            )
+            continue
+        required = byte_offset + (count - 1) * stride + element_size
+        view_length = view.get("byteLength")
+        if not isinstance(view_length, int) or required > view_length:
+            _append_error(
+                summary,
+                f"GLB accessor {accessor_index} range requires {required} bytes "
+                f"inside bufferView {view_index} length {view_length!r}",
+            )
+        if byte_offset % component_size != 0:
+            _append_error(
+                summary,
+                f"GLB accessor {accessor_index} byteOffset {byte_offset} is not component-aligned",
+            )
 
 
 def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | None = None) -> dict:
@@ -507,10 +700,11 @@ def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | N
     if summary["bytes"] > MAX_GLB_BYTES:
         _append_error(summary, f"GLB bytes {summary['bytes']} exceed {MAX_GLB_BYTES}")
     try:
-        gltf = _read_glb_json(path)
+        gltf, bin_payload = _read_glb(path)
     except Exception as exc:
         _append_error(summary, f"GLB parse failed: {exc}")
         return summary
+    _validate_binary_layout(gltf, bin_payload, summary)
 
     for forbidden in ("cameras", "images", "animations", "skins"):
         if gltf.get(forbidden):
@@ -537,6 +731,11 @@ def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | N
         _append_error(summary, f"GLB has invalid active scene index {active_scene_index!r}")
     else:
         active_root_indices = scenes[active_scene_index].get("nodes", [])
+        if not isinstance(active_root_indices, list):
+            _append_error(summary, "GLB active scene nodes must be an array")
+            active_root_indices = []
+    for index in active_root_indices:
+        _node_descendants(nodes, index, summary, f"active scene root {index!r}")
     active_root_names = {
         nodes[index].get("name")
         for index in active_root_indices
@@ -626,7 +825,7 @@ def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | N
 
         mesh_nodes = [
             index
-            for index in _node_descendants(nodes, root_index)
+            for index in _node_descendants(nodes, root_index, summary, node_id)
             if "mesh" in nodes[index]
         ]
         if len(mesh_nodes) != 2:
@@ -671,9 +870,30 @@ def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | N
                             f"GLB {node_id}/{role}: material expected {expected_material}, "
                             f"found {actual_material}",
                         )
+                    if materials[material_index].get("doubleSided", False) is not False:
+                        _append_error(
+                            summary,
+                            f"GLB {node_id}/{role}: opaque material must have doubleSided=false",
+                        )
                 attributes = set(primitive.get("attributes", {}))
                 if attributes != {"POSITION", "NORMAL"}:
                     _append_error(summary, f"GLB {node_id}/{role}: unexpected attributes {sorted(attributes)}")
+                for semantic, accessor_index in primitive.get("attributes", {}).items():
+                    if not isinstance(accessor_index, int) or not 0 <= accessor_index < len(accessors):
+                        _append_error(
+                            summary,
+                            f"GLB {node_id}/{role}: {semantic} references invalid accessor {accessor_index!r}",
+                        )
+                        continue
+                    accessor = accessors[accessor_index]
+                    if semantic in {"POSITION", "NORMAL"} and (
+                        accessor.get("type") != "VEC3"
+                        or accessor.get("componentType") != 5126
+                    ):
+                        _append_error(
+                            summary,
+                            f"GLB {node_id}/{role}: {semantic} accessor must be float VEC3",
+                        )
                 mode = primitive.get("mode", 4)
                 if mode != 4:
                     _append_error(summary, f"GLB {node_id}/{role}: primitive mode expected 4, found {mode}")

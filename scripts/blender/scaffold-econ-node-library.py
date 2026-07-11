@@ -189,6 +189,7 @@ def _material(name: str) -> bpy.types.Material:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         material.use_nodes = True
+        material.use_backface_culling = True
     material.use_fake_user = True
     material.diffuse_color = _hex_color(color)
     nodes = material.node_tree.nodes

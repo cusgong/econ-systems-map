@@ -73,6 +73,35 @@ def mutate_glb(source: Path, destination: Path, mutate) -> None:
     destination.write_bytes(rebuilt)
 
 
+def glb_chunks(path: Path) -> tuple[bytes, int, list[tuple[int, bytes]]]:
+    raw = path.read_bytes()
+    magic, version, declared_length = struct.unpack_from("<4sII", raw, 0)
+    if declared_length != len(raw):
+        raise AssertionError("GLB declared length mismatch")
+    chunks: list[tuple[int, bytes]] = []
+    offset = 12
+    while offset < len(raw):
+        chunk_length, chunk_type = struct.unpack_from("<II", raw, offset)
+        start = offset + 8
+        end = start + chunk_length
+        chunks.append((chunk_type, raw[start:end]))
+        offset = end
+    return magic, version, chunks
+
+
+def write_glb_chunks(
+    path: Path,
+    magic: bytes,
+    version: int,
+    chunks: list[tuple[int, bytes]],
+) -> None:
+    body = b"".join(
+        struct.pack("<II", len(payload), chunk_type) + payload
+        for chunk_type, payload in chunks
+    )
+    path.write_bytes(struct.pack("<4sII", magic, version, 12 + len(body)) + body)
+
+
 class BlenderPipelineContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -245,7 +274,15 @@ class BlenderPipelineContractTests(unittest.TestCase):
                 primitive = document["meshes"][body["mesh"]]["primitives"][0]
                 document["materials"][primitive["material"]]["name"] = "MAT__WRONG"
                 primitive["mode"] = 1
-                document["accessors"][primitive["indices"]]["count"] += 1
+                index_accessor = document["accessors"][primitive["indices"]]
+                index_accessor["count"] += 1
+                index_accessor["byteOffset"] = (
+                    document["bufferViews"][index_accessor["bufferView"]]["byteLength"] + 4
+                )
+                document["bufferViews"][0]["byteOffset"] = (
+                    document["buffers"][0]["byteLength"] + 4
+                )
+                root.setdefault("children", []).extend([root_index, len(nodes) + 99])
                 wrapper_index = len(nodes)
                 nodes.append({"name": "WRAPPER", "children": [root_index]})
                 active_scene = document.get("scene", 0)
@@ -273,8 +310,82 @@ class BlenderPipelineContractTests(unittest.TestCase):
                 "material expected",
                 "primitive mode",
                 "index accessor count",
+                "bufferView 0 range",
+                "range requires",
+                "cyclic node graph",
+                "invalid child index",
             ):
                 self.assertIn(expected, errors)
+
+    def test_glb_validator_rejects_missing_or_truncated_binary_payload(self):
+        with tempfile.TemporaryDirectory(prefix="econ-blender-glb-bin-") as temp_dir:
+            temp = Path(temp_dir)
+            ready_blend = temp / "ready.blend"
+            valid_glb = temp / "valid.glb"
+            missing_bin_glb = temp / "missing-bin.glb"
+            truncated_bin_glb = temp / "truncated-bin.glb"
+            scaffold = run_blender(
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "scaffold-econ-node-library.py"),
+                "--",
+                "--output",
+                str(ready_blend),
+            )
+            self.assertEqual(0, scaffold.returncode, scaffold.stdout)
+            export = run_blender(
+                str(ready_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "export-econ-node-library.py"),
+                "--",
+                "--scope",
+                "ready",
+                "--output",
+                str(valid_glb),
+            )
+            self.assertEqual(0, export.returncode, export.stdout)
+
+            magic, version, chunks = glb_chunks(valid_glb)
+            json_chunks = [chunk for chunk in chunks if chunk[0] == 0x4E4F534A]
+            bin_chunks = [chunk for chunk in chunks if chunk[0] == 0x004E4942]
+            self.assertEqual(1, len(json_chunks))
+            self.assertEqual(1, len(bin_chunks))
+            write_glb_chunks(missing_bin_glb, magic, version, json_chunks)
+            truncated_payload = bin_chunks[0][1][:-64]
+            self.assertEqual(0, len(truncated_payload) % 4)
+            write_glb_chunks(
+                truncated_bin_glb,
+                magic,
+                version,
+                [json_chunks[0], (0x004E4942, truncated_payload)],
+            )
+
+            cases = (
+                (missing_bin_glb, "exactly one BIN chunk"),
+                (truncated_bin_glb, "buffer byteLength"),
+            )
+            for invalid_glb, expected_error in cases:
+                with self.subTest(invalid_glb=invalid_glb.name):
+                    validation = run_blender(
+                        str(ready_blend),
+                        "--python-exit-code",
+                        "1",
+                        "--python",
+                        str(BLENDER_DIR / "validate-econ-node-library.py"),
+                        "--",
+                        "--scope",
+                        "ready",
+                        "--glb",
+                        str(invalid_glb),
+                    )
+                    self.assertNotEqual(0, validation.returncode, validation.stdout)
+                    self.assertIn(
+                        expected_error,
+                        "\n".join(summary_from(validation.stdout)["errors"]),
+                    )
 
     def test_scaffold_red_then_ready_green_and_atomic_export(self):
         with tempfile.TemporaryDirectory(prefix="econ-blender-test-") as temp_dir:
