@@ -15,3 +15,10 @@ docs/session-log.md
 
 .vercel
 .env*
+
+# Blender recoveries and Python caches (authored .blend files remain tracked)
+*.blend1
+*.blend2
+*.blend@
+scripts/blender/__pycache__/
+scripts/blender/tests/__pycache__/
