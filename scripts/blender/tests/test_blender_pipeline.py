@@ -807,6 +807,43 @@ class BlenderPipelineContractTests(unittest.TestCase):
             errors = "\n".join(summary_from(validation.stdout)["errors"])
             self.assertIn("housing/body: bevel coverage minimum", errors)
 
+    def test_validator_rejects_fractional_bevel_weight_above_half(self):
+        with tempfile.TemporaryDirectory(prefix="econ-proof-fractional-bevel-") as temp_dir:
+            mutant_blend = Path(temp_dir) / "fractional-bevel.blend"
+            shutil.copy2(BLENDER_DIR / "econ-node-library.blend", mutant_blend)
+            script = "\n".join(
+                (
+                    "import bpy",
+                    "obj=bpy.data.objects['housing__body']",
+                    "bevel=next(modifier for modifier in obj.modifiers if modifier.type=='BEVEL')",
+                    "weights=obj.data.attributes[bevel.edge_weight]",
+                    "tagged=next(item for item in weights.data if item.value>0.99)",
+                    "tagged.value=0.51",
+                    f"bpy.ops.wm.save_as_mainfile(filepath={str(mutant_blend)!r},check_existing=False)",
+                )
+            )
+            mutation = run_blender(
+                str(mutant_blend),
+                "--python-exit-code",
+                "1",
+                "--python-expr",
+                f"exec({script!r})",
+            )
+            self.assertEqual(0, mutation.returncode, mutation.stdout)
+            validation = run_blender(
+                str(mutant_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "validate-econ-node-library.py"),
+                "--",
+                "--scope",
+                "proof",
+            )
+            self.assertNotEqual(0, validation.returncode, validation.stdout)
+            errors = "\n".join(summary_from(validation.stdout)["errors"])
+            self.assertIn("housing/body: bevel weights must be binary", errors)
+
     def test_validator_rejects_wrong_nonempty_pivot_and_child_rotation(self):
         with tempfile.TemporaryDirectory(prefix="econ-proof-accent-transform-") as temp_dir:
             mutant_blend = Path(temp_dir) / "accent-transform.blend"
@@ -945,6 +982,90 @@ class BlenderPipelineContractTests(unittest.TestCase):
             self.assertIn("GLB oil/accent rotation must be identity", errors)
             self.assertIn("GLB oil/accent scale must be identity", errors)
             self.assertIn("GLB oil/accent translation expected", errors)
+
+    def test_glb_validator_rejects_position_payload_drift_with_unchanged_json(self):
+        with tempfile.TemporaryDirectory(prefix="econ-proof-glb-position-payload-") as temp_dir:
+            temp = Path(temp_dir)
+            ready_blend = temp / "ready.blend"
+            valid_glb = temp / "valid.glb"
+            invalid_glb = temp / "invalid-position.glb"
+            scaffold = run_blender(
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "scaffold-econ-node-library.py"),
+                "--",
+                "--output",
+                str(ready_blend),
+            )
+            self.assertEqual(0, scaffold.returncode, scaffold.stdout)
+            export = run_blender(
+                str(ready_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "export-econ-node-library.py"),
+                "--",
+                "--scope",
+                "ready",
+                "--output",
+                str(valid_glb),
+            )
+            self.assertEqual(0, export.returncode, export.stdout)
+
+            magic, version, chunks = glb_chunks(valid_glb)
+            json_payload = next(payload for chunk_type, payload in chunks if chunk_type == 0x4E4F534A)
+            bin_payload = bytearray(
+                next(payload for chunk_type, payload in chunks if chunk_type == 0x004E4942)
+            )
+            document = json.loads(
+                json_payload.rstrip(b" \t\r\n\x00").decode("utf-8")
+            )
+            body_node = next(
+                node for node in document["nodes"] if node.get("name") == "policy_rate__body"
+            )
+            primitive = document["meshes"][body_node["mesh"]]["primitives"][0]
+            position_accessor = document["accessors"][primitive["attributes"]["POSITION"]]
+            position_view = document["bufferViews"][position_accessor["bufferView"]]
+            payload_offset = (
+                position_view.get("byteOffset", 0)
+                + position_accessor.get("byteOffset", 0)
+            )
+            original = struct.unpack_from("<f", bin_payload, payload_offset)[0]
+            struct.pack_into("<f", bin_payload, payload_offset, original + 0.123)
+            write_glb_chunks(
+                invalid_glb,
+                magic,
+                version,
+                [
+                    (chunk_type, bytes(bin_payload) if chunk_type == 0x004E4942 else payload)
+                    for chunk_type, payload in chunks
+                ],
+            )
+
+            self.assertEqual(
+                glb_json(valid_glb),
+                glb_json(invalid_glb),
+                "POSITION payload mutant must preserve the complete GLB JSON chunk",
+            )
+            validation = run_blender(
+                str(ready_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "validate-econ-node-library.py"),
+                "--",
+                "--scope",
+                "ready",
+                "--glb",
+                str(invalid_glb),
+            )
+            self.assertNotEqual(0, validation.returncode, validation.stdout)
+            errors = "\n".join(summary_from(validation.stdout)["errors"])
+            self.assertIn(
+                "GLB policy_rate/body POSITION/INDEX payload fingerprint mismatch",
+                errors,
+            )
 
 
 if __name__ == "__main__":

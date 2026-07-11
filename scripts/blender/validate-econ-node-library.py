@@ -38,6 +38,8 @@ NORMALIZED_RADIUS_MIN = 0.98
 NORMALIZED_RADIUS_MAX = 1.02
 CENTER_ERROR_RATIO = 0.05
 ZERO_EPSILON = 1.0e-10
+BEVEL_WEIGHT_TOLERANCE = 1.0e-6
+GEOMETRY_QUANTIZATION = 100_000
 OCCUPANCY_MASK_SIZE = 64
 OCCUPANCY_MASK_EXTENT = 1.05
 OCCUPANCY_IOU_FAILURE = 0.80
@@ -55,6 +57,14 @@ COMPONENT_SIZES = {
     5123: 2,
     5125: 4,
     5126: 4,
+}
+COMPONENT_FORMATS = {
+    5120: "b",
+    5121: "B",
+    5122: "h",
+    5123: "H",
+    5125: "I",
+    5126: "f",
 }
 TYPE_COMPONENTS = {
     "SCALAR": 1,
@@ -371,6 +381,7 @@ def _evaluated_mesh_metrics(
                 "area": 0.0,
                 "vertices": [],
                 "triangleVertices": [],
+                "triangleVerticesLocal": [],
                 "extent": Vector((0.0, 0.0, 0.0)),
             }
         if any(not all(math.isfinite(value) for value in vertex) for vertex in vertices):
@@ -430,11 +441,16 @@ def _evaluated_mesh_metrics(
             tuple(vertices[index].copy() for index in triangle.vertices)
             for triangle in mesh.loop_triangles
         ]
+        triangle_vertices_local = [
+            tuple(mesh.vertices[index].co.copy() for index in triangle.vertices)
+            for triangle in mesh.loop_triangles
+        ]
         return {
             "triangles": triangles,
             "area": area,
             "vertices": vertices,
             "triangleVertices": triangle_vertices,
+            "triangleVerticesLocal": triangle_vertices_local,
             "extent": maximum - minimum,
         }
     finally:
@@ -504,6 +520,52 @@ def _occupancy_iou(first: set[int], second: set[int]) -> float:
     return len(first & second) / len(union) if union else 1.0
 
 
+def _canonical_geometry_contract(triangles) -> dict:
+    """Return a winding/order-independent digest and bounds for triangle payloads."""
+
+    canonical_triangles = []
+    points = []
+    for triangle in triangles:
+        if len(triangle) != 3:
+            raise ValueError(f"geometry contract requires triangles, found {len(triangle)} vertices")
+        quantized = []
+        for vertex in triangle:
+            if len(vertex) != 3 or not all(math.isfinite(float(value)) for value in vertex):
+                raise ValueError(f"geometry contract contains invalid vertex {vertex!r}")
+            point = tuple(
+                int(round(float(value) * GEOMETRY_QUANTIZATION))
+                for value in vertex
+            )
+            quantized.append(point)
+            points.append(point)
+        canonical_triangles.append(tuple(sorted(quantized)))
+    canonical_triangles.sort()
+    digest = hashlib.sha256()
+    for triangle in canonical_triangles:
+        for point in triangle:
+            digest.update(struct.pack("<qqq", *point))
+    if points:
+        minimum = [min(point[axis] for point in points) for axis in range(3)]
+        maximum = [max(point[axis] for point in points) for axis in range(3)]
+    else:
+        minimum = [0, 0, 0]
+        maximum = [0, 0, 0]
+    return {
+        "sha256": digest.hexdigest(),
+        "triangles": len(canonical_triangles),
+        "boundsQuantized": {"min": minimum, "max": maximum},
+        "quantization": GEOMETRY_QUANTIZATION,
+    }
+
+
+def _scene_geometry_contract(local_triangle_vertices) -> dict:
+    triangles_gltf = [
+        tuple(_blender_to_gltf_translation(vertex) for vertex in triangle)
+        for triangle in local_triangle_vertices
+    ]
+    return _canonical_geometry_contract(triangles_gltf)
+
+
 def _validate_model(
     root: bpy.types.Object,
     depsgraph: bpy.types.Depsgraph,
@@ -526,6 +588,7 @@ def _validate_model(
 
     metrics_by_role: dict[str, dict] = {}
     bevels_by_role: dict[str, dict] = {}
+    geometry_by_role: dict[str, dict] = {}
     accent_contract = SPECS.PROOF_ACCENT_CONTRACTS.get(node_id)
     if accent_contract is None:
         _append_error(summary, f"{node_id}: missing canonical accent transform contract")
@@ -632,6 +695,9 @@ def _validate_model(
             obj, depsgraph, summary, f"{node_id}/{role}"
         )
         metrics_by_role[role] = metrics
+        geometry_by_role[role] = _scene_geometry_contract(
+            metrics["triangleVerticesLocal"]
+        )
         bevel_modifiers = [modifier for modifier in obj.modifiers if modifier.type == "BEVEL"]
         if len(bevel_modifiers) != 1:
             _append_error(
@@ -669,10 +735,35 @@ def _validate_model(
             tagged_edges = int(obj.get("econ_bevel_tagged_edges", 0))
             weight_name = str(getattr(bevel, "edge_weight", ""))
             weight_attribute = obj.data.attributes.get(weight_name) if weight_name else None
-            weighted_edges = (
-                sum(1 for item in weight_attribute.data if float(item.value) > 0.5)
+            weights = (
+                [float(item.value) for item in weight_attribute.data]
                 if weight_attribute is not None
-                else 0
+                else []
+            )
+            fractional_weights = [
+                value
+                for value in weights
+                if not math.isclose(
+                    value, 0.0, rel_tol=0.0, abs_tol=BEVEL_WEIGHT_TOLERANCE
+                )
+                and not math.isclose(
+                    value, 1.0, rel_tol=0.0, abs_tol=BEVEL_WEIGHT_TOLERANCE
+                )
+            ]
+            if fractional_weights:
+                sample = ", ".join(f"{value:.6f}" for value in fractional_weights[:4])
+                _append_error(
+                    summary,
+                    f"{node_id}/{role}: bevel weights must be binary 0 or 1 "
+                    f"within {BEVEL_WEIGHT_TOLERANCE:g}; found {len(fractional_weights)} "
+                    f"fractional values [{sample}]",
+                )
+            weighted_edges = sum(
+                1
+                for value in weights
+                if math.isclose(
+                    value, 1.0, rel_tol=0.0, abs_tol=BEVEL_WEIGHT_TOLERANCE
+                )
             )
             if tagged_edges <= 0 or weighted_edges != tagged_edges:
                 _append_error(
@@ -796,6 +887,7 @@ def _validate_model(
             view: len(mask) for view, mask in occupancy_masks.items()
         },
         "bevels": bevels_by_role,
+        "geometryByRole": geometry_by_role,
         "accentExtents": [round(float(value), 6) for value in accent["extent"]],
         "accentContract": {
             "pivotLabel": accent_contract["pivotLabel"],
@@ -1008,6 +1100,8 @@ def _validate_binary_layout(gltf: dict, bin_payload: bytes, summary: dict) -> No
         _append_error(summary, "GLB accessors must be an array")
         return
     for accessor_index, accessor in enumerate(accessors):
+        if accessor.get("sparse") is not None:
+            _append_error(summary, f"GLB accessor {accessor_index} sparse payloads are forbidden")
         view_index = accessor.get("bufferView")
         if not isinstance(view_index, int) or not 0 <= view_index < len(buffer_views):
             _append_error(summary, f"GLB accessor {accessor_index} references invalid bufferView {view_index!r}")
@@ -1052,6 +1146,109 @@ def _validate_binary_layout(gltf: dict, bin_payload: bytes, summary: dict) -> No
                 summary,
                 f"GLB accessor {accessor_index} byteOffset {byte_offset} is not component-aligned",
             )
+
+
+def _decode_accessor(
+    gltf: dict,
+    bin_payload: bytes,
+    accessor_index: int,
+    summary: dict,
+    label: str,
+):
+    accessors = gltf.get("accessors", [])
+    buffer_views = gltf.get("bufferViews", [])
+    if not isinstance(accessor_index, int) or not 0 <= accessor_index < len(accessors):
+        _append_error(summary, f"GLB {label}: invalid accessor {accessor_index!r}")
+        return None
+    accessor = accessors[accessor_index]
+    if accessor.get("sparse") is not None:
+        _append_error(summary, f"GLB {label}: sparse accessors are forbidden")
+        return None
+    view_index = accessor.get("bufferView")
+    if not isinstance(view_index, int) or not 0 <= view_index < len(buffer_views):
+        return None
+    view = buffer_views[view_index]
+    component_type = accessor.get("componentType")
+    component_count = TYPE_COMPONENTS.get(accessor.get("type"))
+    component_size = COMPONENT_SIZES.get(component_type)
+    component_format = COMPONENT_FORMATS.get(component_type)
+    count = accessor.get("count")
+    if (
+        component_count is None
+        or component_size is None
+        or component_format is None
+        or not isinstance(count, int)
+        or count <= 0
+    ):
+        return None
+    element_size = component_size * component_count
+    stride = view.get("byteStride", element_size)
+    view_offset = view.get("byteOffset", 0)
+    accessor_offset = accessor.get("byteOffset", 0)
+    if not all(
+        isinstance(value, int) and value >= 0
+        for value in (stride, view_offset, accessor_offset)
+    ) or stride < element_size:
+        return None
+    unpack_format = "<" + component_format * component_count
+    values = []
+    try:
+        for item_index in range(count):
+            offset = view_offset + accessor_offset + item_index * stride
+            if offset + element_size > len(bin_payload):
+                raise ValueError(
+                    f"item {item_index} range {offset}..{offset + element_size} "
+                    f"exceeds BIN payload {len(bin_payload)}"
+                )
+            decoded = struct.unpack_from(unpack_format, bin_payload, offset)
+            values.append(decoded[0] if component_count == 1 else decoded)
+    except (ValueError, struct.error) as exc:
+        _append_error(summary, f"GLB {label}: accessor decode failed: {exc}")
+        return None
+    return values
+
+
+def _primitive_payload_geometry_contract(
+    gltf: dict,
+    bin_payload: bytes,
+    primitive: dict,
+    summary: dict,
+    label: str,
+) -> dict | None:
+    position_accessor = primitive.get("attributes", {}).get("POSITION")
+    index_accessor = primitive.get("indices")
+    positions = _decode_accessor(
+        gltf, bin_payload, position_accessor, summary, f"{label} POSITION"
+    )
+    indices = _decode_accessor(
+        gltf, bin_payload, index_accessor, summary, f"{label} INDEX"
+    )
+    if positions is None or indices is None:
+        return None
+    if len(indices) % 3 != 0:
+        return None
+    triangles = []
+    for offset in range(0, len(indices), 3):
+        triangle = []
+        for raw_index in indices[offset : offset + 3]:
+            if not isinstance(raw_index, int) or not 0 <= raw_index < len(positions):
+                _append_error(
+                    summary,
+                    f"GLB {label}: INDEX payload value {raw_index!r} outside "
+                    f"POSITION count {len(positions)}",
+                )
+                return None
+            position = positions[raw_index]
+            if not isinstance(position, tuple) or len(position) != 3:
+                _append_error(summary, f"GLB {label}: POSITION payload is not VEC3")
+                return None
+            triangle.append(position)
+        triangles.append(tuple(triangle))
+    try:
+        return _canonical_geometry_contract(triangles)
+    except ValueError as exc:
+        _append_error(summary, f"GLB {label}: payload geometry invalid: {exc}")
+        return None
 
 
 def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | None = None) -> dict:
@@ -1382,6 +1579,42 @@ def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | N
                     glb_triangles += count // 3
                 if accessor.get("type") != "SCALAR" or accessor.get("componentType") not in {5121, 5123, 5125}:
                     _append_error(summary, f"GLB {node_id}/{role}: invalid index accessor format")
+                actual_geometry = _primitive_payload_geometry_contract(
+                    gltf,
+                    bin_payload,
+                    primitive,
+                    summary,
+                    f"{node_id}/{role}",
+                )
+                expected_geometry = (
+                    summary.get("models", {})
+                    .get(node_id, {})
+                    .get("geometryByRole", {})
+                    .get(role)
+                )
+                if actual_geometry is not None and expected_geometry is None:
+                    _append_error(
+                        summary,
+                        f"GLB {node_id}/{role}: missing evaluated-scene geometry fingerprint",
+                    )
+                elif actual_geometry is not None and expected_geometry is not None:
+                    if actual_geometry["sha256"] != expected_geometry["sha256"]:
+                        _append_error(
+                            summary,
+                            f"GLB {node_id}/{role} POSITION/INDEX payload fingerprint mismatch "
+                            f"expected={expected_geometry['sha256']} "
+                            f"actual={actual_geometry['sha256']}",
+                        )
+                    if (
+                        actual_geometry["boundsQuantized"]
+                        != expected_geometry["boundsQuantized"]
+                    ):
+                        _append_error(
+                            summary,
+                            f"GLB {node_id}/{role} POSITION payload bounds mismatch "
+                            f"expected={expected_geometry['boundsQuantized']} "
+                            f"actual={actual_geometry['boundsQuantized']}",
+                        )
         if set(roles) != {"body", "accent"}:
             _append_error(summary, f"GLB {node_id}: econ_role set is {sorted(str(role) for role in roles)}")
 
@@ -1403,7 +1636,19 @@ def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | N
 
 def emit_summary(summary: dict) -> None:
     summary["errors"] = sorted(summary["errors"])
-    print(json.dumps(summary, ensure_ascii=True, sort_keys=True, separators=(",", ":")))
+    # Geometry fingerprints are an internal scene-to-payload comparison cache.
+    # Omitting them from the one-line CLI report keeps Blender's shutdown banner
+    # from being coalesced onto an oversized JSON line on Windows stdout.
+    rendered = dict(summary)
+    rendered["models"] = {
+        node_id: {
+            key: value
+            for key, value in model.items()
+            if key != "geometryByRole"
+        }
+        for node_id, model in summary.get("models", {}).items()
+    }
+    print(json.dumps(rendered, ensure_ascii=True, sort_keys=True, separators=(",", ":")))
 
 
 def _arguments(argv: list[str]) -> argparse.Namespace:
