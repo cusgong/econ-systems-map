@@ -7,6 +7,7 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { validateModelContract } from './model-contract.js';
 import {
   createLatestLoadCoordinator,
+  normalizePublicLoadStatus,
   validateNodeModelIdentity,
 } from './node-model-loader-contract.js';
 
@@ -486,7 +487,7 @@ export function createNodeVisualSystem(options) {
     const ticket = loadCoordinator.begin();
     if (ticket === null) {
       return {
-        status: 'fallback',
+        status: normalizePublicLoadStatus('disposed'),
         loadedIds: [],
         fallbackIds: [...expectedIds],
         issues: ['disposed'],
@@ -518,7 +519,7 @@ export function createNodeVisualSystem(options) {
           .filter((record) => record.modelStatus === 'ready')
           .map((record) => record.id);
         return {
-          status: modelStatus,
+          status: normalizePublicLoadStatus(modelStatus),
           loadedIds,
           fallbackIds: expectedIds.filter((id) => !loadedIds.includes(id)),
           issues: ['stale-load'],
@@ -576,7 +577,7 @@ export function createNodeVisualSystem(options) {
           .filter((record) => record.modelStatus === 'ready')
           .map((record) => record.id);
         return {
-          status: modelStatus,
+          status: normalizePublicLoadStatus(modelStatus),
           loadedIds,
           fallbackIds: expectedIds.filter((id) => !loadedIds.includes(id)),
           issues: ['stale-load'],

@@ -63,6 +63,56 @@ test('dispose invalidates an in-flight load and refuses new tickets', async () =
   assert.equal(coordinator.begin(), null);
 });
 
+const PUBLIC_LOAD_STATUSES = new Set(['ready', 'partial', 'fallback']);
+
+test('stale load settling while a newer load is pending never exposes loading', async () => {
+  assert.equal(typeof contract.normalizePublicLoadStatus, 'function');
+  const coordinator = contract.createLatestLoadCoordinator();
+  const a = deferred();
+  const b = deferred();
+  const ticketA = coordinator.begin();
+  const settledA = a.promise.then(() => (
+    coordinator.succeed(ticketA)
+      ? 'ready'
+      : contract.normalizePublicLoadStatus('loading')
+  ));
+
+  coordinator.begin(); // B is now the current pending load.
+  void b;
+  a.resolve('late A success');
+  const status = await settledA;
+
+  assert.equal(status, 'fallback');
+  assert.notEqual(status, 'loading', 'public status must never be loading');
+  assert.ok(PUBLIC_LOAD_STATUSES.has(status));
+});
+
+test('pending resolve and reject after dispose both normalize to a public status', async () => {
+  assert.equal(typeof contract.normalizePublicLoadStatus, 'function');
+  for (const outcome of ['resolve', 'reject']) {
+    const coordinator = contract.createLatestLoadCoordinator();
+    const pending = deferred();
+    const ticket = coordinator.begin();
+    const publicResult = pending.promise.then(
+      () => coordinator.succeed(ticket)
+        ? 'ready'
+        : contract.normalizePublicLoadStatus('disposed'),
+      () => coordinator.fail(ticket)
+        ? 'fallback'
+        : contract.normalizePublicLoadStatus('disposed'),
+    );
+
+    coordinator.dispose();
+    if (outcome === 'resolve') pending.resolve('late success');
+    else pending.reject(new Error('late failure'));
+    const status = await publicResult;
+
+    assert.equal(status, 'fallback');
+    assert.notEqual(status, 'loading');
+    assert.ok(PUBLIC_LOAD_STATUSES.has(status));
+  }
+});
+
 function validIdentity(overrides = {}) {
   return {
     name: 'policy_rate',
@@ -110,4 +160,12 @@ test('visual system tilts fallbacks and has one geometry disposal owner', () => 
   assert.match(visualSource, /record\.fallbackRoot\.rotation\.x/);
   assert.match(visualSource, /record\.fallbackRoot\.rotation\.y/);
   assert.doesNotMatch(visualSource, /loadedGeometries/);
+});
+
+test('visual system normalizes every stale or disposed load result', () => {
+  assert.match(visualSource, /normalizePublicLoadStatus/);
+  assert.equal(
+    (visualSource.match(/status:\s*normalizePublicLoadStatus\s*\(/g) || []).length,
+    3,
+  );
 });

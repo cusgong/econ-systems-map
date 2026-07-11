@@ -2,6 +2,12 @@
 // policies pure makes overlap, disposal, and malformed GLB identity testable
 // without importing Three.js through a browser import map.
 
+const PUBLIC_LOAD_STATUSES = new Set(['ready', 'partial', 'fallback']);
+
+export function normalizePublicLoadStatus(status) {
+  return PUBLIC_LOAD_STATUSES.has(status) ? status : 'fallback';
+}
+
 export function createLatestLoadCoordinator() {
   let latestTicket = 0;
   let disposed = false;
