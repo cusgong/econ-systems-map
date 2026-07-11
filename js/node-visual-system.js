@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { validateModelContract } from './model-contract.js';
+import { layoutNodeLabels } from './node-label-layout.js';
+import { evaluateSignatureTransform } from './node-motion.js';
 import {
   createLatestLoadCoordinator,
   normalizePublicLoadStatus,
@@ -26,6 +28,14 @@ const VERTICAL_SLICE_MODEL_IDS = new Set([
 ]);
 const BASE_VISUAL_RADIUS = 1.82;
 const LABEL_GAP = 0.62;
+const LABEL_SCREEN_GAP = 4;
+const LABEL_SCREEN_MARGIN = 8;
+const LABEL_VERTICAL_OFFSET = 12;
+const LABEL_LAYOUT_INTERVAL = 0.06;
+const LABEL_LOCAL_DISPLACEMENT = 32;
+const LABEL_CRITICAL_DISPLACEMENT = 64;
+const LABEL_LEADER_MAX_LENGTH = 128;
+const NODE_CENTER_CLEARANCE = 3;
 const MAX_MODEL_TRIANGLES = 3000;
 
 const MATERIAL_PARAMS = Object.freeze({
@@ -188,6 +198,8 @@ export function createNodeVisualSystem(options) {
   let disposed = false;
   let lastElapsed = 0;
   let previousElapsed = 0;
+  let lastLabelLayoutAt = -Infinity;
+  let labelLayoutDirty = true;
   let selectedId = null;
 
   const expectedIds = graph.nodes.map((node) => node.id);
@@ -330,9 +342,22 @@ export function createNodeVisualSystem(options) {
 
     const wrap = document.createElement('div');
     wrap.style.pointerEvents = 'none';
+    const leader = document.createElement('span');
+    leader.className = 'node-label-leader';
+    leader.setAttribute('aria-hidden', 'true');
+    Object.assign(leader.style, {
+      position: 'absolute',
+      display: 'none',
+      height: '1px',
+      opacity: '0.42',
+      background: category.color,
+      pointerEvents: 'none',
+      transformOrigin: '0 50%',
+    });
     const chip = document.createElement('button');
     chip.type = 'button';
     chip.className = 'node-label';
+    chip.dataset.nodeId = node.id;
     chip.style.position = 'absolute';
     chip.style.left = '0';
     chip.style.top = '0';
@@ -347,7 +372,7 @@ export function createNodeVisualSystem(options) {
       onSelect?.(node.id);
     };
     chip.addEventListener('click', labelClick);
-    wrap.appendChild(chip);
+    wrap.append(leader, chip);
     const labelObject = new CSS2DObject(wrap);
     const labelAnchor = new THREE.Group();
     labelAnchor.name = `${node.id}__label_anchor`;
@@ -359,6 +384,7 @@ export function createNodeVisualSystem(options) {
       selectedAt: null,
       arrivalAt: null,
       arrivalSign: 0,
+      accentBasePosition: fallbackAccent.position.clone(),
       accentBaseQuaternion: fallbackAccent.quaternion.clone(),
       accentBaseScale: fallbackAccent.scale.clone(),
     };
@@ -377,6 +403,7 @@ export function createNodeVisualSystem(options) {
       hitProxy,
       labelAnchor,
       chip,
+      leader,
       categoryColor,
       hubMetric,
       modelStatus: 'fallback',
@@ -416,6 +443,7 @@ export function createNodeVisualSystem(options) {
   }
 
   function resetAccentBaseline(record) {
+    record.motionState.accentBasePosition.copy(record.accentRoot.position);
     record.motionState.accentBaseQuaternion.copy(record.accentRoot.quaternion);
     record.motionState.accentBaseScale.copy(record.accentRoot.scale);
     record.motionState.selectedAt = null;
@@ -630,6 +658,7 @@ export function createNodeVisualSystem(options) {
       record.chip.classList.remove('dimmed', 'hl', 'selected');
       record.motionState.selectedAt = null;
     }
+    labelLayoutDirty = true;
   }
 
   function setHighlight(spec = {}) {
@@ -650,6 +679,7 @@ export function createNodeVisualSystem(options) {
         record.motionState.selectedAt = lastElapsed;
       }
     }
+    labelLayoutDirty = true;
   }
 
   function setPressures(map) {
@@ -666,6 +696,7 @@ export function createNodeVisualSystem(options) {
       record.chip.classList.toggle('tint-down', active && value < 0);
       if (tint) tint.textContent = active ? (value > 0 ? '▲' : '▼') : '';
     }
+    labelLayoutDirty = true;
   }
 
   function pulseArrival(id, sign) {
@@ -680,6 +711,7 @@ export function createNodeVisualSystem(options) {
     for (const record of records.values()) {
       record.chip.querySelector('.nm').textContent = record.node.name[lang] || record.node.name.ko;
     }
+    labelLayoutDirty = true;
   }
 
   function setLabelTitles(map) {
@@ -695,11 +727,12 @@ export function createNodeVisualSystem(options) {
       const value = record.chip.querySelector('.lval');
       if (value) value.textContent = map?.get(record.id) || '';
     }
+    labelLayoutDirty = true;
   }
 
   const worldPosition = new THREE.Vector3();
-  const axis = new THREE.Vector3();
-  const signatureRotation = new THREE.Quaternion();
+  const labelProjection = new THREE.Vector3();
+  const nodeProjection = new THREE.Vector3();
   function updateHitProxy(record) {
     if (!camera || !renderer?.domElement) return;
     const height = renderer.domElement.clientHeight || window.innerHeight || 1;
@@ -713,10 +746,15 @@ export function createNodeVisualSystem(options) {
   function updateAccentMotion(record, elapsed) {
     const state = record.motionState;
     const accent = record.accentRoot;
+    accent.position.copy(state.accentBasePosition);
     accent.quaternion.copy(state.accentBaseQuaternion);
     accent.scale.copy(state.accentBaseScale);
     if (reducedMotion) return;
 
+    let signature = null;
+    let signatureAxis = 'z';
+    let signatureAmount = 0;
+    let signatureWave = 0;
     if (state.selectedAt !== null) {
       const duration = Number(record.loadedRoot?.children[0]?.userData?.econ_duration) || 0.28;
       const t = (elapsed - state.selectedAt) / duration;
@@ -724,19 +762,174 @@ export function createNodeVisualSystem(options) {
         state.selectedAt = null;
       } else if (t >= 0) {
         const rootData = record.loadedRoot?.children[0]?.userData || {};
-        const amount = Number(rootData.econ_amount) || 0.16;
-        const axisName = rootData.econ_axis || 'z';
-        axis.set(axisName === 'x' ? 1 : 0, axisName === 'y' ? 1 : 0, axisName === 'z' ? 1 : 0);
-        signatureRotation.setFromAxisAngle(axis, Math.sin(Math.PI * t) * amount);
-        accent.quaternion.multiply(signatureRotation);
+        signature = rootData.econ_signature || 'rotate';
+        signatureAxis = rootData.econ_axis || 'z';
+        signatureAmount = Number(rootData.econ_amount) || 0.16;
+        signatureWave = Math.sin(Math.PI * t);
       }
     }
+    let arrivalScale = 1;
     if (state.arrivalAt !== null) {
       const t = (elapsed - state.arrivalAt) / 0.2;
       if (t >= 1) {
         state.arrivalAt = null;
       } else if (t >= 0) {
-        accent.scale.multiplyScalar(1 + Math.sin(Math.PI * t) * 0.08);
+        arrivalScale = 1 + Math.sin(Math.PI * t) * 0.08;
+      }
+    }
+    if (!signature && arrivalScale === 1) return;
+
+    const transform = evaluateSignatureTransform({
+      position: state.accentBasePosition.toArray(),
+      quaternion: state.accentBaseQuaternion.toArray(),
+      scale: state.accentBaseScale.toArray(),
+    }, {
+      signature,
+      axis: signatureAxis,
+      amount: signatureAmount,
+      wave: signatureWave,
+      arrivalScale,
+    });
+    accent.position.fromArray(transform.position);
+    accent.quaternion.fromArray(transform.quaternion);
+    accent.scale.fromArray(transform.scale);
+  }
+
+  function elementObstacle(element, viewportRect, width, height) {
+    if (!element || element.hidden) return null;
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden') return null;
+    const rect = element.getBoundingClientRect();
+    const obstacle = {
+      left: Math.max(0, rect.left - viewportRect.left),
+      top: Math.max(0, rect.top - viewportRect.top),
+      right: Math.min(width, rect.right - viewportRect.left),
+      bottom: Math.min(height, rect.bottom - viewportRect.top),
+    };
+    if (obstacle.right <= obstacle.left || obstacle.bottom <= obstacle.top) return null;
+    return obstacle;
+  }
+
+  function labelPriority(record, hasValue) {
+    if (record.chip.classList.contains('selected')) return 500;
+    if (record.chip.classList.contains('hl')) return 400;
+    if (hasValue) return 300;
+    if (record.node.lever) return 200;
+    return Number(record.hubMetric.score100) || 0;
+  }
+
+  function updateLabelLayout() {
+    if (!camera || !renderer?.domElement || typeof document === 'undefined') return;
+    const viewportRect = renderer.domElement.getBoundingClientRect();
+    const width = renderer.domElement.clientWidth || viewportRect.width;
+    const height = renderer.domElement.clientHeight || viewportRect.height;
+    if (!(width > 0 && height > 0)) return;
+
+    const obstacles = [
+      elementObstacle(document.querySelector('.hud-top'), viewportRect, width, height),
+      elementObstacle(document.getElementById('panel'), viewportRect, width, height),
+    ].filter(Boolean);
+    const projections = new Map();
+    const candidates = [];
+    for (const record of records.values()) {
+      record.labelAnchor.getWorldPosition(labelProjection).project(camera);
+      const anchorX = (labelProjection.x * 0.5 + 0.5) * width;
+      const anchorY = (-labelProjection.y * 0.5 + 0.5) * height;
+      record.nodeRoot.getWorldPosition(nodeProjection).project(camera);
+      const nodeX = (nodeProjection.x * 0.5 + 0.5) * width;
+      const nodeY = (-nodeProjection.y * 0.5 + 0.5) * height;
+      const nodeProjectable = nodeProjection.x >= -1 && nodeProjection.x <= 1
+        && nodeProjection.y >= -1 && nodeProjection.y <= 1
+        && nodeProjection.z >= -1 && nodeProjection.z <= 1;
+      const bounds = record.chip.getBoundingClientRect();
+      const labelWidth = record.chip.offsetWidth || bounds.width || 96;
+      const labelHeight = record.chip.offsetHeight || bounds.height || 24;
+      const hasValue = !!record.chip.querySelector('.lval')?.textContent?.trim();
+      const priority = labelPriority(record, hasValue);
+      const critical = priority >= 200;
+      const selected = record.chip.classList.contains('selected');
+      const preferredY = anchorY - labelHeight / 2 - LABEL_VERTICAL_OFFSET;
+      const anchorOccluded = obstacles.some((obstacle) => (
+        anchorX >= obstacle.left && anchorX <= obstacle.right
+        && anchorY >= obstacle.top && anchorY <= obstacle.bottom
+      ));
+      record.chip.dataset.nodeScreenX = nodeX.toFixed(2);
+      record.chip.dataset.nodeScreenY = nodeY.toFixed(2);
+      record.chip.dataset.nodeAnchorOccluded = String(anchorOccluded);
+      projections.set(record.id, {
+        anchorX,
+        anchorY,
+        nodeX,
+        nodeY,
+        nodeProjectable,
+        labelHeight,
+        preferredX: anchorX,
+        preferredY,
+      });
+      candidates.push({
+        id: record.id,
+        preferredX: anchorX,
+        preferredY,
+        width: labelWidth,
+        height: labelHeight,
+        priority,
+        critical,
+        maxDisplacement: selected
+          ? Infinity
+          : critical
+            ? LABEL_CRITICAL_DISPLACEMENT
+            : LABEL_LOCAL_DISPLACEMENT,
+        allowDistantFallback: selected,
+        eligible: (!anchorOccluded || selected)
+          && labelProjection.x >= -1 && labelProjection.x <= 1
+          && labelProjection.y >= -1 && labelProjection.y <= 1
+          && labelProjection.z >= -1 && labelProjection.z <= 1,
+      });
+    }
+
+    const nodeCenterObstacles = [...projections.values()]
+      .filter((projection) => projection.nodeProjectable)
+      .map((projection) => ({
+        left: projection.nodeX - NODE_CENTER_CLEARANCE,
+        top: projection.nodeY - NODE_CENTER_CLEARANCE,
+        right: projection.nodeX + NODE_CENTER_CLEARANCE,
+        bottom: projection.nodeY + NODE_CENTER_CLEARANCE,
+      }));
+    const layout = layoutNodeLabels({
+      viewport: { width, height, padding: LABEL_SCREEN_MARGIN },
+      obstacles: [...obstacles, ...nodeCenterObstacles],
+      candidates,
+      gap: LABEL_SCREEN_GAP,
+    });
+    for (const placement of layout) {
+      const record = records.get(placement.id);
+      const projection = projections.get(placement.id);
+      if (!record || !projection) continue;
+      record.chip.style.visibility = placement.visible ? 'visible' : 'hidden';
+      record.leader.style.display = 'none';
+      record.chip.dataset.labelDisplacement = placement.visible
+        ? placement.displacement.toFixed(2)
+        : '';
+      if (!placement.visible) continue;
+      const dx = placement.x - projection.anchorX;
+      const initialCenterY = projection.anchorY - projection.labelHeight / 2 - LABEL_VERTICAL_OFFSET;
+      const dy = placement.y - initialCenterY;
+      record.chip.style.transform = `translate(calc(-50% + ${dx.toFixed(2)}px), `
+        + `calc(-100% - ${LABEL_VERTICAL_OFFSET}px + ${dy.toFixed(2)}px))`;
+      if (placement.critical
+        && placement.displacement > LABEL_LOCAL_DISPLACEMENT
+        && placement.displacement <= LABEL_LEADER_MAX_LENGTH) {
+        const startX = projection.nodeX - projection.anchorX;
+        const startY = projection.nodeY - projection.anchorY;
+        const endX = placement.x - projection.anchorX;
+        const endY = placement.y - projection.anchorY;
+        const lineX = endX - startX;
+        const lineY = endY - startY;
+        record.leader.style.display = 'block';
+        record.leader.style.left = `${startX.toFixed(2)}px`;
+        record.leader.style.top = `${startY.toFixed(2)}px`;
+        record.leader.style.width = `${Math.hypot(lineX, lineY).toFixed(2)}px`;
+        record.leader.style.transform = `rotate(${Math.atan2(lineY, lineX).toFixed(5)}rad)`;
       }
     }
   }
@@ -755,6 +948,11 @@ export function createNodeVisualSystem(options) {
       updateAccentMotion(record, lastElapsed);
       updateHitProxy(record);
     }
+    if (labelLayoutDirty || lastElapsed - lastLabelLayoutAt >= LABEL_LAYOUT_INTERVAL) {
+      updateLabelLayout();
+      lastLabelLayoutAt = lastElapsed;
+      labelLayoutDirty = false;
+    }
   }
 
   function setReducedMotion(value) {
@@ -765,6 +963,7 @@ export function createNodeVisualSystem(options) {
       record.fallbackRoot.rotation.set(0, 0, 0);
       record.motionState.selectedAt = null;
       record.motionState.arrivalAt = null;
+      record.accentRoot.position.copy(record.motionState.accentBasePosition);
       record.accentRoot.quaternion.copy(record.motionState.accentBaseQuaternion);
       record.accentRoot.scale.copy(record.motionState.accentBaseScale);
     }

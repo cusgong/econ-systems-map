@@ -15,11 +15,11 @@ from hard_surface import MeshAssembler, ModelGeometry
 def build_fx() -> ModelGeometry:
     """Build an asymmetric double-gimbal foreign-exchange instrument.
 
-    Triangle budget before normalization:
-    body = 2*(42*9 + 38*9) + 4*(4*16-4) + (4*18-4)
-           + 2*(4*16-4) = 1,868
-    accent = 2*30*8 = 480
-    total = 2,348
+    Source triangle budget before the evaluated precision bevel:
+    body = 2*(38*8 + 34*8) + 4*(4*12-4) + (4*14-4)
+           + 2*(4*12-4) = 1,468
+    accent = 2*28*8 + (4*12-4) = 492
+    total = 1,960
     """
 
     body = MeshAssembler()
@@ -31,16 +31,16 @@ def build_fx() -> ModelGeometry:
     body.add_torus(
         major_radius=1.18,
         minor_radius=0.12,
-        major_segments=42,
-        minor_segments=9,
+        major_segments=38,
+        minor_segments=8,
         location=(-0.05, 0.02, 0.04),
         rotation=(math.radians(88.0), math.radians(8.0), math.radians(-6.0)),
     )
     body.add_torus(
         major_radius=0.80,
         minor_radius=0.11,
-        major_segments=38,
-        minor_segments=9,
+        major_segments=34,
+        minor_segments=8,
         location=(0.10, -0.03, -0.03),
         rotation=(math.radians(67.0), math.radians(-18.0), math.radians(14.0)),
     )
@@ -57,7 +57,7 @@ def build_fx() -> ModelGeometry:
         body.add_cylinder(
             radius=0.15,
             depth=0.22,
-            segments=16,
+            segments=12,
             location=location,
             rotation=rotation,
         )
@@ -67,27 +67,38 @@ def build_fx() -> ModelGeometry:
         (ring_pivot[0], -0.29, ring_pivot[2]),
         (ring_pivot[0], 0.26, ring_pivot[2]),
         radius=0.105,
-        segments=18,
+        segments=14,
+        bevel=True,
     )
     for y in (-0.31, 0.28):
         body.add_cylinder(
             radius=0.17,
             depth=0.12,
-            segments=16,
+            segments=12,
             location=(ring_pivot[0], y, ring_pivot[2]),
             rotation=(math.pi * 0.5, 0.0, 0.0),
         )
-
     # The restrained category accent is a third, smaller exchange ring.  Its
     # authored center becomes the true local origin so runtime Y rotation is a
     # counter-rotation around the ring rather than an orbit around the model.
     accent.add_torus(
         major_radius=0.47,
         minor_radius=0.10,
-        major_segments=30,
+        major_segments=28,
         minor_segments=8,
         location=ring_pivot,
         rotation=(math.radians(91.0), math.radians(27.0), math.radians(-11.0)),
+    )
+    # A visible keyed center hub makes the counter-rotating accent a precision
+    # mechanism rather than a decorative ring.  Its exposed cap loops carry
+    # the selective three-segment bevel.
+    accent.add_cylinder(
+        radius=0.15,
+        depth=0.10,
+        segments=12,
+        location=ring_pivot,
+        rotation=(math.pi * 0.5, 0.0, 0.0),
+        bevel=True,
     )
 
     return ModelGeometry(
@@ -107,10 +118,10 @@ def build_fx() -> ModelGeometry:
 def build_oil() -> ModelGeometry:
     """Build a horizontal pressure capsule with an offset calibration valve.
 
-    Triangle budget before normalization:
-    body = 4*40*5 + 2*34*8 + (4*16-4) + (4*18-4) = 1,472
-    accent = 2*22*6 + 4*(4*10-4) + (4*16-4) = 468
-    total = 1,940
+    Source triangle budget before the evaluated precision bevel:
+    body = 4*36*5 + 2*30*8 + 2*(4*14-4) = 1,304
+    accent = 2*20*6 + 4*(4*8-4) + (4*12-4) = 396
+    total = 1,700
     """
 
     body = MeshAssembler()
@@ -121,13 +132,13 @@ def build_oil() -> ModelGeometry:
     body.add_capsule_x(
         half_length=0.78,
         radius=0.42,
-        segments=40,
+        segments=36,
         hemisphere_steps=5,
     )
     body.add_torus(
         major_radius=0.47,
         minor_radius=0.095,
-        major_segments=34,
+        major_segments=30,
         minor_segments=8,
         location=(-0.20, 0.0, 0.0),
         rotation=(0.0, math.pi * 0.5, 0.0),
@@ -140,22 +151,27 @@ def build_oil() -> ModelGeometry:
         (0.40, -0.31, 0.18),
         (0.46, -0.53, 0.39),
         radius=0.09,
-        segments=16,
+        segments=14,
     )
     body.add_cylinder(
         radius=0.15,
         depth=0.16,
-        segments=18,
+        segments=14,
         location=(0.46, -0.53, 0.41),
+        bevel=True,
     )
 
     valve_pivot = (0.46, -0.53, 0.67)
+    # Blender exports +Y as glTF +Z.  Authoring the complete valve wheel in the
+    # XZ plane therefore gives the runtime's declared rotate-z motion the true
+    # wheel normal, with no compensating object rotation or off-center orbit.
     accent.add_torus(
         major_radius=0.25,
         minor_radius=0.09,
-        major_segments=22,
+        major_segments=20,
         minor_segments=6,
         location=valve_pivot,
+        rotation=(math.pi * 0.5, 0.0, 0.0),
     )
     spoke_inner = 0.07
     spoke_outer = 0.20
@@ -166,22 +182,24 @@ def build_oil() -> ModelGeometry:
         accent.add_cylinder_between(
             (
                 valve_pivot[0] + cosine * spoke_inner,
-                valve_pivot[1] + sine * spoke_inner,
-                valve_pivot[2],
+                valve_pivot[1],
+                valve_pivot[2] + sine * spoke_inner,
             ),
             (
                 valve_pivot[0] + cosine * spoke_outer,
-                valve_pivot[1] + sine * spoke_outer,
-                valve_pivot[2],
+                valve_pivot[1],
+                valve_pivot[2] + sine * spoke_outer,
             ),
             radius=0.075,
-            segments=10,
+            segments=8,
         )
     accent.add_cylinder(
         radius=0.135,
         depth=0.12,
-        segments=16,
+        segments=12,
         location=valve_pivot,
+        rotation=(math.pi * 0.5, 0.0, 0.0),
+        bevel=True,
     )
 
     return ModelGeometry(
@@ -193,6 +211,6 @@ def build_oil() -> ModelGeometry:
             "top:long vessel axis opposed by a four-spoke calibration wheel"
         ),
         body_detail="domed pressure capsule, reinforcing collar, and offset pipe socket",
-        accent_pivot="true side-valve hub; rotate local Z",
+        accent_pivot="true side-valve hub; Blender Y normal exports to rotate Z",
         accent_origin=valve_pivot,
     )

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
+from itertools import combinations
 import json
 import math
 from pathlib import Path
@@ -36,6 +38,14 @@ NORMALIZED_RADIUS_MIN = 0.98
 NORMALIZED_RADIUS_MAX = 1.02
 CENTER_ERROR_RATIO = 0.05
 ZERO_EPSILON = 1.0e-10
+OCCUPANCY_MASK_SIZE = 64
+OCCUPANCY_MASK_EXTENT = 1.05
+OCCUPANCY_IOU_FAILURE = 0.80
+OCCUPANCY_VIEW_AXES = {
+    "front": (0, 2),
+    "side": (1, 2),
+    "top": (0, 1),
+}
 JSON_CHUNK_TYPE = 0x4E4F534A
 BIN_CHUNK_TYPE = 0x004E4942
 COMPONENT_SIZES = {
@@ -330,7 +340,13 @@ def _evaluated_mesh_metrics(
         vertices = [evaluated.matrix_world @ vertex.co for vertex in mesh.vertices]
         if not vertices:
             _append_error(summary, f"{label}: mesh has no vertices")
-            return {"triangles": triangles, "area": 0.0, "vertices": []}
+            return {
+                "triangles": triangles,
+                "area": 0.0,
+                "vertices": [],
+                "triangleVertices": [],
+                "extent": Vector((0.0, 0.0, 0.0)),
+            }
         if any(not all(math.isfinite(value) for value in vertex) for vertex in vertices):
             _append_error(summary, f"{label}: mesh contains non-finite vertices")
 
@@ -378,16 +394,95 @@ def _evaluated_mesh_metrics(
         if not math.isfinite(signed_volume) or signed_volume <= ZERO_EPSILON:
             _append_error(summary, f"{label}: normals do not enclose positive volume")
 
-        return {"triangles": triangles, "area": area, "vertices": vertices}
+        minimum = Vector(
+            tuple(min(vertex[index] for vertex in vertices) for index in range(3))
+        )
+        maximum = Vector(
+            tuple(max(vertex[index] for vertex in vertices) for index in range(3))
+        )
+        triangle_vertices = [
+            tuple(vertices[index].copy() for index in triangle.vertices)
+            for triangle in mesh.loop_triangles
+        ]
+        return {
+            "triangles": triangles,
+            "area": area,
+            "vertices": vertices,
+            "triangleVertices": triangle_vertices,
+            "extent": maximum - minimum,
+        }
     finally:
         evaluated.to_mesh_clear()
+
+
+def _mask_coordinate(value: float) -> float:
+    normalized = (value + OCCUPANCY_MASK_EXTENT) / (2.0 * OCCUPANCY_MASK_EXTENT)
+    return normalized * (OCCUPANCY_MASK_SIZE - 1)
+
+
+def _edge_sign(point, first, second) -> float:
+    return (
+        (point[0] - second[0]) * (first[1] - second[1])
+        - (first[0] - second[0]) * (point[1] - second[1])
+    )
+
+
+def _projected_occupancy_mask(
+    triangle_vertices: list[tuple[Vector, Vector, Vector]],
+    axes: tuple[int, int],
+) -> set[int]:
+    occupied: set[int] = set()
+    for triangle in triangle_vertices:
+        projected = [
+            (
+                _mask_coordinate(vertex[axes[0]]),
+                _mask_coordinate(vertex[axes[1]]),
+            )
+            for vertex in triangle
+        ]
+        area = _edge_sign(projected[0], projected[1], projected[2])
+        if abs(area) <= 1.0e-9:
+            continue
+        minimum_x = max(0, math.floor(min(point[0] for point in projected)))
+        maximum_x = min(
+            OCCUPANCY_MASK_SIZE - 1,
+            math.ceil(max(point[0] for point in projected)),
+        )
+        minimum_y = max(0, math.floor(min(point[1] for point in projected)))
+        maximum_y = min(
+            OCCUPANCY_MASK_SIZE - 1,
+            math.ceil(max(point[1] for point in projected)),
+        )
+        for pixel_y in range(minimum_y, maximum_y + 1):
+            for pixel_x in range(minimum_x, maximum_x + 1):
+                point = (pixel_x + 0.5, pixel_y + 0.5)
+                signs = (
+                    _edge_sign(point, projected[0], projected[1]),
+                    _edge_sign(point, projected[1], projected[2]),
+                    _edge_sign(point, projected[2], projected[0]),
+                )
+                if not (any(value < 0.0 for value in signs) and any(value > 0.0 for value in signs)):
+                    occupied.add(pixel_y * OCCUPANCY_MASK_SIZE + pixel_x)
+    return occupied
+
+
+def _occupancy_digest(mask: set[int]) -> str:
+    payload = bytearray((OCCUPANCY_MASK_SIZE * OCCUPANCY_MASK_SIZE + 7) // 8)
+    for index in mask:
+        payload[index // 8] |= 1 << (index % 8)
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _occupancy_iou(first: set[int], second: set[int]) -> float:
+    union = first | second
+    return len(first & second) / len(union) if union else 1.0
 
 
 def _validate_model(
     root: bpy.types.Object,
     depsgraph: bpy.types.Depsgraph,
     summary: dict,
-) -> None:
+) -> dict[str, set[int]] | None:
     node_id = root.name
     descendants = _descendants(root)
     meshes = [obj for obj in descendants if obj.type == "MESH"]
@@ -404,6 +499,7 @@ def _validate_model(
         )
 
     metrics_by_role: dict[str, dict] = {}
+    bevels_by_role: dict[str, dict] = {}
     for obj in meshes:
         role = obj.get("econ_role")
         if role not in {"body", "accent"}:
@@ -411,6 +507,20 @@ def _validate_model(
             continue
         if obj.name != f"{node_id}__{role}":
             _append_error(summary, f"{node_id}: {obj.name} does not match econ_role={role}")
+        expected_data_name = f"MESH__{node_id}__{role}"
+        if obj.data is None or obj.data.name != expected_data_name:
+            actual_data_name = obj.data.name if obj.data is not None else None
+            _append_error(
+                summary,
+                f"{node_id}/{role}: mesh data name expected {expected_data_name}, "
+                f"found {actual_data_name}",
+            )
+        if obj.data is not None and obj.data.users != 1:
+            _append_error(
+                summary,
+                f"{node_id}/{role}: unique mesh ownership required, "
+                f"data {obj.data.name} has {obj.data.users} users",
+            )
         if len(obj.material_slots) != 1 or obj.material_slots[0].material is None:
             _append_error(summary, f"{node_id}: {obj.name} must have exactly one material slot")
         else:
@@ -424,12 +534,102 @@ def _validate_model(
                         summary,
                         f"{node_id}: accent material expected {expected_material}, found {material_name}",
                     )
-        metrics_by_role[role] = _evaluated_mesh_metrics(
+        if role == "accent":
+            signature, axis, amount = SPECS.NODE_MOTIONS[node_id]
+            accent_expected = {
+                "econ_signature": signature,
+                "econ_axis": axis,
+                "econ_amount": amount,
+            }
+            for key, expected in accent_expected.items():
+                actual = obj.get(key)
+                if isinstance(expected, float):
+                    valid = isinstance(actual, (int, float)) and math.isclose(
+                        float(actual), expected, rel_tol=0.0, abs_tol=1.0e-6
+                    )
+                else:
+                    valid = actual == expected
+                if not valid:
+                    _append_error(
+                        summary,
+                        f"{node_id}/accent {key} expected {expected!r}, found {actual!r}",
+                    )
+            pivot = obj.get("econ_pivot")
+            if not isinstance(pivot, str) or not pivot.strip():
+                _append_error(summary, f"{node_id}/accent econ_pivot must be nonempty")
+        if obj.data is not None:
+            obj.data.calc_loop_triangles()
+            raw_triangles = len(obj.data.loop_triangles)
+        else:
+            raw_triangles = 0
+        metrics = _evaluated_mesh_metrics(
             obj, depsgraph, summary, f"{node_id}/{role}"
         )
+        metrics_by_role[role] = metrics
+        bevel_modifiers = [modifier for modifier in obj.modifiers if modifier.type == "BEVEL"]
+        if len(bevel_modifiers) != 1:
+            _append_error(
+                summary,
+                f"{node_id}/{role}: requires exactly one real Bevel modifier, "
+                f"found {len(bevel_modifiers)}",
+            )
+            bevel_width = 0.0
+            bevel_segments = 0
+            bevel_limit_method = ""
+            tagged_edges = 0
+        else:
+            bevel = bevel_modifiers[0]
+            bevel_width = float(bevel.width)
+            bevel_segments = int(bevel.segments)
+            bevel_limit_method = str(bevel.limit_method)
+            if not 0.03 <= bevel_width <= 0.05:
+                _append_error(
+                    summary,
+                    f"{node_id}/{role}: Bevel width {bevel_width:.6f} outside 0.03..0.05",
+                )
+            if bevel_segments != 3:
+                _append_error(
+                    summary,
+                    f"{node_id}/{role}: Bevel segments must equal 3, found {bevel_segments}",
+                )
+            if not bevel.show_viewport or not bevel.show_render:
+                _append_error(summary, f"{node_id}/{role}: Bevel modifier must be evaluated")
+            if bevel_limit_method != "WEIGHT":
+                _append_error(
+                    summary,
+                    f"{node_id}/{role}: Bevel limit_method must be WEIGHT, "
+                    f"found {bevel_limit_method}",
+                )
+            tagged_edges = int(obj.get("econ_bevel_tagged_edges", 0))
+            weight_name = str(getattr(bevel, "edge_weight", ""))
+            weight_attribute = obj.data.attributes.get(weight_name) if weight_name else None
+            weighted_edges = (
+                sum(1 for item in weight_attribute.data if float(item.value) > 0.5)
+                if weight_attribute is not None
+                else 0
+            )
+            if tagged_edges <= 0 or weighted_edges != tagged_edges:
+                _append_error(
+                    summary,
+                    f"{node_id}/{role}: bevel tagged edge count invalid "
+                    f"metadata={tagged_edges}, weighted={weighted_edges}",
+                )
+        evaluated_delta = int(metrics["triangles"] - raw_triangles)
+        if evaluated_delta <= 0:
+            _append_error(
+                summary,
+                f"{node_id}/{role}: Bevel modifier produced no evaluated triangle geometry",
+            )
+        bevels_by_role[role] = {
+            "width": round(bevel_width, 6),
+            "segments": bevel_segments,
+            "evaluatedTriangleDelta": evaluated_delta,
+            "limitMethod": bevel_limit_method,
+            "taggedEdges": tagged_edges,
+        }
 
     if set(metrics_by_role) != {"body", "accent"}:
-        return
+        return None
     body = metrics_by_role["body"]
     accent = metrics_by_role["accent"]
     model_triangles = int(body["triangles"] + accent["triangles"])
@@ -472,15 +672,14 @@ def _validate_model(
     accent_ratio = accent["area"] / total_area if total_area > ZERO_EPSILON else 0.0
     if not 0.10 <= accent_ratio <= 0.20:
         _append_error(summary, f"{node_id}: accent area ratio {accent_ratio:.6f} outside 0.10..0.20")
-
-    body_obj = next((obj for obj in meshes if obj.get("econ_role") == "body"), None)
-    if body_obj is not None:
-        bevel_ratio = body_obj.get("econ_bevel_width_ratio")
-        bevel_segments = body_obj.get("econ_bevel_segments")
-        if not isinstance(bevel_ratio, (int, float)) or not 0.015 <= float(bevel_ratio) <= 0.03:
-            _append_error(summary, f"{node_id}: bevel width ratio must be 0.015..0.03")
-        if bevel_segments != 3:
-            _append_error(summary, f"{node_id}: bevel segments must equal 3")
+    if node_id == "oil":
+        accent_extent = accent["extent"]
+        if accent_extent[1] >= 0.45 * min(accent_extent[0], accent_extent[2]):
+            _append_error(
+                summary,
+                "oil/accent: side valve must lie in Blender XZ with a thin Y normal "
+                f"for exported rotate-z, found extents={tuple(round(float(v), 6) for v in accent_extent)}",
+            )
 
     silhouette = root.get("econ_silhouette")
     if not isinstance(silhouette, str) or len(silhouette.split(";")) != 3:
@@ -490,6 +689,11 @@ def _validate_model(
         )
         silhouette = ""
 
+    triangle_vertices = body["triangleVertices"] + accent["triangleVertices"]
+    occupancy_masks = {
+        view: _projected_occupancy_mask(triangle_vertices, axes)
+        for view, axes in OCCUPANCY_VIEW_AXES.items()
+    }
     summary["models"][node_id] = {
         "bodyTriangles": int(body["triangles"]),
         "accentTriangles": int(accent["triangles"]),
@@ -499,9 +703,18 @@ def _validate_model(
         "centerError": round(float(center.length), 6),
         "primitives": 2,
         "silhouetteSignature": silhouette,
+        "occupancyMaskSha256": {
+            view: _occupancy_digest(mask) for view, mask in occupancy_masks.items()
+        },
+        "occupancyPixels": {
+            view: len(mask) for view, mask in occupancy_masks.items()
+        },
+        "bevels": bevels_by_role,
+        "accentExtents": [round(float(value), 6) for value in accent["extent"]],
     }
     summary["triangles"] += model_triangles
     summary["primitives"] += 2
+    return occupancy_masks
 
 
 def validate_scene(scope: str) -> tuple[dict, list[bpy.types.Object]]:
@@ -519,8 +732,27 @@ def validate_scene(scope: str) -> tuple[dict, list[bpy.types.Object]]:
     roots = _check_global_scene_contract(summary)
     selected_roots = _scope_roots(roots, scope, summary)
     depsgraph = bpy.context.evaluated_depsgraph_get()
+    masks_by_id: dict[str, dict[str, set[int]]] = {}
     for root in selected_roots:
-        _validate_model(root, depsgraph, summary)
+        masks = _validate_model(root, depsgraph, summary)
+        if masks is not None:
+            masks_by_id[root.name] = masks
+    for first_id, second_id in combinations(masks_by_id, 2):
+        by_view = {
+            view: _occupancy_iou(
+                masks_by_id[first_id][view],
+                masks_by_id[second_id][view],
+            )
+            for view in OCCUPANCY_VIEW_AXES
+        }
+        if all(value >= OCCUPANCY_IOU_FAILURE for value in by_view.values()):
+            rendered = ", ".join(
+                f"{view}={value:.6f}" for view, value in by_view.items()
+            )
+            _append_error(
+                summary,
+                f"three-view silhouette IoU failure {first_id}/{second_id}: {rendered}",
+            )
     if summary["triangles"] > MAX_TOTAL_TRIANGLES:
         _append_error(
             summary,
@@ -538,13 +770,6 @@ def validate_scene(scope: str) -> tuple[dict, list[bpy.types.Object]]:
                 "proof triangles "
                 f"{summary['triangles']} outside {PROOF_TOTAL_TRIANGLES_MIN}..{PROOF_TOTAL_TRIANGLES_MAX}",
             )
-        signatures = [
-            summary["models"].get(node_id, {}).get("silhouetteSignature")
-            for node_id in SPECS.PROOF_IDS
-        ]
-        usable = [signature for signature in signatures if signature]
-        if len(usable) != len(SPECS.PROOF_IDS) or len(set(usable)) != len(usable):
-            _append_error(summary, "proof silhouette signatures must be present and pairwise unique")
     return summary, selected_roots
 
 
@@ -816,6 +1041,7 @@ def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | N
     primitive_count = 0
     glb_triangles = 0
     accessors = gltf.get("accessors", [])
+    used_mesh_indices: dict[int, str] = {}
     for node_id in expected_ids:
         if node_id not in roots_by_name:
             continue
@@ -903,12 +1129,51 @@ def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | N
         roles = []
         for node_index in mesh_nodes:
             node = nodes[node_index]
-            role = node.get("extras", {}).get("econ_role")
+            node_extras = node.get("extras", {})
+            role = node_extras.get("econ_role")
             roles.append(role)
             mesh_index = node["mesh"]
             if not isinstance(mesh_index, int) or not 0 <= mesh_index < len(meshes):
                 _append_error(summary, f"GLB {node_id}: invalid mesh index {mesh_index}")
                 continue
+            owner = used_mesh_indices.get(mesh_index)
+            if owner is not None:
+                _append_error(
+                    summary,
+                    f"GLB {node_id}/{role}: mesh index reused from {owner}: {mesh_index}",
+                )
+            else:
+                used_mesh_indices[mesh_index] = f"{node_id}/{role}"
+            expected_mesh_name = f"MESH__{node_id}__{role}"
+            actual_mesh_name = meshes[mesh_index].get("name")
+            if actual_mesh_name != expected_mesh_name:
+                _append_error(
+                    summary,
+                    f"GLB {node_id}/{role}: mesh name expected {expected_mesh_name}, "
+                    f"found {actual_mesh_name}",
+                )
+            if role == "accent":
+                accent_expected = {
+                    "econ_signature": signature,
+                    "econ_axis": axis,
+                    "econ_amount": amount,
+                }
+                for key, expected in accent_expected.items():
+                    actual = node_extras.get(key)
+                    if isinstance(expected, float):
+                        valid = isinstance(actual, (int, float)) and math.isclose(
+                            float(actual), expected, rel_tol=0.0, abs_tol=1.0e-6
+                        )
+                    else:
+                        valid = actual == expected
+                    if not valid:
+                        _append_error(
+                            summary,
+                            f"GLB {node_id}/accent {key} expected {expected!r}, found {actual!r}",
+                        )
+                pivot = node_extras.get("econ_pivot")
+                if not isinstance(pivot, str) or not pivot.strip():
+                    _append_error(summary, f"GLB {node_id}/accent econ_pivot must be nonempty")
             primitives = meshes[mesh_index].get("primitives", [])
             primitive_count += len(primitives)
             if len(primitives) != 1:
@@ -956,6 +1221,27 @@ def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | N
                             summary,
                             f"GLB {node_id}/{role}: {semantic} accessor must be float VEC3",
                         )
+                    if semantic == "POSITION" and node_id == "oil" and role == "accent":
+                        minimum = accessor.get("min")
+                        maximum = accessor.get("max")
+                        if (
+                            not isinstance(minimum, list)
+                            or not isinstance(maximum, list)
+                            or len(minimum) != 3
+                            or len(maximum) != 3
+                        ):
+                            _append_error(
+                                summary,
+                                "GLB oil/accent POSITION accessor requires three-axis min/max",
+                            )
+                        else:
+                            extent = [float(maximum[i]) - float(minimum[i]) for i in range(3)]
+                            if extent[2] >= 0.45 * min(extent[0], extent[1]):
+                                _append_error(
+                                    summary,
+                                    "GLB oil/accent wheel must be thin on exported Z for rotate-z, "
+                                    f"found extents={tuple(round(value, 6) for value in extent)}",
+                                )
                 mode = primitive.get("mode", 4)
                 if mode != 4:
                     _append_error(summary, f"GLB {node_id}/{role}: primitive mode expected 4, found {mode}")

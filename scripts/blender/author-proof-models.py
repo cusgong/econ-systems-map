@@ -1,8 +1,8 @@
 """Reproducibly author the six Precision Macro Instruments proof models.
 
-Run with Blender 5.1.2 after the canonical scaffold is open.  Only the five
-proof roots beyond the approved policy-rate instrument are rebuilt; unrelated
-ready roots and their geometry are never touched.
+Run with Blender 5.1.2 after the canonical scaffold is open.  The approved
+policy-rate geometry is preserved and receives the canonical precision bevel
+when upgrading an older scaffold.  Only the five other proof roots are rebuilt.
 """
 
 from __future__ import annotations
@@ -36,6 +36,16 @@ def _load_specs():
     return module
 
 
+def _load_scaffold_module():
+    module_path = SCRIPT_DIR / "scaffold-econ-node-library.py"
+    spec = importlib.util.spec_from_file_location("econ_node_scaffold", module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load policy scaffold source: {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 SPECS = _load_specs()
 BUILDERS = {
     "fx": build_fx,
@@ -44,6 +54,36 @@ BUILDERS = {
     "gdp": build_gdp,
     "risk_sentiment": build_risk_sentiment,
 }
+
+
+def _upgrade_policy_precision_geometry(root: bpy.types.Object) -> str:
+    """Rebuild policy from the canonical 48/40 source on every proof pass.
+
+    The approved economic semantics and root metadata remain untouched.  Only
+    the smooth circular tessellation is rebuilt before the continuous crown
+    and needle bevels are attached.  Rebuilding avoids carrying legacy 64/64
+    topology or stale modifier settings into a supposedly reproducible export.
+    """
+
+    scaffold = _load_scaffold_module()
+    for obj in list(root.children_recursive):
+        if obj.type != "MESH":
+            continue
+        mesh = obj.data
+        bpy.data.objects.remove(obj, do_unlink=True)
+        if mesh is not None and mesh.users == 0:
+            bpy.data.meshes.remove(mesh)
+    materials = {
+        name: bpy.data.materials.get(name)
+        for name in SPECS.MATERIAL_NAMES
+    }
+    missing = sorted(name for name, material in materials.items() if material is None)
+    if missing:
+        raise RuntimeError(f"policy_rate: required materials are missing: {missing}")
+    status = scaffold._author_policy_rate(root, materials)
+    if status != "created":
+        raise RuntimeError(f"policy_rate: deterministic topology rebuild failed: {status}")
+    return "rebuilt"
 
 
 def _arguments(argv: list[str]) -> argparse.Namespace:
@@ -97,6 +137,7 @@ def main(argv: list[str] | None = None) -> int:
     policy_root = bpy.data.objects.get("policy_rate")
     if policy_root is None or not policy_root.get("econ_ready", False):
         raise RuntimeError("Approved policy_rate anchor must already be ready")
+    policy_status = _upgrade_policy_precision_geometry(policy_root)
     preserved_unrelated = {
         node_id: tuple(
             sorted(
@@ -150,6 +191,7 @@ def main(argv: list[str] | None = None) -> int:
             {
                 "authored": authored,
                 "output": str(output),
+                "policyRate": policy_status,
                 "readyCount": len(ready_ids),
                 "readyIds": ready_ids,
             },

@@ -16,8 +16,15 @@ from mathutils import Vector
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from hard_surface import configure_precision_bevel, exposed_primary_edge_pairs  # noqa: E402
+
+
 SCENE_NAME = "SCENE__ECON_NODE_LIBRARY"
 MASTER_COLLECTION_NAME = "MASTER__ECON_NODE_LIBRARY"
+POLICY_BEVEL_MINIMUM_ANGLE = math.radians(60.0)
 
 
 def _load_specs():
@@ -307,15 +314,69 @@ def _mesh_object(
     obj.data.materials.append(material)
     obj["econ_role"] = role
     if role == "body":
-        obj["econ_bevel_width_ratio"] = 0.02
-        obj["econ_bevel_segments"] = 3
-        obj["econ_detail"] = "64-segment base; 48-segment crown; 12 knurls; 3 calibration grooves"
+        obj["econ_detail"] = "48-segment base/crown; 12 knurls; 3 calibration grooves"
     else:
         obj["econ_signature"] = "rotate"
         obj["econ_axis"] = "z"
         obj["econ_amount"] = 0.20
         obj["econ_pivot"] = "needle_rotation_center"
+    _configure_policy_precision_bevel(obj, role)
     return obj
+
+
+def _mesh_vertex_components(mesh: bpy.types.Mesh) -> tuple[frozenset[int], ...]:
+    adjacency = {vertex.index: set() for vertex in mesh.vertices}
+    for edge in mesh.edges:
+        first, second = (int(index) for index in edge.vertices)
+        adjacency[first].add(second)
+        adjacency[second].add(first)
+
+    remaining = set(adjacency)
+    components: list[frozenset[int]] = []
+    while remaining:
+        seed = min(remaining)
+        stack = [seed]
+        component: set[int] = set()
+        while stack:
+            current = stack.pop()
+            if current in component:
+                continue
+            component.add(current)
+            stack.extend(sorted(adjacency[current] - component, reverse=True))
+        remaining.difference_update(component)
+        components.append(frozenset(component))
+    return tuple(sorted(components, key=lambda item: (len(item), min(item))))
+
+
+def _policy_precision_bevel_pairs(
+    obj: bpy.types.Object,
+    role: str,
+) -> tuple[tuple[int, int], ...]:
+    candidates = exposed_primary_edge_pairs(obj, POLICY_BEVEL_MINIMUM_ANGLE)
+    if role == "body":
+        # The only 60-degree body candidates form the exposed 48-edge crown
+        # transition.  The shallow base rings and knurl tessellation stay clean.
+        return candidates
+    if role != "accent":
+        raise ValueError(f"{obj.name}: unsupported policy bevel role {role!r}")
+
+    # The accent contains a large annulus and a small disconnected needle.
+    # Restrict weighting to that needle so the dial face does not become a
+    # blanket-beveled, inflated ring.
+    components = _mesh_vertex_components(obj.data)
+    candidate_vertices = {index for pair in candidates for index in pair}
+    eligible = [component for component in components if component & candidate_vertices]
+    if not eligible:
+        raise ValueError(f"{obj.name}: no connected accent component has bevel candidates")
+    needle = min(eligible, key=lambda item: (len(item), min(item)))
+    return tuple(pair for pair in candidates if pair[0] in needle and pair[1] in needle)
+
+
+def _configure_policy_precision_bevel(obj: bpy.types.Object, role: str) -> None:
+    bevels = [modifier for modifier in obj.modifiers if modifier.type == "BEVEL"]
+    if bevels:
+        return
+    configure_precision_bevel(obj, _policy_precision_bevel_pairs(obj, role))
 
 
 def _policy_rate_geometry() -> tuple[MeshAssembler, MeshAssembler]:
@@ -332,7 +393,7 @@ def _policy_rate_geometry() -> tuple[MeshAssembler, MeshAssembler]:
         (1.50, -0.172),
         (1.47, -0.18),
     ]
-    body.add_revolved_y(base_profile, 64, back_y=0.18, front_y=-0.18)
+    body.add_revolved_y(base_profile, 48, back_y=0.18, front_y=-0.18)
 
     # Four vertices per tooth make twelve controlled knurl protrusions around
     # the crown. The front profile then cuts three V-shaped calibration grooves.
@@ -370,7 +431,7 @@ def _policy_rate_geometry() -> tuple[MeshAssembler, MeshAssembler]:
         inner_radius=0.69,
         back_y=-0.472,
         front_y=-0.515,
-        segments=64,
+        segments=40,
     )
     needle = [
         (-0.075, -0.08),
@@ -393,8 +454,13 @@ def _author_policy_rate(root: bpy.types.Object, materials: dict[str, bpy.types.M
         for obj in root.children_recursive
         if obj.type == "MESH" and obj.data is not None and len(obj.data.polygons) > 0
     ]
-    if nonempty_meshes:
+    if nonempty_meshes and all(
+        len([modifier for modifier in obj.modifiers if modifier.type == "BEVEL"]) == 1
+        for obj in nonempty_meshes
+    ):
         return "preserved"
+
+    replacing_legacy = bool(nonempty_meshes)
 
     for obj in list(root.children_recursive):
         if obj.type == "MESH":
@@ -423,7 +489,7 @@ def _author_policy_rate(root: bpy.types.Object, materials: dict[str, bpy.types.M
     )
     root["econ_ready"] = True
     root["econ_silhouette"] = "front:crown+needle; side:tiered-low-profile; top:knurled-control"
-    return "created"
+    return "upgraded" if replacing_legacy else "created"
 
 
 def _arguments(argv: list[str]) -> argparse.Namespace:

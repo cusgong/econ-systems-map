@@ -49,14 +49,10 @@ def build_housing() -> ModelGeometry:
 
     # Depth-separated lower plates read as structural floors rather than a
     # facade.  Rotating the rounded Y extrusion makes Z the plate thickness.
-    body.add_rounded_box_y(
-        width=1.42,
-        height=0.48,
-        depth=0.11,
-        radius=0.08,
-        corner_segments=6,
+    body.add_box(
+        size=(1.42, 0.48, 0.11),
         location=(0.00, 0.19, -0.56),
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
+        bevel=True,
     )
     body.add_rounded_box_y(
         width=1.14,
@@ -85,14 +81,10 @@ def build_housing() -> ModelGeometry:
         body.add_box(size=(1.10, 0.08, 0.08), location=(0.0, y, -0.46))
 
     upper_plate_origin = (0.16, -0.18, 0.62)
-    accent.add_rounded_box_y(
-        width=1.18,
-        height=0.52,
-        depth=0.10,
-        radius=0.08,
-        corner_segments=8,
+    accent.add_box(
+        size=(1.18, 0.52, 0.10),
         location=upper_plate_origin,
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
+        bevel=True,
     )
     for x in (-0.14, 0.34):
         accent.add_box(size=(0.10, 0.40, 0.08), location=(x, -0.18, 0.53))
@@ -146,8 +138,8 @@ def build_gdp() -> ModelGeometry:
                 minor_radius=0.055,
                 start_angle=start,
                 end_angle=end,
-                arc_segments=5,
-                minor_segments=8,
+                arc_segments=3,
+                minor_segments=6,
                 location=(0.0, y, 0.0),
                 rotation=cage_rotation,
             )
@@ -162,7 +154,7 @@ def build_gdp() -> ModelGeometry:
             (x, -cage_depth, z),
             (x, cage_depth, z),
             radius=0.05,
-            segments=12,
+            segments=8,
         )
 
         brace_angle = angle + _SIXTH_TURN * 0.5
@@ -178,7 +170,7 @@ def build_gdp() -> ModelGeometry:
                 0.64 * math.sin(brace_angle),
             ),
             radius=0.045,
-            segments=12,
+            segments=8,
         )
 
     body.add_cylinder(
@@ -187,6 +179,7 @@ def build_gdp() -> ModelGeometry:
         segments=6,
         location=(0.0, 0.0, 0.0),
         rotation=cage_rotation,
+        bevel=True,
     )
     body.add_cylinder(
         radius=0.34,
@@ -196,35 +189,54 @@ def build_gdp() -> ModelGeometry:
         rotation=cage_rotation,
     )
 
-    # A long angular eight-point planform gives every vane a clipped directional
-    # tip and a consistent clockwise bias. Its radial-to-tangential proportion
-    # reads as an instrument blade rather than a petal or gear tooth.
-    vane = (
-        (0.34, -0.030),
-        (0.44, -0.055),
-        (0.62, -0.035),
-        (0.68, 0.000),
-        (0.63, 0.055),
-        (0.50, 0.082),
-        (0.38, 0.060),
-        (0.33, 0.018),
+    # Six clockwise load paddles alternate reach on an intentionally irregular
+    # 56..65-degree cadence.  Each root-to-tip centerline sweeps by roughly 36
+    # degrees, producing directional turbine plates instead of radial petals or
+    # gear teeth.  Every exposed paddle perimeter carries the selective
+    # three-segment precision bevel.
+    long_paddle = (
+        (0.31, -0.150),
+        (0.40, -0.200),
+        (0.69, 0.060),
+        (0.73, 0.130),
+        (0.68, 0.220),
+        (0.58, 0.230),
+        (0.35, -0.020),
     )
-    for sector in range(6):
+    short_paddle = (
+        (0.35, -0.120),
+        (0.43, -0.160),
+        (0.59, 0.040),
+        (0.64, 0.100),
+        (0.60, 0.170),
+        (0.52, 0.190),
+        (0.39, -0.020),
+    )
+    paddles = (
+        (long_paddle, 0.0),
+        (short_paddle, 58.0),
+        (long_paddle, 121.0),
+        (short_paddle, 177.0),
+        (long_paddle, 242.0),
+        (short_paddle, 300.0),
+    )
+    for paddle, angle_degrees in paddles:
         accent.add_extruded_polygon_y(
-            vane,
+            paddle,
             depth=0.10,
-            rotation=(0.0, -sector * _SIXTH_TURN, 0.0),
+            rotation=(0.0, -math.radians(angle_degrees), 0.0),
+            bevel=True,
         )
 
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:hex-hub-with-six-clipped-vanes;"
+            "front:hex-hub-with-six-unequal-clockwise-swept-paddles;"
             "side:twin-cage-rails;"
             "top:open-flywheel-cage"
         ),
         body_detail="central hex hub inside a twin-rail open macro cage",
-        accent_pivot="hex_hub_center_scale_xyz",
+        accent_pivot="swept_paddle_hub_center_scale_xyz",
         accent_origin=(0.0, 0.0, 0.0),
     )

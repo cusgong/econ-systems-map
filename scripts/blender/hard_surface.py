@@ -20,6 +20,21 @@ from mathutils import Euler, Matrix, Vector
 Vec3 = tuple[float, float, float]
 
 
+# Source geometry is normalized to a near-unit pre-bevel radius before Blender
+# objects are created.  The small 1.008 compensation keeps an inward-beveled
+# evaluated mesh inside the 0.98..1.02 radius contract.  A 0.035-unit bevel is
+# 1.736 percent of that full diameter, inside the approved 0.03..0.05
+# normalized-width range.  Builders explicitly
+# nominate exposed primary shells; only their edges above the source angle
+# threshold receive weights.  The modifier therefore retains a reviewable
+# source selection while smooth torus/cylinder tessellation remains untouched.
+NORMALIZED_SOURCE_RADIUS = 1.008
+BEVEL_WIDTH = 0.035
+BEVEL_WIDTH_RATIO = BEVEL_WIDTH / (2.0 * NORMALIZED_SOURCE_RADIUS)
+BEVEL_SEGMENTS = 3
+BEVEL_SOURCE_ANGLE_LIMIT = math.radians(70.0)
+
+
 @dataclass(frozen=True)
 class ModelGeometry:
     body: "MeshAssembler"
@@ -44,12 +59,51 @@ def transform_matrix(
     )
 
 
+def _face_normal(vertices: Sequence[Vector], face: Sequence[int]) -> Vector:
+    """Return a stable Newell normal for an arbitrary source polygon."""
+
+    normal = Vector((0.0, 0.0, 0.0))
+    for index, vertex_index in enumerate(face):
+        current = vertices[vertex_index]
+        following = vertices[face[(index + 1) % len(face)]]
+        normal.x += (current.y - following.y) * (current.z + following.z)
+        normal.y += (current.z - following.z) * (current.x + following.x)
+        normal.z += (current.x - following.x) * (current.y + following.y)
+    if normal.length <= 1.0e-9:
+        raise ValueError(f"cannot calculate normal for degenerate face {tuple(face)}")
+    return normal.normalized()
+
+
+def _angle_qualified_edges(
+    vertices: Sequence[Vector],
+    faces: Sequence[Sequence[int]],
+    minimum_angle: float,
+) -> set[tuple[int, int]]:
+    """Select closed-shell edges above an angle without touching smooth facets."""
+
+    adjacency: dict[tuple[int, int], list[Vector]] = {}
+    for face in faces:
+        normal = _face_normal(vertices, face)
+        for index, first in enumerate(face):
+            second = face[(index + 1) % len(face)]
+            adjacency.setdefault(tuple(sorted((first, second))), []).append(normal)
+    selected: set[tuple[int, int]] = set()
+    for edge, normals in adjacency.items():
+        if len(normals) != 2:
+            continue
+        dot = max(-1.0, min(1.0, normals[0].dot(normals[1])))
+        if math.acos(dot) + 1.0e-6 >= minimum_angle:
+            selected.add(edge)
+    return selected
+
+
 class MeshAssembler:
     """Append deterministic primitive shells into one eventual Blender mesh."""
 
     def __init__(self) -> None:
         self.vertices: list[Vec3] = []
         self.faces: list[tuple[int, ...]] = []
+        self.bevel_edges: set[tuple[int, int]] = set()
 
     def add_vertex(self, vertex: Sequence[float]) -> int:
         self.vertices.append((float(vertex[0]), float(vertex[1]), float(vertex[2])))
@@ -63,22 +117,39 @@ class MeshAssembler:
         vertices: Iterable[Sequence[float]],
         faces: Iterable[Sequence[int]],
         matrix: Matrix | None = None,
+        bevel: bool = False,
     ) -> None:
         matrix = matrix or Matrix.Identity(4)
+        source_vertices = [Vector(vertex) for vertex in vertices]
+        source_faces = [tuple(int(index) for index in face) for face in faces]
+        transformed = [matrix @ vertex for vertex in source_vertices]
         offset = len(self.vertices)
-        for vertex in vertices:
-            self.add_vertex(matrix @ Vector(vertex))
-        for face in faces:
-            self.add_face(*(offset + int(index) for index in face))
+        for vertex in transformed:
+            self.add_vertex(vertex)
+        for face in source_faces:
+            self.add_face(*(offset + index for index in face))
+        if bevel:
+            for first, second in _angle_qualified_edges(
+                transformed,
+                source_faces,
+                BEVEL_SOURCE_ANGLE_LIMIT,
+            ):
+                self.bevel_edges.add(tuple(sorted((offset + first, offset + second))))
 
     def extend(self, other: "MeshAssembler", matrix: Matrix | None = None) -> None:
+        offset = len(self.vertices)
         self.append(other.vertices, other.faces, matrix)
+        self.bevel_edges.update(
+            tuple(sorted((offset + first, offset + second)))
+            for first, second in other.bevel_edges
+        )
 
     def add_box(
         self,
         size: Vec3,
         location: Vec3 = (0.0, 0.0, 0.0),
         rotation: Vec3 = (0.0, 0.0, 0.0),
+        bevel: bool = False,
     ) -> None:
         hx, hy, hz = (value * 0.5 for value in size)
         vertices = [
@@ -99,7 +170,7 @@ class MeshAssembler:
             (2, 3, 7, 6),
             (3, 0, 4, 7),
         ]
-        self.append(vertices, faces, transform_matrix(location, rotation))
+        self.append(vertices, faces, transform_matrix(location, rotation), bevel=bevel)
 
     def add_cylinder(
         self,
@@ -108,6 +179,7 @@ class MeshAssembler:
         segments: int = 24,
         location: Vec3 = (0.0, 0.0, 0.0),
         rotation: Vec3 = (0.0, 0.0, 0.0),
+        bevel: bool = False,
     ) -> None:
         vertices: list[Vec3] = []
         half = depth * 0.5
@@ -122,7 +194,7 @@ class MeshAssembler:
         for segment in range(segments):
             following = (segment + 1) % segments
             faces.append((segment, following, following + segments, segment + segments))
-        self.append(vertices, faces, transform_matrix(location, rotation))
+        self.append(vertices, faces, transform_matrix(location, rotation), bevel=bevel)
 
     def add_cylinder_between(
         self,
@@ -130,6 +202,7 @@ class MeshAssembler:
         end: Vec3,
         radius: float,
         segments: int = 20,
+        bevel: bool = False,
     ) -> None:
         start_v = Vector(start)
         end_v = Vector(end)
@@ -147,7 +220,7 @@ class MeshAssembler:
         matrix = Matrix.Translation((start_v + end_v) * 0.5) @ rotation
 
         shell = MeshAssembler()
-        shell.add_cylinder(radius, length, segments)
+        shell.add_cylinder(radius, length, segments, bevel=bevel)
         self.extend(shell, matrix)
 
     def add_torus(
@@ -299,6 +372,7 @@ class MeshAssembler:
         depth: float,
         location: Vec3 = (0.0, 0.0, 0.0),
         rotation: Vec3 = (0.0, 0.0, 0.0),
+        bevel: bool = False,
     ) -> None:
         half = depth * 0.5
         vertices = [(x, half, z) for x, z in points_xz] + [(x, -half, z) for x, z in points_xz]
@@ -310,7 +384,7 @@ class MeshAssembler:
         for index in range(count):
             following = (index + 1) % count
             faces.append((index, following, following + count, index + count))
-        self.append(vertices, faces, transform_matrix(location, rotation))
+        self.append(vertices, faces, transform_matrix(location, rotation), bevel=bevel)
 
     def add_rounded_box_y(
         self,
@@ -321,9 +395,10 @@ class MeshAssembler:
         corner_segments: int = 3,
         location: Vec3 = (0.0, 0.0, 0.0),
         rotation: Vec3 = (0.0, 0.0, 0.0),
+        bevel: bool = False,
     ) -> None:
         points = rounded_rectangle_points(width, height, radius, corner_segments)
-        self.add_extruded_polygon_y(points, depth, location, rotation)
+        self.add_extruded_polygon_y(points, depth, location, rotation, bevel=bevel)
 
     def add_rounded_rect_ring_y(
         self,
@@ -405,10 +480,16 @@ def normalise_pair(
     radius = max((vertex - center).length for vertex in vertices)
     if radius <= 1.0e-9:
         raise ValueError("cannot normalize zero-radius model geometry")
-    body.vertices = [tuple((Vector(vertex) - center) / radius) for vertex in body.vertices]
+    body.vertices = [
+        tuple((Vector(vertex) - center) * (NORMALIZED_SOURCE_RADIUS / radius))
+        for vertex in body.vertices
+    ]
     pivot = Vector(accent_origin)
-    accent.vertices = [tuple((Vector(vertex) - pivot) / radius) for vertex in accent.vertices]
-    return tuple((pivot - center) / radius)
+    accent.vertices = [
+        tuple((Vector(vertex) - pivot) * (NORMALIZED_SOURCE_RADIUS / radius))
+        for vertex in accent.vertices
+    ]
+    return tuple((pivot - center) * (NORMALIZED_SOURCE_RADIUS / radius))
 
 
 def _remove_mesh_descendants(root: bpy.types.Object) -> None:
@@ -419,6 +500,105 @@ def _remove_mesh_descendants(root: bpy.types.Object) -> None:
         bpy.data.objects.remove(obj, do_unlink=True)
         if mesh is not None and mesh.users == 0:
             bpy.data.meshes.remove(mesh)
+
+
+def exposed_primary_edge_pairs(
+    obj: bpy.types.Object,
+    minimum_angle: float = BEVEL_SOURCE_ANGLE_LIMIT,
+) -> tuple[tuple[int, int], ...]:
+    """Return deterministic manifold source edges above a visible angle.
+
+    This adapter lets existing authored meshes, notably ``policy_rate``, use
+    the same weighted bevel contract as ``MeshAssembler`` output.  Smooth
+    tessellation stays below the threshold and is never weighted.
+    """
+
+    if obj.type != "MESH" or obj.data is None:
+        raise ValueError(f"{obj.name}: exposed-edge selection requires a mesh object")
+    if not 0.0 < minimum_angle < math.pi:
+        raise ValueError(f"minimum bevel angle must be between 0 and pi: {minimum_angle}")
+    bm = bmesh.new()
+    try:
+        bm.from_mesh(obj.data)
+        bm.verts.ensure_lookup_table()
+        bm.verts.index_update()
+        bm.normal_update()
+        pairs = {
+            tuple(sorted((int(edge.verts[0].index), int(edge.verts[1].index))))
+            for edge in bm.edges
+            if edge.is_manifold
+            and edge.calc_face_angle(0.0) + 1.0e-6 >= minimum_angle
+        }
+    finally:
+        bm.free()
+    return tuple(sorted(pairs))
+
+
+def configure_precision_bevel(
+    obj: bpy.types.Object,
+    tagged_vertex_pairs: Iterable[Sequence[int]],
+) -> int:
+    """Attach the canonical weighted three-segment bevel to a mesh object.
+
+    Callers own the design decision about which exposed primary edges are
+    tagged.  Passing vertex pairs rather than Blender edge indices keeps the
+    selection deterministic across mesh validation and bmesh normal repair.
+    """
+
+    if obj.type != "MESH" or obj.data is None:
+        raise ValueError(f"{obj.name}: precision bevel requires a mesh object")
+    if any(modifier.type == "BEVEL" for modifier in obj.modifiers):
+        raise ValueError(f"{obj.name}: precision bevel already exists")
+    expected = {
+        tuple(sorted((int(pair[0]), int(pair[1]))))
+        for pair in tagged_vertex_pairs
+    }
+    if not expected:
+        raise ValueError(f"{obj.name}: no exposed primary bevel edges were tagged")
+
+    mesh = obj.data
+    bevel_attribute = mesh.attributes.get("bevel_weight_edge")
+    if bevel_attribute is None:
+        bevel_attribute = mesh.attributes.new(
+            name="bevel_weight_edge",
+            type="FLOAT",
+            domain="EDGE",
+        )
+    for item in bevel_attribute.data:
+        item.value = 0.0
+    tagged_count = 0
+    for edge in mesh.edges:
+        key = tuple(sorted((int(edge.vertices[0]), int(edge.vertices[1]))))
+        if key in expected:
+            bevel_attribute.data[edge.index].value = 1.0
+            tagged_count += 1
+    if tagged_count != len(expected):
+        raise ValueError(
+            f"{obj.name}: tagged bevel edge drift "
+            f"expected={len(expected)} actual={tagged_count}"
+        )
+
+    bevel = obj.modifiers.new(name="BEVEL__PRECISION_3SEG", type="BEVEL")
+    bevel.affect = "EDGES"
+    bevel.width = BEVEL_WIDTH
+    bevel.segments = BEVEL_SEGMENTS
+    bevel.limit_method = "WEIGHT"
+    bevel.edge_weight = bevel_attribute.name
+    bevel.angle_limit = BEVEL_SOURCE_ANGLE_LIMIT
+    bevel.offset_type = "OFFSET"
+    bevel.profile = 0.5
+    bevel.use_clamp_overlap = True
+    bevel.loop_slide = True
+    bevel.miter_outer = "MITER_SHARP"
+    bevel.miter_inner = "MITER_SHARP"
+    bevel.harden_normals = False
+    obj["econ_bevel_width"] = BEVEL_WIDTH
+    obj["econ_bevel_width_ratio"] = BEVEL_WIDTH_RATIO
+    obj["econ_bevel_segments"] = BEVEL_SEGMENTS
+    obj["econ_bevel_limit_method"] = "WEIGHT"
+    obj["econ_bevel_source_angle_degrees"] = math.degrees(BEVEL_SOURCE_ANGLE_LIMIT)
+    obj["econ_bevel_tagged_edges"] = tagged_count
+    return tagged_count
 
 
 def _mesh_object(
@@ -454,6 +634,7 @@ def _mesh_object(
     mesh.update()
 
     obj = bpy.data.objects.new(name, mesh)
+    configure_precision_bevel(obj, assembler.bevel_edges)
     collection.objects.link(obj)
     obj.parent = root
     obj.matrix_parent_inverse = Matrix.Identity(4)
@@ -463,8 +644,6 @@ def _mesh_object(
     obj.data.materials.append(material)
     obj["econ_role"] = role
     if role == "body":
-        obj["econ_bevel_width_ratio"] = 0.025
-        obj["econ_bevel_segments"] = 3
         obj["econ_detail"] = detail
     else:
         obj["econ_pivot"] = pivot

@@ -91,3 +91,39 @@ test('keeps GLB loading fail-soft with the deliberate six-model proof set', () =
   );
   assert.doesNotMatch(visualSource, /showFatal|unhandledrejection/);
 });
+
+test('integrates signature dispatch with a complete resettable accent transform', () => {
+  assert.match(visualSource, /from ['"]\.\/node-motion\.js['"]/);
+  assert.match(visualSource, /evaluateSignatureTransform\s*\(/);
+  assert.match(visualSource, /econ_signature/);
+  assert.match(visualSource, /accentBasePosition/);
+  assert.match(visualSource, /accentBaseQuaternion/);
+  assert.match(visualSource, /accentBaseScale/);
+  assert.match(visualSource, /accent\.position\.fromArray\s*\(/);
+  assert.match(visualSource, /accent\.quaternion\.fromArray\s*\(/);
+  assert.match(visualSource, /accent\.scale\.fromArray\s*\(/);
+  assert.match(
+    visualSource,
+    /record\.accentRoot\.position\.copy\s*\(\s*record\.motionState\.accentBasePosition\s*\)/,
+    'reduced motion must restore accent position as well as quaternion and scale',
+  );
+});
+
+test('integrates projection-aware label layout without changing the public API', () => {
+  assert.match(visualSource, /from ['"]\.\/node-label-layout\.js['"]/);
+  assert.match(visualSource, /layoutNodeLabels\s*\(/);
+  assert.match(visualSource, /getWorldPosition\s*\([^)]*\)\.project\s*\(\s*camera\s*\)/);
+  assert.match(visualSource, /querySelector\s*\(\s*['"]\.hud-top['"]\s*\)/);
+  assert.match(visualSource, /getElementById\s*\(\s*['"]panel['"]\s*\)/);
+  assert.match(visualSource, /classList\.contains\s*\(\s*['"]selected['"]\s*\)/);
+  assert.match(visualSource, /classList\.contains\s*\(\s*['"]hl['"]\s*\)/);
+  assert.match(visualSource, /querySelector\s*\(\s*['"]\.lval['"]\s*\)/);
+  assert.match(visualSource, /style\.visibility\s*=/);
+  assert.match(visualSource, /node-label-leader/);
+  assert.match(visualSource, /dataset\.nodeScreenX\s*=/);
+  assert.match(visualSource, /dataset\.nodeScreenY\s*=/);
+  assert.match(visualSource, /chip\.dataset\.nodeId\s*=\s*node\.id/);
+  assert.match(visualSource, /anchorOccluded/);
+  assert.match(visualSource, /nodeCenterObstacles/);
+  assert.match(visualSource, /allowDistantFallback:\s*selected/);
+});

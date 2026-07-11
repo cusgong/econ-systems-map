@@ -551,11 +551,33 @@ class BlenderPipelineContractTests(unittest.TestCase):
             self.assertGreaterEqual(model["radius"], 0.98, node_id)
             self.assertLessEqual(model["radius"], 1.02, node_id)
             self.assertLessEqual(model["centerError"], 0.05, node_id)
+            self.assertEqual(
+                {"front", "side", "top"},
+                set(model["occupancyMaskSha256"]),
+                node_id,
+            )
+            for view, digest in model["occupancyMaskSha256"].items():
+                self.assertEqual(64, len(digest), f"{node_id}/{view}")
+                self.assertGreater(model["occupancyPixels"][view], 0, f"{node_id}/{view}")
+            self.assertEqual({"body", "accent"}, set(model["bevels"]), node_id)
+            for role, bevel in model["bevels"].items():
+                self.assertEqual(3, bevel["segments"], f"{node_id}/{role}")
+                self.assertGreaterEqual(bevel["width"], 0.03, f"{node_id}/{role}")
+                self.assertLessEqual(bevel["width"], 0.05, f"{node_id}/{role}")
+                self.assertGreater(bevel["evaluatedTriangleDelta"], 0, f"{node_id}/{role}")
+                self.assertEqual("WEIGHT", bevel["limitMethod"], f"{node_id}/{role}")
+                self.assertGreater(bevel["taggedEdges"], 0, f"{node_id}/{role}")
             signature = model.get("silhouetteSignature")
             self.assertIsInstance(signature, str, node_id)
             self.assertEqual(3, len(signature.split(";")), node_id)
             silhouette_signatures.append(signature)
         self.assertEqual(6, len(set(silhouette_signatures)))
+        oil_extents = summary["models"]["oil"]["accentExtents"]
+        self.assertLess(
+            oil_extents[1],
+            0.45 * min(oil_extents[0], oil_extents[2]),
+            "oil valve must be an XZ-plane side wheel with Blender-Y normal",
+        )
 
         with tempfile.TemporaryDirectory(prefix="econ-blender-proof-export-") as temp_dir:
             first_glb = Path(temp_dir) / "proof-a.glb"
@@ -628,6 +650,151 @@ class BlenderPipelineContractTests(unittest.TestCase):
                 self.assertEqual([], summary_from(export.stdout)["errors"])
                 hashes.append(hashlib.sha256(output_glb.read_bytes()).hexdigest())
             self.assertEqual(hashes[0], hashes[1], "reauthoring changed proof GLB bytes")
+
+    def test_validator_rejects_geometry_duplicate_despite_unique_description(self):
+        with tempfile.TemporaryDirectory(prefix="econ-proof-duplicate-geometry-") as temp_dir:
+            mutant_blend = Path(temp_dir) / "duplicate.blend"
+            shutil.copy2(BLENDER_DIR / "econ-node-library.blend", mutant_blend)
+            script = "\n".join(
+                (
+                    "import bpy",
+                    "source_root=bpy.data.objects['housing']",
+                    "target_root=bpy.data.objects['risk_sentiment']",
+                    "source={obj.get('econ_role'):obj for obj in source_root.children_recursive if obj.type=='MESH'}",
+                    "target={obj.get('econ_role'):obj for obj in target_root.children_recursive if obj.type=='MESH'}",
+                    "for role in ('body','accent'):",
+                    "    old=target[role].data",
+                    "    old_material=target[role].material_slots[0].material",
+                    "    new=source[role].data.copy()",
+                    "    target[role].data=new",
+                    "    target[role].matrix_local=source[role].matrix_local.copy()",
+                    "    if old.users==0: bpy.data.meshes.remove(old)",
+                    "    new.name=f'MESH__risk_sentiment__{role}'",
+                    "    new.materials.clear()",
+                    "    new.materials.append(old_material)",
+                    f"bpy.ops.wm.save_as_mainfile(filepath={str(mutant_blend)!r},check_existing=False)",
+                )
+            )
+            mutation = run_blender(
+                str(mutant_blend),
+                "--python-exit-code",
+                "1",
+                "--python-expr",
+                f"exec({script!r})",
+            )
+            self.assertEqual(0, mutation.returncode, mutation.stdout)
+
+            validation = run_blender(
+                str(mutant_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "validate-econ-node-library.py"),
+                "--",
+                "--scope",
+                "proof",
+            )
+            self.assertNotEqual(0, validation.returncode, validation.stdout)
+            errors = "\n".join(summary_from(validation.stdout)["errors"])
+            self.assertIn("three-view silhouette IoU", errors)
+            self.assertIn("housing", errors)
+            self.assertIn("risk_sentiment", errors)
+
+    def test_validator_rejects_shared_or_noncanonical_mesh_data(self):
+        with tempfile.TemporaryDirectory(prefix="econ-proof-shared-mesh-") as temp_dir:
+            mutant_blend = Path(temp_dir) / "shared.blend"
+            shutil.copy2(BLENDER_DIR / "econ-node-library.blend", mutant_blend)
+            script = "\n".join(
+                (
+                    "import bpy",
+                    "source_root=bpy.data.objects['housing']",
+                    "target_root=bpy.data.objects['risk_sentiment']",
+                    "source={obj.get('econ_role'):obj for obj in source_root.children_recursive if obj.type=='MESH'}",
+                    "target={obj.get('econ_role'):obj for obj in target_root.children_recursive if obj.type=='MESH'}",
+                    "for role in ('body','accent'):",
+                    "    old=target[role].data",
+                    "    old_material=target[role].material_slots[0].material",
+                    "    target[role].data=source[role].data",
+                    "    target[role].matrix_local=source[role].matrix_local.copy()",
+                    "    target[role].material_slots[0].link='OBJECT'",
+                    "    target[role].material_slots[0].material=old_material",
+                    "    if old.users==0: bpy.data.meshes.remove(old)",
+                    f"bpy.ops.wm.save_as_mainfile(filepath={str(mutant_blend)!r},check_existing=False)",
+                )
+            )
+            mutation = run_blender(
+                str(mutant_blend),
+                "--python-exit-code",
+                "1",
+                "--python-expr",
+                f"exec({script!r})",
+            )
+            self.assertEqual(0, mutation.returncode, mutation.stdout)
+            validation = run_blender(
+                str(mutant_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "validate-econ-node-library.py"),
+                "--",
+                "--scope",
+                "proof",
+            )
+            self.assertNotEqual(0, validation.returncode, validation.stdout)
+            errors = "\n".join(summary_from(validation.stdout)["errors"])
+            self.assertIn("mesh data name", errors)
+            self.assertIn("unique mesh ownership", errors)
+
+    def test_glb_validator_rejects_reused_mesh_names_and_accent_motion_drift(self):
+        with tempfile.TemporaryDirectory(prefix="econ-proof-glb-ownership-") as temp_dir:
+            temp = Path(temp_dir)
+            valid_glb = temp / "valid.glb"
+            invalid_glb = temp / "invalid.glb"
+            library_blend = BLENDER_DIR / "econ-node-library.blend"
+            export = run_blender(
+                str(library_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "export-econ-node-library.py"),
+                "--",
+                "--scope",
+                "proof",
+                "--output",
+                str(valid_glb),
+            )
+            self.assertEqual(0, export.returncode, export.stdout)
+
+            def drift(document: dict) -> None:
+                nodes = document["nodes"]
+                housing_body = next(node for node in nodes if node.get("name") == "housing__body")
+                risk_body = next(node for node in nodes if node.get("name") == "risk_sentiment__body")
+                risk_body["mesh"] = housing_body["mesh"]
+                fx_accent = next(node for node in nodes if node.get("name") == "fx__accent")
+                document["meshes"][fx_accent["mesh"]]["name"] = "MESH__WRONG"
+                oil_accent = next(node for node in nodes if node.get("name") == "oil__accent")
+                oil_accent.setdefault("extras", {}).pop("econ_pivot", None)
+                oil_accent["extras"]["econ_signature"] = "translate"
+
+            mutate_glb(valid_glb, invalid_glb, drift)
+            validation = run_blender(
+                str(library_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "validate-econ-node-library.py"),
+                "--",
+                "--scope",
+                "proof",
+                "--glb",
+                str(invalid_glb),
+            )
+            self.assertNotEqual(0, validation.returncode, validation.stdout)
+            errors = "\n".join(summary_from(validation.stdout)["errors"])
+            self.assertIn("mesh index reused", errors)
+            self.assertIn("mesh name expected", errors)
+            self.assertIn("econ_pivot", errors)
+            self.assertIn("accent econ_signature", errors)
 
 
 if __name__ == "__main__":

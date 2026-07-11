@@ -23,11 +23,11 @@ The SHA-256 matches Blender's official `blender-5.1.2.sha256` manifest. The Micr
 ## Files and contracts
 
 - `node-specs.py`: imports the canonical 30 IDs/categories from `data/nodes.js` and fails at import if the motion map drifts.
-- `scaffold-econ-node-library.py`: creates the collection/material/root contract idempotently and never replaces an existing non-empty mesh.
-- `hard_surface.py`: shared deterministic closed-manifold assembly, normalization, real-pivot rebasing, and two-mesh finalization helpers.
-- `author-proof-models.py`: rebuilds any requested non-anchor proof models in canonical order while preserving `policy_rate` and all unrelated roots.
+- `scaffold-econ-node-library.py`: creates the collection/material/root contract idempotently, authors the canonical 48-segment base/40-segment annulus `policy_rate`, and upgrades the legacy modifier-free policy mesh once.
+- `hard_surface.py`: shared deterministic closed-manifold assembly, normalization, real-pivot rebasing, weighted-edge three-segment bevel authoring, and two-mesh finalization helpers.
+- `author-proof-models.py`: deterministically rebuilds `policy_rate` from the shared scaffold source on every proof pass, then rebuilds any requested non-anchor proof models in canonical order while preserving all unrelated roots.
 - `proof_models_external.py`, `proof_models_real.py`, `proof_models_psychology.py`: reproducible geometry builders for the five new proof instruments.
-- `validate-econ-node-library.py`: validates evaluated Blender geometry and the complete GLB container, including JSON/BIN chunks, buffer and accessor byte ranges, node traversal, and primitive topology. Asset discovery is collection-aware: `10_WIP` cutters/references and `90_QA` cameras/lights are allowed in the source but never selected or exported.
+- `validate-econ-node-library.py`: validates evaluated Blender geometry, weighted bevel contribution, unique mesh ownership, deterministic three-view occupancy masks, accent motion metadata, and the complete GLB container, including JSON/BIN chunks, buffer and accessor byte ranges, node traversal, and primitive topology. Asset discovery is collection-aware: `10_WIP` cutters/references and `90_QA` cameras/lights are allowed in the source but never selected or exported.
 - `export-econ-node-library.py`: validates first, exports to a same-directory temporary GLB, post-validates it, and only then uses `os.replace`.
 - `econ-node-library.blend`: authored source scene.
 - `../../data/models/econ-node-library.glb`: runtime derivative.
@@ -57,7 +57,7 @@ $Glb = "$Project\data\models\econ-node-library.glb"
   --python "$Project\scripts\blender\export-econ-node-library.py" -- --scope proof --output $Glb
 ```
 
-The scaffold reopens an existing output before making changes. When it finds non-empty `policy_rate` geometry it reports `"policyRate":"preserved"` and leaves the mesh untouched.
+The scaffold reopens an existing output before making changes. A current beveled `policy_rate` reports `"policyRate":"preserved"`; a legacy non-beveled mesh is rebuilt from the canonical 48/40 source and reports `"policyRate":"upgraded"`. Proof authoring always rebuilds that same policy source, which makes legacy migration and repeated GLB export byte-stable.
 
 ## Validation-first RED
 
@@ -79,7 +79,7 @@ Expected: exit code `1`, `readyCount=0`, and the sole error `no ready roots for 
 python -m unittest discover -s scripts/blender/tests -p "test_*.py" -v
 ```
 
-The integration suite covers the RED fixture, exact six-ID proof scope, per-model and total triangle bands, accent area, unique three-view signatures, normalized bounds, 12 primitives, deterministic GLB export, and preservation of a sentinel output when an invalid export is attempted.
+The integration suite covers the RED fixture, exact six-ID proof scope, per-model and total triangle bands, accent area, normalized bounds, 12 primitives, real weighted three-segment bevels, CPU-rasterized three-view silhouette separation, canonical one-owner mesh data, accent motion/pivot drift, deterministic GLB export, and preservation of a sentinel output when an invalid export is attempted.
 
 The proof gate currently validates `readyCount=6`, `fallbackCount=24`, `primitives=12`, 10,600–13,000 total triangles, and a proof GLB no larger than 600,000 bytes. Ignored QA tooling under `.superpowers/sdd/` renders isolated FRONT/SIDE/TOP, PBR perspective, true 48px, and alpha-mask tiles so framing and pairwise silhouette checks remain reproducible without polluting the authored scene.
 
