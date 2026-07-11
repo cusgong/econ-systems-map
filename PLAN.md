@@ -6,7 +6,7 @@
 2차·3차 파급효과를 탐색하는 3D 경제 인과관계 지도로 시스템 사고를 훈련하는 웹앱.
 
 ## 지금 단계
-v2.4.0 배포 유지. 다음 시각 개편은 **A2 정밀 거시경제 계기(Precision Macro Instruments)**로 방향 확정: 30개 고유 Blender 오브제, 범주색 인레이, 직·간접 인과 허브 크기, 단일 GLB 점진 로딩. **현재 서면 설계 스펙 검토 단계이며, 승인 직후 Blender 설치와 대표 6개 제작 계획으로 전환한다.** "지금" 자동화 파이프라인은 시크릿 **3/6 등록 완료**(VERCEL_TOKEN·ORG_ID·PROJECT_ID) 상태로 병행 대기한다.
+v2.4.0 배포 유지. **A2 정밀 거시경제 계기 설계가 승인됐고 v2.5.0 구현 계획까지 작성 완료**: 30개 고유 Blender 오브제, 범주색 인레이, 직·간접 인과 허브 크기, 단일 GLB 점진 로딩. PC에는 Microsoft Store판 Blender 5.1.2가 설치되어 있으며, WindowsApps 직접 실행 제한 때문에 자동 검증·내보내기에는 동일 버전의 명령줄 실행 가능 배포본을 사용한다. 다음 단계는 실행 방식 선택 후 Task 1 허브 점수 테스트부터 착수한다. "지금" 자동화 파이프라인은 시크릿 **3/6 등록 완료** 상태로 병행 대기한다.
 
 ## Milestones  (상태는 매 작업·도달 시 갱신)
 - [x] M1 스캐폴드 + canonical 데이터 스키마/노드 정의
@@ -22,8 +22,11 @@ v2.4.0 배포 유지. 다음 시각 개편은 **A2 정밀 거시경제 계기(Pr
 - [x] (AI, 260711) GH 시크릿 3/6 등록: `VERCEL_TOKEN`·`VERCEL_ORG_ID`·`VERCEL_PROJECT_ID` (repo cusgong/econ-systems-map)
 - [x] (Marcus·AI, 260711) A2 방향 확정: 30개 고유 오브제, 범주색 인레이, 인과 허브 크기, Blender + 단일 GLB
 - [x] (AI, 260711) 서면 설계 스펙 작성: `docs/superpowers/specs/2026-07-11-precision-macro-instruments-design.md`
-- [ ] (Marcus) 서면 설계 스펙 검토·승인
-- [ ] (AI, 승인 후) Blender 설치 → 구현 계획 작성 → 대표 6개 제작
+- [x] (Marcus, 260711) 서면 설계 스펙 승인
+- [x] (AI, 260711) Store판 Blender 5.1.2 설치 확인 + WindowsApps CLI 제약 확인
+- [x] (AI, 260711) 구현 계획 작성: `docs/superpowers/plans/2026-07-11-precision-macro-instruments-implementation.md`
+- [ ] (Marcus) 실행 방식 선택: subagent-driven 권장 / inline execution
+- [ ] (AI, 선택 후) 허브 점수 TDD → Blender 수직 슬라이스 → 대표 6개 제작
 - [ ] (Marcus) ECOS 키 발급 → api-keys.local.env에 `ECOS_API_KEY=` 추가
 - [ ] (Marcus) FRED 키 발급 → `FRED_API_KEY=` 추가
 - [ ] (Marcus) `claude setup-token` 실행 → `CLAUDE_CODE_OAUTH_TOKEN=` 추가
@@ -58,4 +61,4 @@ v2.4.0 배포 유지. 다음 시각 개편은 **A2 정밀 거시경제 계기(Pr
 - 로컬: preview `econ-map` (127.0.0.1:5230) 또는 `python -m http.server 5230` (프로젝트 루트)
 - 데이터 수정: 스크래치 JSON → `python scripts/build-data.py <dir>` (data/*.js 직접 편집 금지)
 
-업데이트: 260711 (v2.4.0 배포 유지, M6 설계 검토)
+업데이트: 260711 (v2.4.0 배포 유지, M6 구현 계획 완료)
