@@ -3,16 +3,15 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { edgeKey } from './graph.js';
+import { createNodeVisualSystem } from './node-visual-system.js';
 
 const COLOR_POS = new THREE.Color('#2fb9d8');
 const COLOR_NEG = new THREE.Color('#ff8a55');
 const COLOR_POS_HL = new THREE.Color('#7deeff');
 const COLOR_NEG_HL = new THREE.Color('#ffb184');
-const COLOR_UP = new THREE.Color('#ffb36b');
-const COLOR_DOWN = new THREE.Color('#6fb5ff');
-const GOLDEN = 2.399963;
 
 function hash01(str) {
   let h = 0;
@@ -55,8 +54,6 @@ export function createScene(opts) {
   let reducedMotion = !!opts.reducedMotion;
   let lang = initialLang || 'ko';
 
-  const catById = new Map(categories.map((c) => [c.id, c]));
-
   // --- renderer / scene / camera ---
   // container may report 0x0 when initialized in a hidden/backgrounded pane;
   // fall back to the window size and self-heal in the render loop.
@@ -68,7 +65,15 @@ export function createScene(opts) {
   let [vw, vh] = viewSize();
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.95;
+  renderer.shadowMap.enabled = false;
+  function syncPixelRatio() {
+    const mobile = window.matchMedia('(pointer: coarse)').matches;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2));
+  }
+  syncPixelRatio();
   renderer.setSize(vw, vh);
   container.appendChild(renderer.domElement);
 
@@ -81,6 +86,19 @@ export function createScene(opts) {
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(new THREE.Color('#050a16'), 110, 320);
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const room = new RoomEnvironment();
+  const envTarget = pmrem.fromScene(room, 0.04);
+  scene.environment = envTarget.texture;
+
+  const keyLight = new THREE.DirectionalLight(0xf2f5ff, 1.35);
+  keyLight.position.set(24, 36, 18);
+  keyLight.castShadow = false;
+  scene.add(keyLight);
+  const rimLight = new THREE.DirectionalLight(0x7298d8, 0.42);
+  rimLight.position.set(-24, 16, -18);
+  rimLight.castShadow = false;
+  scene.add(rimLight);
 
   const camera = new THREE.PerspectiveCamera(55, vw / vh, 0.1, 600);
   camera.position.set(0, 34, 128); // side-on enough that the layer strata read
@@ -93,10 +111,11 @@ export function createScene(opts) {
   controls.maxPolarAngle = 1.48;
   controls.autoRotate = !reducedMotion;
   controls.autoRotateSpeed = 0.35;
-  controls.addEventListener('start', () => {
+  function onControlsStart() {
     controls.autoRotate = false;
     camTween = null; // user input takes the camera back immediately
-  });
+  }
+  controls.addEventListener('start', onControlsStart);
 
   // --- ambience: stars + floor rings ---
   {
@@ -167,75 +186,27 @@ export function createScene(opts) {
   // --- nodes ---
   computePositions(graph.nodes, layers);
   const glowTex = makeGlowTexture();
-  const sphereGeo = new THREE.SphereGeometry(1, 24, 16);
-  const wireGeo = new THREE.IcosahedronGeometry(1.5, 1);
-  const ringGeo = new THREE.TorusGeometry(2.15, 0.045, 8, 48);
-
-  const nodeVis = new Map(); // id -> vis
-  const pickMeshes = [];
-
-  for (const n of graph.nodes) {
-    const cat = catById.get(n.cat);
-    const color = new THREE.Color(cat.color);
-    const deg = graph.degree.get(n.id) || 1;
-    const size = 1.35 + Math.min(1.15, deg * 0.085);
-
-    const group = new THREE.Group();
-    group.position.copy(n.pos);
-
-    const mesh = new THREE.Mesh(sphereGeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95 }));
-    mesh.scale.setScalar(size);
-    mesh.userData.nodeId = n.id;
-    group.add(mesh);
-    pickMeshes.push(mesh);
-
-    const wire = new THREE.Mesh(wireGeo, new THREE.MeshBasicMaterial({
-      color, wireframe: true, transparent: true, opacity: 0.22, depthWrite: false,
-    }));
-    wire.scale.setScalar(size);
-    group.add(wire);
-
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: glowTex, color: color.clone(), transparent: true, opacity: 0.5,
-      blending: THREE.AdditiveBlending, depthWrite: false,
-    }));
-    glow.scale.setScalar(size * 7.5);
-    group.add(glow);
-
-    let ring = null;
-    if (n.lever) {
-      ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
-        color, transparent: true, opacity: 0.5, depthWrite: false,
-      }));
-      ring.rotation.x = Math.PI / 2;
-      ring.scale.setScalar(size * 0.85);
-      group.add(ring);
-    }
-
-    // label: wrapper (positioned by CSS2DRenderer) > chip (offset + styling)
-    const wrap = document.createElement('div');
-    wrap.style.pointerEvents = 'none';
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'node-label';
-    chip.style.position = 'absolute';
-    chip.style.left = '0';
-    chip.style.top = '0';
-    chip.setAttribute('tabindex', '-1'); // keyboard path goes through the panel lists
-    chip.innerHTML = '<span class="dot"></span><span class="nm"></span><span class="lval"></span>'
-      + (n.lever ? '<span class="lever-mark">LEVER</span>' : '')
-      + '<span class="tint" aria-hidden="true"></span>';
-    chip.querySelector('.dot').style.background = cat.color;
-    chip.querySelector('.nm').textContent = n.name[lang] || n.name.ko;
-    chip.addEventListener('click', (ev) => { ev.stopPropagation(); onSelect(n.id); });
-    wrap.appendChild(chip);
-    const label = new CSS2DObject(wrap);
-    label.position.set(0, size + 0.6, 0);
-    group.add(label);
-
-    scene.add(group);
-    nodeVis.set(n.id, { n, group, mesh, wire, glow, ring, chip, color, size, baseGlowOpacity: 0.5 });
-  }
+  const visualSystem = createNodeVisualSystem({
+    scene,
+    camera,
+    renderer,
+    graph,
+    categories,
+    hubMetrics: opts.hubMetrics,
+    reducedMotion,
+    lang,
+    onSelect,
+  });
+  const nodeRuntime = new Map(visualSystem.pickTargets.map((target) => {
+    const id = target.userData.nodeId;
+    const nodeRoot = target.parent;
+    const labelAnchor = nodeRoot.getObjectByName(`${id}__label_anchor`);
+    const chip = labelAnchor?.children[0]?.element?.querySelector('.node-label') || null;
+    return [id, { nodeRoot, chip }];
+  }));
+  // Fallbacks, labels, and hit proxies already exist. Model loading never gates
+  // the first frame or lets a rejected request escape into the boot fatal path.
+  void visualSystem.loadLibrary(opts.nodeLibraryUrl);
 
   // --- edges ---
   const edgeVis = new Map(); // key -> vis
@@ -336,13 +307,6 @@ export function createScene(opts) {
   let pulseEdges = [];
   let pulsePeriod = 0;
   let pulseT0 = 0;
-  const bounces = new Map(); // nodeId -> {t0, dir}
-
-  function triggerBounce(id, dir) {
-    if (dragState && dragState.id === id) return; // drag owns that node's position
-    bounces.set(id, { t0: clock.getElapsedTime(), dir });
-  }
-
   function updatePulses(elapsed) {
     if (!pulseEdges.length || reducedMotion) return;
     const phase = (elapsed - pulseT0) % pulsePeriod;
@@ -357,23 +321,9 @@ export function createScene(opts) {
       }
       // arrival: the target node gets pushed up (+) or pulled down (−)
       if (p.lastLocal !== null && p.lastLocal >= 0 && p.lastLocal <= 1 && local > 1) {
-        triggerBounce(p.toId, p.sign);
+        visualSystem.pulseArrival(p.toId, p.sign);
       }
       p.lastLocal = local;
-    }
-  }
-
-  function updateBounces(elapsed) {
-    for (const [id, b] of bounces) {
-      const v = nodeVis.get(id);
-      if (!v) { bounces.delete(id); continue; }
-      const x = elapsed - b.t0;
-      if (x > 1.1 || reducedMotion) {
-        v.group.position.y = v.n.pos.y;
-        bounces.delete(id);
-        continue;
-      }
-      v.group.position.y = v.n.pos.y + b.dir * 1.6 * Math.exp(-3.5 * x) * Math.sin(9 * x);
     }
   }
 
@@ -381,23 +331,12 @@ export function createScene(opts) {
     hlActive = false;
     staged = [];
     pulseEdges = [];
-    for (const [id] of bounces) {
-      const v = nodeVis.get(id);
-      if (v) v.group.position.y = v.n.pos.y;
-    }
-    bounces.clear();
+    visualSystem.clearHighlight();
     while (hlGroup.children.length) {
       const c = hlGroup.children.pop();
       c.geometry?.dispose();
       c.material?.dispose();
       hlGroup.remove(c);
-    }
-    for (const v of nodeVis.values()) {
-      v.mesh.material.opacity = 0.95;
-      v.wire.material.opacity = 0.22;
-      v.glow.material.opacity = v.baseGlowOpacity;
-      if (v.ring) v.ring.material.opacity = 0.5;
-      v.chip.classList.remove('dimmed', 'hl', 'selected');
     }
     for (const ev of edgeVis.values()) {
       ev.line.material.opacity = ev.baseOpacity;
@@ -414,23 +353,9 @@ export function createScene(opts) {
   function setHighlight(spec) {
     clearHighlight();
     hlActive = true;
-    const { nodeOrders, edgeOrders, selectedId } = spec;
+    visualSystem.setHighlight(spec);
+    const { edgeOrders } = spec;
     const now = clock.getElapsedTime();
-
-    for (const [id, v] of nodeVis) {
-      const inSet = nodeOrders.has(id) || id === selectedId;
-      if (!inSet) {
-        v.mesh.material.opacity = 0.08;
-        v.wire.material.opacity = 0.03;
-        v.glow.material.opacity = 0.04;
-        if (v.ring) v.ring.material.opacity = 0.05;
-        v.chip.classList.add('dimmed');
-      } else {
-        v.chip.classList.add('hl');
-        if (id === selectedId) v.chip.classList.add('selected');
-        v.glow.material.opacity = 0.85;
-      }
-    }
     for (const [key, ev] of edgeVis) {
       if (edgeOrders.has(key)) {
         ev.highlighted = true;
@@ -502,29 +427,8 @@ export function createScene(opts) {
   }
 
   // --- node tints (simulator) ---
-  const tmpColor = new THREE.Color();
   function setNodeTints(map) {
-    for (const [id, v] of nodeVis) {
-      const val = map ? (map.get(id) ?? 0) : 0;
-      const chipTint = v.chip.querySelector('.tint');
-      if (Math.abs(val) > 0.06) {
-        const target = val > 0 ? COLOR_UP : COLOR_DOWN;
-        const k = Math.min(1, Math.abs(val)) * 0.85;
-        tmpColor.copy(v.color).lerp(target, k);
-        v.glow.material.color.copy(tmpColor);
-        v.glow.material.opacity = 0.55 + 0.4 * Math.min(1, Math.abs(val));
-        v.mesh.material.color.copy(tmpColor);
-        v.chip.classList.toggle('tint-up', val > 0);
-        v.chip.classList.toggle('tint-down', val < 0);
-        chipTint.textContent = val > 0 ? '▲' : '▼';
-      } else {
-        v.glow.material.color.copy(v.color);
-        v.glow.material.opacity = v.baseGlowOpacity;
-        v.mesh.material.color.copy(v.color);
-        v.chip.classList.remove('tint-up', 'tint-down');
-        chipTint.textContent = '';
-      }
-    }
+    visualSystem.setPressures(map);
   }
 
   // --- camera choreography ---
@@ -584,14 +488,14 @@ export function createScene(opts) {
     ndc.x = ((ev.clientX - r.left) / r.width) * 2 - 1;
     ndc.y = -((ev.clientY - r.top) / r.height) * 2 + 1;
     ray.setFromCamera(ndc, camera);
-    const hits = ray.intersectObjects(pickMeshes, false);
+    const hits = ray.intersectObjects(visualSystem.pickTargets, false);
     return hits.length ? hits[0].object.userData.nodeId : null;
   }
   function dragValue(ev) {
     return THREE.MathUtils.clamp((dragState.startY - ev.clientY) / 110, -1, 1);
   }
 
-  renderer.domElement.addEventListener('pointerdown', (ev) => {
+  function onPointerDown(ev) {
     downXY = [ev.clientX, ev.clientY];
     const id = raycastNode(ev);
     const n = id ? graph.nodeById.get(id) : null;
@@ -600,13 +504,15 @@ export function createScene(opts) {
       controls.enabled = false;
       try { renderer.domElement.setPointerCapture(ev.pointerId); } catch { /* ok */ }
     }
-  });
-  renderer.domElement.addEventListener('pointerup', (ev) => {
+  }
+
+  function onPointerUp(ev) {
     if (dragState) {
       const { id, moved } = dragState;
       const v = dragValue(ev);
-      const nv = nodeVis.get(id);
-      if (nv) nv.group.position.y = nv.n.pos.y;
+      const runtime = nodeRuntime.get(id);
+      const node = graph.nodeById.get(id);
+      if (runtime && node) runtime.nodeRoot.position.y = node.pos.y;
       dragState = null;
       controls.enabled = true;
       if (moved) {
@@ -622,46 +528,64 @@ export function createScene(opts) {
     downXY = null;
     if (movedPx > 7) return;
     onSelect(raycastNode(ev));
-  });
-  renderer.domElement.addEventListener('pointermove', (ev) => {
+  }
+
+  function onPointerMove(ev) {
     if (dragState) {
       const v = dragValue(ev);
       if (Math.abs(dragState.startY - ev.clientY) > 5) dragState.moved = true;
-      const nv = nodeVis.get(dragState.id);
-      if (nv) nv.group.position.y = nv.n.pos.y + v * 4;
+      const runtime = nodeRuntime.get(dragState.id);
+      const node = graph.nodeById.get(dragState.id);
+      if (runtime && node) runtime.nodeRoot.position.y = node.pos.y + v * 4;
       if (dragState.moved) opts.onLeverDrag(dragState.id, v);
       return;
     }
     if (downXY) return;
     const id = raycastNode(ev);
+    visualSystem.setHoveredId(id);
     const n = id ? graph.nodeById.get(id) : null;
     renderer.domElement.style.cursor = n ? (n.lever ? 'ns-resize' : 'pointer') : '';
-  }, { passive: true });
-  renderer.domElement.addEventListener('pointercancel', (ev) => {
+  }
+
+  function onPointerCancel(ev) {
     // interrupted drag (notification, browser gesture takeover, tab switch):
     // undo the drag without committing a shock
     downXY = null;
     if (!dragState) return;
     const { id, moved } = dragState;
-    const nv = nodeVis.get(id);
-    if (nv) nv.group.position.y = nv.n.pos.y;
+    const runtime = nodeRuntime.get(id);
+    const node = graph.nodeById.get(id);
+    if (runtime && node) runtime.nodeRoot.position.y = node.pos.y;
     dragState = null;
     controls.enabled = true;
     try { renderer.domElement.releasePointerCapture(ev.pointerId); } catch { /* ok */ }
     // pointermove only tints after `moved`; re-render with the preview zeroed (no onLeverDragEnd)
     if (moved) opts.onLeverDrag(id, 0);
-  });
+  }
+
+  function onPointerLeave() {
+    if (dragState) return;
+    visualSystem.setHoveredId(null);
+    renderer.domElement.style.cursor = '';
+  }
+
+  renderer.domElement.addEventListener('pointerdown', onPointerDown);
+  renderer.domElement.addEventListener('pointerup', onPointerUp);
+  renderer.domElement.addEventListener('pointermove', onPointerMove, { passive: true });
+  renderer.domElement.addEventListener('pointercancel', onPointerCancel);
+  renderer.domElement.addEventListener('pointerleave', onPointerLeave);
 
   // --- label distance fade ---
   const camWorld = new THREE.Vector3();
   function updateLabelFade() {
     camera.getWorldPosition(camWorld);
-    for (const v of nodeVis.values()) {
-      const d = camWorld.distanceTo(v.group.position);
+    for (const { nodeRoot, chip } of nodeRuntime.values()) {
+      if (!chip) continue;
+      const d = camWorld.distanceTo(nodeRoot.position);
       let o = 1;
       if (d > 95) o = Math.max(0.25, 1 - (d - 95) / 130);
-      if (v.chip.classList.contains('dimmed')) o = Math.min(o, 0.14);
-      v.chip.style.opacity = String(o);
+      if (chip.classList.contains('dimmed')) o = Math.min(o, 0.14);
+      chip.style.opacity = String(o);
     }
   }
 
@@ -669,9 +593,10 @@ export function createScene(opts) {
   const clock = new THREE.Clock();
   let disposed = false;
   let frame = 0;
+  let animationFrame = 0;
   function animate() {
     if (disposed) return;
-    requestAnimationFrame(animate);
+    animationFrame = requestAnimationFrame(animate);
     // Note: no document.hidden gate. Browsers already throttle rAF in hidden
     // tabs, and skipping renders entirely breaks first paint, CSS2D label
     // attachment, and screenshot-based verification of background windows.
@@ -687,15 +612,8 @@ export function createScene(opts) {
       updateStaged(elapsed);
       updatePulses(elapsed);
     }
-    if (bounces.size) updateBounces(elapsed);
+    visualSystem.update(elapsed);
     if (frame % 3 === 0) updateLabelFade();
-    // subtle breathing on glows
-    if (!reducedMotion && frame % 2 === 0) {
-      const breathe = 1 + Math.sin(elapsed * 1.4) * 0.05;
-      for (const v of nodeVis.values()) {
-        if (!v.chip.classList.contains('dimmed')) v.glow.scale.setScalar(v.size * 7.5 * breathe);
-      }
-    }
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
     frame++;
@@ -707,26 +625,25 @@ export function createScene(opts) {
     [vw, vh] = viewSize();
     camera.aspect = vw / vh;
     camera.updateProjectionMatrix();
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // monitor/zoom changes
+    syncPixelRatio(); // monitor, zoom, or coarse-pointer changes
     renderer.setSize(vw, vh);
     labelRenderer.setSize(vw, vh);
   }
   window.addEventListener('resize', resize);
-  document.addEventListener('visibilitychange', () => {
+  function onVisibilityChange() {
     if (!document.hidden && !disposed) {
       resize();
       renderer.render(scene, camera);
       labelRenderer.render(scene, camera);
     }
-  });
+  }
+  document.addEventListener('visibilitychange', onVisibilityChange);
 
   return {
     setHighlight, clearHighlight, setNodeTints, focusNodes, resetView,
     setLang(l) {
       lang = l;
-      for (const v of nodeVis.values()) {
-        v.chip.querySelector('.nm').textContent = v.n.name[lang] || v.n.name.ko;
-      }
+      visualSystem.setLang(l);
       for (const tg of layerTags) {
         tg.el.textContent = tg.l.name[lang] || tg.l.name.ko;
       }
@@ -734,25 +651,49 @@ export function createScene(opts) {
     setReducedMotion(v) {
       reducedMotion = v;
       if (v) controls.autoRotate = false;
+      visualSystem.setReducedMotion(v);
       particlePositions(0);
     },
     setLabelTitles(map) {
-      for (const [id, txt] of map) {
-        const v = nodeVis.get(id);
-        if (v) v.chip.title = txt;
-      }
+      visualSystem.setLabelTitles(map);
     },
     setLabelValues(map) {
-      // instrument readout on key-variable labels (e.g. "기준금리 2.50%")
-      for (const v of nodeVis.values()) {
-        const el = v.chip.querySelector('.lval');
-        if (el) el.textContent = (map && map.get(v.n.id)) || '';
-      }
+      visualSystem.setLabelValues(map);
     },
     dispose() {
+      if (disposed) return;
       disposed = true;
+      cancelAnimationFrame(animationFrame);
+      clearHighlight();
       window.removeEventListener('resize', resize);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      controls.removeEventListener('start', onControlsStart);
+      renderer.domElement.removeEventListener('pointerdown', onPointerDown);
+      renderer.domElement.removeEventListener('pointerup', onPointerUp);
+      renderer.domElement.removeEventListener('pointermove', onPointerMove);
+      renderer.domElement.removeEventListener('pointercancel', onPointerCancel);
+      renderer.domElement.removeEventListener('pointerleave', onPointerLeave);
+      controls.dispose();
+      visualSystem.dispose();
+      const geometries = new Set();
+      const materials = new Set();
+      scene.traverse((object) => {
+        if (object.geometry) geometries.add(object.geometry);
+        if (Array.isArray(object.material)) {
+          for (const material of object.material) materials.add(material);
+        } else if (object.material) {
+          materials.add(object.material);
+        }
+      });
+      for (const geometry of geometries) geometry.dispose();
+      for (const material of materials) material.dispose();
+      glowTex.dispose();
+      envTarget.dispose();
+      room.dispose();
+      pmrem.dispose();
       renderer.dispose();
+      renderer.domElement.remove();
+      labelRenderer.domElement.remove();
     },
   };
 }

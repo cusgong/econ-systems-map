@@ -61,6 +61,11 @@ function boot() {
   }
 
   const graph = buildGraph(NODES, EDGES);
+  const searchParams = new URLSearchParams(window.location.search);
+  const sphereNodesOnly = searchParams.get('nodes') === 'sphere';
+  const nodeLibraryUrl = sphereNodesOnly
+    ? null
+    : new URL('../data/models/econ-node-library.glb', import.meta.url).href;
 
   let uiRef = null;
   let scene = null;
@@ -76,6 +81,7 @@ function boot() {
       onLeverDragEnd: (id, v) => uiRef && uiRef.onLeverDragEnd(id, v),
       reducedMotion: initialReducedMotion(),
       lang: 'ko',
+      nodeLibraryUrl,
       onFirstFrame: hideLoading,
     });
   } catch (err) {
