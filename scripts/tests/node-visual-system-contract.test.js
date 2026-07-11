@@ -126,4 +126,12 @@ test('integrates projection-aware label layout without changing the public API',
   assert.match(visualSource, /anchorOccluded/);
   assert.match(visualSource, /nodeCenterObstacles/);
   assert.match(visualSource, /allowDistantFallback:\s*selected/);
+  assert.match(visualSource, /LABEL_SELECTED_ASSOCIATION_CAP\s*=\s*160/);
+  assert.match(visualSource, /LABEL_SELECTED_LEADER_THRESHOLD\s*=\s*0\s*;/);
+  assert.match(visualSource, /maxDisplacement:\s*selected\s*\?\s*LABEL_SELECTED_ASSOCIATION_CAP/);
+  assert.doesNotMatch(visualSource, /maxDisplacement:\s*selected\s*\?\s*Infinity/);
+  assert.match(visualSource, /leaderThreshold:\s*selected/);
+  assert.match(visualSource, /placement\.showLeader/);
+  assert.match(visualSource, /getElementById\s*\(\s*['"]legend['"]\s*\)/);
+  assert.match(visualSource, /getElementById\s*\(\s*['"]statusline['"]\s*\)/);
 });

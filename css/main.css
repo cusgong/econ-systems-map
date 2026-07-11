@@ -33,6 +33,7 @@
 
   --radius: 10px;
   --hud-h: 58px;
+  --mobile-panel-reserve: 55dvh;
 
   /* Korean line-break baseline (rules/cjk-rendering-safety §5) */
   word-break: keep-all;
@@ -1222,7 +1223,7 @@ button, [role="button"], .fx-row { touch-action: manipulation; }
     top: auto;
     right: 0; left: 0; bottom: 0;
     width: 100%;
-    max-height: 62dvh;
+    max-height: var(--mobile-panel-reserve);
     border-radius: 14px 14px 0 0;
     border-bottom: 0;
     padding-bottom: env(safe-area-inset-bottom, 0);
@@ -1231,6 +1232,11 @@ button, [role="button"], .fx-row { touch-action: manipulation; }
   #panel.collapsed .panel-body { display: none; }
   #panel.collapsed { max-height: none; }
   #panel-toggle { display: inline-flex; }
+  :root.map-viewport-reserved #stage,
+  :root.map-viewport-reserved #labels {
+    top: var(--hud-real-h, var(--hud-h));
+    bottom: var(--mobile-panel-reserve);
+  }
   #legend { bottom: auto; top: calc(var(--hud-real-h, var(--hud-h)) + 8px); left: 8px; width: 220px; }
   #statusline { display: none; }
 }

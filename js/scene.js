@@ -7,6 +7,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { edgeKey } from './graph.js';
 import { createNodeVisualSystem } from './node-visual-system.js';
+import { minimumFocusDistance } from './viewport-policy.js';
 
 const COLOR_POS = new THREE.Color('#2fb9d8');
 const COLOR_NEG = new THREE.Color('#ff8a55');
@@ -464,7 +465,12 @@ export function createScene(opts) {
     const center = pts.reduce((s, p) => s.add(p), new THREE.Vector3()).multiplyScalar(1 / pts.length);
     let radius = 6;
     for (const p of pts) radius = Math.max(radius, center.distanceTo(p));
-    const dist = THREE.MathUtils.clamp(radius * 2.4 * pad + 20, 36, 165);
+    const framingScale = ids.length === 1 ? 1 : 2.4;
+    const dist = THREE.MathUtils.clamp(
+      radius * framingScale * pad + 20,
+      minimumFocusDistance(ids.length),
+      165,
+    );
     const dirV = new THREE.Vector3().subVectors(camera.position, controls.target);
     if (dirV.lengthSq() < 1) dirV.set(0, 0.5, 1);
     dirV.normalize();
@@ -630,6 +636,10 @@ export function createScene(opts) {
     labelRenderer.setSize(vw, vh);
   }
   window.addEventListener('resize', resize);
+  const containerResizeObserver = typeof ResizeObserver === 'function'
+    ? new ResizeObserver(() => resize())
+    : null;
+  containerResizeObserver?.observe(container);
   function onVisibilityChange() {
     if (!document.hidden && !disposed) {
       resize();
@@ -666,6 +676,7 @@ export function createScene(opts) {
       cancelAnimationFrame(animationFrame);
       clearHighlight();
       window.removeEventListener('resize', resize);
+      containerResizeObserver?.disconnect();
       document.removeEventListener('visibilitychange', onVisibilityChange);
       controls.removeEventListener('start', onControlsStart);
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);

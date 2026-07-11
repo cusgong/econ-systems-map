@@ -106,26 +106,79 @@ test('ordinary labels hide instead of drifting beyond their displacement cap', a
   assert.equal(placement.visible, false);
 });
 
-test('critical labels may use a distant deterministic fallback that can receive a leader', async () => {
+test('selected labels lazily search within a finite association cap and request a leader', async () => {
   const { layoutNodeLabels } = await loadLayoutModule();
+  const stats = {};
   const [placement] = layoutNodeLabels({
     viewport: { width: 300, height: 300, padding: 8 },
-    obstacles: [{ left: 0, top: 100, right: 300, bottom: 200 }],
+    obstacles: [{ left: 0, top: 0, right: 300, bottom: 260 }],
     candidates: [{
       id: 'selected',
       preferredX: 150,
       preferredY: 150,
       width: 80,
       height: 20,
-      maxDisplacement: 32,
+      maxDisplacement: 160,
       allowDistantFallback: true,
+      leaderThreshold: 0.5,
+      critical: true,
+      priority: 500,
+    }],
+    stats,
+  });
+
+  assert.equal(placement.visible, true);
+  assert.ok(placement.displacement > 72, 'all bounded local targets should be blocked');
+  assert.ok(placement.displacement <= 160, 'selected label must stay associated with its node');
+  assert.equal(placement.showLeader, true);
+  assert.ok(stats.fallbackProbes > 0, 'fallback search should begin after local failure');
+  assert.ok(stats.fallbackProbes <= 96, 'fallback search must have a fixed operation budget');
+});
+
+test('selected fallback stays lazy when a local placement succeeds', async () => {
+  const { layoutNodeLabels } = await loadLayoutModule();
+  const stats = {};
+  const [placement] = layoutNodeLabels({
+    viewport: { width: 390, height: 844, padding: 8 },
+    candidates: [{
+      id: 'selected',
+      preferredX: 195,
+      preferredY: 220,
+      width: 96,
+      height: 24,
+      maxDisplacement: 160,
+      allowDistantFallback: true,
+      critical: true,
+      priority: 500,
+    }],
+    stats,
+  });
+
+  assert.equal(placement.visible, true);
+  assert.equal(placement.displacement, 0);
+  assert.equal(stats.fallbackProbes, 0);
+});
+
+test('390px selected label hides when viewport clamping would detach it by 384px', async () => {
+  const { layoutNodeLabels } = await loadLayoutModule();
+  const [placement] = layoutNodeLabels({
+    viewport: { width: 390, height: 844, padding: 8 },
+    candidates: [{
+      id: 'selected',
+      preferredX: -336,
+      preferredY: 220,
+      width: 80,
+      height: 24,
+      maxDisplacement: 160,
+      allowDistantFallback: true,
+      leaderThreshold: 0.5,
       critical: true,
       priority: 500,
     }],
   });
 
-  assert.equal(placement.visible, true);
-  assert.ok(placement.displacement > 32);
+  assert.equal(placement.visible, false);
+  assert.equal(placement.displacement, null);
 });
 
 test('non-selected critical labels respect their displacement cap', async () => {
@@ -178,6 +231,37 @@ test('layout is deterministic regardless of candidate input order', async () => 
 
   assert.deepEqual(forward, reverse);
 });
+
+for (const criticalCount of [8, 19, 30]) {
+  test(`${criticalCount} non-selected critical labels stay inside the local operation budget`, async () => {
+    const { layoutNodeLabels } = await loadLayoutModule();
+    const stats = {};
+    const candidates = Array.from({ length: criticalCount }, (_, index) => ({
+      id: `critical-${String(index).padStart(2, '0')}`,
+      preferredX: 195,
+      preferredY: 220,
+      width: 104,
+      height: 26,
+      maxDisplacement: 64,
+      critical: true,
+      priority: 300 - index,
+    }));
+
+    layoutNodeLabels({
+      viewport: { width: 390, height: 844, padding: 8 },
+      obstacles: [{ left: 0, top: 0, right: 390, bottom: 844 }],
+      candidates,
+      stats,
+    });
+
+    assert.ok(
+      stats.localProbes <= criticalCount * 25,
+      `expected at most 25 local probes per label, received ${stats.localProbes}`,
+    );
+    assert.equal(stats.fallbackProbes, 0, 'non-selected critical labels must not search a fallback grid');
+    assert.equal(stats.totalProbes, stats.localProbes);
+  });
+}
 
 for (const scenario of [
   {

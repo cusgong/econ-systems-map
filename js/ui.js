@@ -2,6 +2,7 @@
 // legend, onboarding, sources, prefs. Talks to scene via a narrow API.
 
 import { ripple, propagate, pathDirections, lagBucket, loopEdges, loopNetSign, edgeKey } from './graph.js';
+import { focusIdsForViewport, shouldReserveMapViewport } from './viewport-policy.js';
 
 const $ = (sel) => document.querySelector(sel);
 const t = (s) => window.I18n.t(s);
@@ -265,8 +266,10 @@ export function createUI(deps) {
     const r = ripple(graph, state.selectedId, state.dir, state.depth);
     const nodeOrders = new Map([...r.nodes].map(([id, info]) => [id, info.order]));
     scene.setHighlight({ nodeOrders, edgeOrders: r.edgeOrders, selectedId: state.selectedId });
-    const focusIds = [state.selectedId, ...[...r.nodes].filter(([, i]) => i.order <= Math.min(2, state.depth)).map(([id]) => id)];
-    scene.focusNodes(focusIds);
+    const contextualIds = [state.selectedId, ...[...r.nodes]
+      .filter(([, i]) => i.order <= Math.min(2, state.depth))
+      .map(([id]) => id)];
+    scene.focusNodes(focusIdsForViewport(state.selectedId, contextualIds, window.innerWidth));
   }
 
   function renderExplore() {
@@ -1829,11 +1832,20 @@ export function createUI(deps) {
   }
 
   // ---------- panel collapse (mobile) ----------
-  function isMobile() { return window.matchMedia('(max-width: 900px)').matches; }
+  const mobileViewport = window.matchMedia('(max-width: 900px)');
+  function isMobile() { return mobileViewport.matches; }
+  function syncMapViewportReservation() {
+    const reserve = shouldReserveMapViewport(
+      window.innerWidth,
+      els.panel.classList.contains('collapsed'),
+    );
+    document.documentElement.classList.toggle('map-viewport-reserved', reserve);
+  }
   function setPanelCollapsed(collapsed) {
     els.panel.classList.toggle('collapsed', collapsed);
     els.toggle.setAttribute('aria-expanded', String(!collapsed));
     els.toggle.querySelector('span').textContent = collapsed ? t('펼치기') : t('접기');
+    syncMapViewportReservation();
   }
   function expandPanelIfMobile(expand) {
     if (isMobile()) setPanelCollapsed(!expand);
@@ -1895,6 +1907,7 @@ export function createUI(deps) {
       toast(reducedMotion() ? t('모션을 줄였습니다') : t('모션을 켰습니다'));
     });
     mediaReduced.addEventListener?.('change', syncMotion); // OS setting changed mid-session
+    mobileViewport.addEventListener?.('change', syncMapViewportReservation);
     syncMotion();
 
     document.addEventListener('keydown', (ev) => {

@@ -34,7 +34,8 @@ const LABEL_VERTICAL_OFFSET = 12;
 const LABEL_LAYOUT_INTERVAL = 0.06;
 const LABEL_LOCAL_DISPLACEMENT = 32;
 const LABEL_CRITICAL_DISPLACEMENT = 64;
-const LABEL_LEADER_MAX_LENGTH = 128;
+const LABEL_SELECTED_ASSOCIATION_CAP = 160;
+const LABEL_SELECTED_LEADER_THRESHOLD = 0;
 const NODE_CENTER_CLEARANCE = 3;
 const MAX_MODEL_TRIANGLES = 3000;
 
@@ -388,6 +389,11 @@ export function createNodeVisualSystem(options) {
       accentBaseQuaternion: fallbackAccent.quaternion.clone(),
       accentBaseScale: fallbackAccent.scale.clone(),
     };
+    const fallbackAccentBaseline = {
+      position: fallbackAccent.position.clone(),
+      quaternion: fallbackAccent.quaternion.clone(),
+      scale: fallbackAccent.scale.clone(),
+    };
 
     const record = {
       id: node.id,
@@ -414,6 +420,7 @@ export function createNodeVisualSystem(options) {
       accentMaterial,
       fallbackBody,
       fallbackAccent,
+      fallbackAccentBaseline,
       labelObject,
       labelClick,
       loadedRoot: null,
@@ -432,6 +439,11 @@ export function createNodeVisualSystem(options) {
     record.bodyMaterial.copy(template);
     record.bodyMaterial.name = `${record.id}__runtime_${preset}`;
     record.bodyPreset = preset;
+    applyMaterialState(
+      record,
+      record.chip.classList.contains('dimmed'),
+      record.chip.classList.contains('selected'),
+    );
   }
 
   function disposeSourceMaterial(material) {
@@ -446,8 +458,6 @@ export function createNodeVisualSystem(options) {
     record.motionState.accentBasePosition.copy(record.accentRoot.position);
     record.motionState.accentBaseQuaternion.copy(record.accentRoot.quaternion);
     record.motionState.accentBaseScale.copy(record.accentRoot.scale);
-    record.motionState.selectedAt = null;
-    record.motionState.arrivalAt = null;
   }
 
   function restoreFallback(record) {
@@ -459,6 +469,9 @@ export function createNodeVisualSystem(options) {
     record.fallbackRoot.visible = true;
     record.bodyMeshes = [record.fallbackBody];
     record.accentRoot = record.fallbackAccent;
+    record.fallbackAccent.position.copy(record.fallbackAccentBaseline.position);
+    record.fallbackAccent.quaternion.copy(record.fallbackAccentBaseline.quaternion);
+    record.fallbackAccent.scale.copy(record.fallbackAccentBaseline.scale);
     record.modelStatus = 'fallback';
     configureBodyMaterial(record, 'MAT__DARK_TITANIUM');
     updateLabelOffset(record);
@@ -828,6 +841,8 @@ export function createNodeVisualSystem(options) {
     const obstacles = [
       elementObstacle(document.querySelector('.hud-top'), viewportRect, width, height),
       elementObstacle(document.getElementById('panel'), viewportRect, width, height),
+      elementObstacle(document.getElementById('legend'), viewportRect, width, height),
+      elementObstacle(document.getElementById('statusline'), viewportRect, width, height),
     ].filter(Boolean);
     const projections = new Map();
     const candidates = [];
@@ -875,11 +890,16 @@ export function createNodeVisualSystem(options) {
         priority,
         critical,
         maxDisplacement: selected
-          ? Infinity
+          ? LABEL_SELECTED_ASSOCIATION_CAP
           : critical
             ? LABEL_CRITICAL_DISPLACEMENT
             : LABEL_LOCAL_DISPLACEMENT,
         allowDistantFallback: selected,
+        leaderThreshold: selected
+          ? LABEL_SELECTED_LEADER_THRESHOLD
+          : critical
+            ? LABEL_LOCAL_DISPLACEMENT
+            : Infinity,
         eligible: (!anchorOccluded || selected)
           && labelProjection.x >= -1 && labelProjection.x <= 1
           && labelProjection.y >= -1 && labelProjection.y <= 1
@@ -916,9 +936,7 @@ export function createNodeVisualSystem(options) {
       const dy = placement.y - initialCenterY;
       record.chip.style.transform = `translate(calc(-50% + ${dx.toFixed(2)}px), `
         + `calc(-100% - ${LABEL_VERTICAL_OFFSET}px + ${dy.toFixed(2)}px))`;
-      if (placement.critical
-        && placement.displacement > LABEL_LOCAL_DISPLACEMENT
-        && placement.displacement <= LABEL_LEADER_MAX_LENGTH) {
+      if (placement.showLeader) {
         const startX = projection.nodeX - projection.anchorX;
         const startY = projection.nodeY - projection.anchorY;
         const endX = placement.x - projection.anchorX;
