@@ -548,6 +548,12 @@ class BlenderPipelineContractTests(unittest.TestCase):
             self.assertEqual(2, model["primitives"], node_id)
             self.assertGreaterEqual(model["accentAreaRatio"], 0.10, node_id)
             self.assertLessEqual(model["accentAreaRatio"], 0.20, node_id)
+            if node_id == "gdp":
+                self.assertLessEqual(
+                    model["accentAreaRatio"],
+                    0.165,
+                    "GDP counterweight must remain a restrained load indicator",
+                )
             self.assertGreaterEqual(model["radius"], 0.98, node_id)
             self.assertLessEqual(model["radius"], 1.02, node_id)
             self.assertLessEqual(model["centerError"], 0.05, node_id)
@@ -566,7 +572,25 @@ class BlenderPipelineContractTests(unittest.TestCase):
                 self.assertLessEqual(bevel["width"], 0.05, f"{node_id}/{role}")
                 self.assertGreater(bevel["evaluatedTriangleDelta"], 0, f"{node_id}/{role}")
                 self.assertEqual("WEIGHT", bevel["limitMethod"], f"{node_id}/{role}")
-                self.assertGreater(bevel["taggedEdges"], 0, f"{node_id}/{role}")
+                self.assertGreaterEqual(
+                    bevel["taggedEdges"],
+                    bevel["minimumTaggedEdges"],
+                    f"{node_id}/{role}",
+                )
+            accent_contract = model["accentContract"]
+            self.assertTrue(accent_contract["pivotLabel"], node_id)
+            self.assertEqual(3, len(accent_contract["blenderTranslation"]), node_id)
+            self.assertEqual(3, len(accent_contract["gltfTranslation"]), node_id)
+            blender_translation = accent_contract["blenderTranslation"]
+            self.assertEqual(
+                [
+                    blender_translation[0],
+                    blender_translation[2],
+                    -blender_translation[1],
+                ],
+                accent_contract["gltfTranslation"],
+                node_id,
+            )
             signature = model.get("silhouetteSignature")
             self.assertIsInstance(signature, str, node_id)
             self.assertEqual(3, len(signature.split(";")), node_id)
@@ -745,6 +769,81 @@ class BlenderPipelineContractTests(unittest.TestCase):
             self.assertIn("mesh data name", errors)
             self.assertIn("unique mesh ownership", errors)
 
+    def test_validator_rejects_token_bevel_coverage(self):
+        with tempfile.TemporaryDirectory(prefix="econ-proof-token-bevel-") as temp_dir:
+            mutant_blend = Path(temp_dir) / "token-bevel.blend"
+            shutil.copy2(BLENDER_DIR / "econ-node-library.blend", mutant_blend)
+            script = "\n".join(
+                (
+                    "import bpy",
+                    "obj=bpy.data.objects['housing__body']",
+                    "bevel=next(modifier for modifier in obj.modifiers if modifier.type=='BEVEL')",
+                    "weights=obj.data.attributes[bevel.edge_weight]",
+                    "[setattr(item,'value',0.0) for item in weights.data]",
+                    "[setattr(weights.data[index],'value',1.0) for index in range(4)]",
+                    "obj['econ_bevel_tagged_edges']=4",
+                    f"bpy.ops.wm.save_as_mainfile(filepath={str(mutant_blend)!r},check_existing=False)",
+                )
+            )
+            mutation = run_blender(
+                str(mutant_blend),
+                "--python-exit-code",
+                "1",
+                "--python-expr",
+                f"exec({script!r})",
+            )
+            self.assertEqual(0, mutation.returncode, mutation.stdout)
+            validation = run_blender(
+                str(mutant_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "validate-econ-node-library.py"),
+                "--",
+                "--scope",
+                "proof",
+            )
+            self.assertNotEqual(0, validation.returncode, validation.stdout)
+            errors = "\n".join(summary_from(validation.stdout)["errors"])
+            self.assertIn("housing/body: bevel coverage minimum", errors)
+
+    def test_validator_rejects_wrong_nonempty_pivot_and_child_rotation(self):
+        with tempfile.TemporaryDirectory(prefix="econ-proof-accent-transform-") as temp_dir:
+            mutant_blend = Path(temp_dir) / "accent-transform.blend"
+            shutil.copy2(BLENDER_DIR / "econ-node-library.blend", mutant_blend)
+            script = "\n".join(
+                (
+                    "import bpy",
+                    "housing=bpy.data.objects['housing__accent']",
+                    "housing['econ_pivot']='wrong_but_nonempty'",
+                    "oil=bpy.data.objects['oil__accent']",
+                    "oil.rotation_euler[0]=0.01",
+                    f"bpy.ops.wm.save_as_mainfile(filepath={str(mutant_blend)!r},check_existing=False)",
+                )
+            )
+            mutation = run_blender(
+                str(mutant_blend),
+                "--python-exit-code",
+                "1",
+                "--python-expr",
+                f"exec({script!r})",
+            )
+            self.assertEqual(0, mutation.returncode, mutation.stdout)
+            validation = run_blender(
+                str(mutant_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "validate-econ-node-library.py"),
+                "--",
+                "--scope",
+                "proof",
+            )
+            self.assertNotEqual(0, validation.returncode, validation.stdout)
+            errors = "\n".join(summary_from(validation.stdout)["errors"])
+            self.assertIn("housing/accent econ_pivot expected", errors)
+            self.assertIn("oil/accent child rotation must be identity", errors)
+
     def test_glb_validator_rejects_reused_mesh_names_and_accent_motion_drift(self):
         with tempfile.TemporaryDirectory(prefix="econ-proof-glb-ownership-") as temp_dir:
             temp = Path(temp_dir)
@@ -795,6 +894,57 @@ class BlenderPipelineContractTests(unittest.TestCase):
             self.assertIn("mesh name expected", errors)
             self.assertIn("econ_pivot", errors)
             self.assertIn("accent econ_signature", errors)
+
+    def test_glb_validator_rejects_wrong_pivot_and_accent_transform_drift(self):
+        with tempfile.TemporaryDirectory(prefix="econ-proof-glb-transform-") as temp_dir:
+            temp = Path(temp_dir)
+            valid_glb = temp / "valid.glb"
+            invalid_glb = temp / "invalid.glb"
+            library_blend = BLENDER_DIR / "econ-node-library.blend"
+            export = run_blender(
+                str(library_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "export-econ-node-library.py"),
+                "--",
+                "--scope",
+                "proof",
+                "--output",
+                str(valid_glb),
+            )
+            self.assertEqual(0, export.returncode, export.stdout)
+
+            def drift(document: dict) -> None:
+                oil_accent = next(
+                    node for node in document["nodes"] if node.get("name") == "oil__accent"
+                )
+                oil_accent.setdefault("extras", {})["econ_pivot"] = "wrong_but_nonempty"
+                oil_accent["rotation"] = [0.00499998, 0.0, 0.0, 0.9999875]
+                oil_accent["scale"] = [1.001, 1.0, 1.0]
+                translation = list(oil_accent.get("translation", [0.0, 0.0, 0.0]))
+                translation[0] += 0.001
+                oil_accent["translation"] = translation
+
+            mutate_glb(valid_glb, invalid_glb, drift)
+            validation = run_blender(
+                str(library_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "validate-econ-node-library.py"),
+                "--",
+                "--scope",
+                "proof",
+                "--glb",
+                str(invalid_glb),
+            )
+            self.assertNotEqual(0, validation.returncode, validation.stdout)
+            errors = "\n".join(summary_from(validation.stdout)["errors"])
+            self.assertIn("GLB oil/accent econ_pivot expected", errors)
+            self.assertIn("GLB oil/accent rotation must be identity", errors)
+            self.assertIn("GLB oil/accent scale must be identity", errors)
+            self.assertIn("GLB oil/accent translation expected", errors)
 
 
 if __name__ == "__main__":

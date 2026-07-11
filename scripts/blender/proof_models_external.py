@@ -116,12 +116,12 @@ def build_fx() -> ModelGeometry:
 
 
 def build_oil() -> ModelGeometry:
-    """Build a horizontal pressure capsule with an offset calibration valve.
+    """Build a horizontal pressure capsule with a coaxial side handwheel.
 
     Source triangle budget before the evaluated precision bevel:
-    body = 4*36*5 + 2*30*8 + 2*(4*14-4) = 1,304
-    accent = 2*20*6 + 4*(4*8-4) + (4*12-4) = 396
-    total = 1,700
+    The wheel, shaft, and flanged body boss share one Blender-Y axis.  Blender
+    exports that axis as glTF Z, so the declared rotate-z signature remains a
+    physical handwheel rotation without a compensating child transform.
     """
 
     body = MeshAssembler()
@@ -132,36 +132,37 @@ def build_oil() -> ModelGeometry:
     body.add_capsule_x(
         half_length=0.78,
         radius=0.42,
-        segments=36,
+        segments=34,
         hemisphere_steps=5,
     )
     body.add_torus(
         major_radius=0.47,
         minor_radius=0.095,
-        major_segments=30,
+        major_segments=26,
         minor_segments=8,
         location=(-0.20, 0.0, 0.0),
         rotation=(0.0, math.pi * 0.5, 0.0),
     )
 
-    # The line leaves the front-side shoulder on a diagonal and terminates in a
-    # compact calibration socket below the valve, creating a visible offset in
-    # front, side, and top views.
+    valve_pivot = (0.46, -0.62, 0.36)
+    # A turned flange and boss project directly from the capsule flank.  Both
+    # exposed cap rims receive the common precision bevel.  Their rear caps are
+    # buried in the vessel, while the front caps overlap the rotating shaft.
     body.add_cylinder_between(
-        (0.40, -0.31, 0.18),
-        (0.46, -0.53, 0.39),
-        radius=0.09,
-        segments=14,
+        (valve_pivot[0], -0.30, valve_pivot[2]),
+        (valve_pivot[0], -0.49, valve_pivot[2]),
+        radius=0.18,
+        segments=12,
+        bevel=True,
     )
-    body.add_cylinder(
-        radius=0.15,
-        depth=0.16,
-        segments=14,
-        location=(0.46, -0.53, 0.41),
+    body.add_cylinder_between(
+        (valve_pivot[0], -0.43, valve_pivot[2]),
+        (valve_pivot[0], -0.55, valve_pivot[2]),
+        radius=0.13,
+        segments=12,
         bevel=True,
     )
 
-    valve_pivot = (0.46, -0.53, 0.67)
     # Blender exports +Y as glTF +Z.  Authoring the complete valve wheel in the
     # XZ plane therefore gives the runtime's declared rotate-z motion the true
     # wheel normal, with no compensating object rotation or off-center orbit.
@@ -170,7 +171,7 @@ def build_oil() -> ModelGeometry:
         minor_radius=0.09,
         major_segments=20,
         minor_segments=6,
-        location=valve_pivot,
+        location=(valve_pivot[0], valve_pivot[1], valve_pivot[2]),
         rotation=(math.pi * 0.5, 0.0, 0.0),
     )
     spoke_inner = 0.07
@@ -201,16 +202,26 @@ def build_oil() -> ModelGeometry:
         rotation=(math.pi * 0.5, 0.0, 0.0),
         bevel=True,
     )
+    # The rotating shaft is collinear with the wheel hub and penetrates the
+    # stationary boss.  Its rear cap is hidden inside that boss; its exposed
+    # front shoulder uses the same three-segment bevel as the hub.
+    accent.add_cylinder_between(
+        (valve_pivot[0], valve_pivot[1] - 0.04, valve_pivot[2]),
+        (valve_pivot[0], -0.50, valve_pivot[2]),
+        radius=0.075,
+        segments=12,
+        bevel=True,
+    )
 
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:horizontal domed capsule with raised offset valve; "
-            "side:reinforcing collar and diagonal pressure takeoff; "
+            "front:horizontal domed capsule with offset side handwheel; "
+            "side:wheel shaft seated in a coaxial flanged boss; "
             "top:long vessel axis opposed by a four-spoke calibration wheel"
         ),
-        body_detail="domed pressure capsule, reinforcing collar, and offset pipe socket",
-        accent_pivot="true side-valve hub; Blender Y normal exports to rotate Z",
+        body_detail="domed pressure capsule, reinforcing collar, and coaxial side boss",
+        accent_pivot="coaxial side-handwheel hub; Blender Y exports to glTF Z",
         accent_origin=valve_pivot,
     )

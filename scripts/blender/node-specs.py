@@ -28,6 +28,49 @@ def require_blender_version(version) -> None:
 
 PROOF_IDS = ("policy_rate", "fx", "oil", "housing", "gdp", "risk_sentiment")
 
+# Canonical authored child-space contracts.  Blender uses +Z up and exports a
+# child translation (x, y, z) as glTF (x, z, -y).  These values are deliberately
+# stored outside the .blend so a wrong-but-nonempty pivot label or a subtly
+# drifted child transform cannot self-certify through asset metadata.
+PROOF_ACCENT_CONTRACTS = {
+    "policy_rate": {
+        "pivotLabel": "needle_rotation_center",
+        "blenderTranslation": (0.0, 0.0, 0.0),
+    },
+    "fx": {
+        "pivotLabel": "true offset ring center; counter-rotate local Y",
+        "blenderTranslation": (0.113864593, 0.0, -0.045545854),
+    },
+    "oil": {
+        "pivotLabel": "coaxial side-handwheel hub; Blender Y exports to glTF Z",
+        "blenderTranslation": (0.385164529, -0.461752892, 0.244914398),
+    },
+    "housing": {
+        "pivotLabel": "offset transfer-beam center; translate local Y",
+        "blenderTranslation": (0.193240196, -0.155534804, 0.558511257),
+    },
+    "gdp": {
+        "pivotLabel": "asymmetric counterweight hub center; scale XYZ",
+        "blenderTranslation": (-0.018568849, 0.0, 0.012370927),
+    },
+    "risk_sentiment": {
+        "pivotLabel": "upper pendulum hinge",
+        "blenderTranslation": (0.0, -0.123495959, 0.527664542),
+    },
+}
+
+# Minimum weighted source-edge coverage per proof object and material role.
+# The gate is intentionally model-specific: a single token-beveled shell can no
+# longer satisfy a complex portal, counterweight cage, or coaxial valve model.
+PROOF_BEVEL_TAGGED_EDGE_MINIMUMS = {
+    "policy_rate": {"body": 48, "accent": 22},
+    "fx": {"body": 28, "accent": 24},
+    "oil": {"body": 48, "accent": 48},
+    "housing": {"body": 119, "accent": 54},
+    "gdp": {"body": 84, "accent": 72},
+    "risk_sentiment": {"body": 48, "accent": 24},
+}
+
 NODE_MOTIONS = {
     "policy_rate": ("rotate", "z", 0.20),
     "market_rate": ("translate", "x", 0.12),

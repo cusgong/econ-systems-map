@@ -108,6 +108,32 @@ def _is_identity_transform(obj: bpy.types.Object, tolerance: float = 1.0e-6) -> 
     )
 
 
+def _components_close(actual, expected, tolerance: float = 1.0e-6) -> bool:
+    return len(actual) == len(expected) and all(
+        math.isclose(float(value), float(wanted), rel_tol=0.0, abs_tol=tolerance)
+        for value, wanted in zip(actual, expected)
+    )
+
+
+def _blender_to_gltf_translation(translation) -> tuple[float, float, float]:
+    return (
+        float(translation[0]),
+        float(translation[2]),
+        -float(translation[1]),
+    )
+
+
+def _identity_child_rotation_and_scale(obj: bpy.types.Object) -> tuple[bool, bool]:
+    _translation, rotation, scale = obj.matrix_basis.decompose()
+    rotation_identity = (
+        abs(float(rotation.x)) <= 1.0e-6
+        and abs(float(rotation.y)) <= 1.0e-6
+        and abs(float(rotation.z)) <= 1.0e-6
+        and math.isclose(abs(float(rotation.w)), 1.0, rel_tol=0.0, abs_tol=1.0e-6)
+    )
+    return rotation_identity, _components_close(scale, (1.0, 1.0, 1.0))
+
+
 def _descendants(root: bpy.types.Object) -> list[bpy.types.Object]:
     result: list[bpy.types.Object] = []
     stack = list(root.children)
@@ -500,6 +526,13 @@ def _validate_model(
 
     metrics_by_role: dict[str, dict] = {}
     bevels_by_role: dict[str, dict] = {}
+    accent_contract = SPECS.PROOF_ACCENT_CONTRACTS.get(node_id)
+    if accent_contract is None:
+        _append_error(summary, f"{node_id}: missing canonical accent transform contract")
+        accent_contract = {
+            "pivotLabel": None,
+            "blenderTranslation": (0.0, 0.0, 0.0),
+        }
     for obj in meshes:
         role = obj.get("econ_role")
         if role not in {"body", "accent"}:
@@ -555,8 +588,41 @@ def _validate_model(
                         f"{node_id}/accent {key} expected {expected!r}, found {actual!r}",
                     )
             pivot = obj.get("econ_pivot")
-            if not isinstance(pivot, str) or not pivot.strip():
-                _append_error(summary, f"{node_id}/accent econ_pivot must be nonempty")
+            expected_pivot = (
+                accent_contract.get("pivotLabel") if accent_contract is not None else None
+            )
+            if pivot != expected_pivot:
+                _append_error(
+                    summary,
+                    f"{node_id}/accent econ_pivot expected {expected_pivot!r}, found {pivot!r}",
+                )
+        if not all(
+            math.isclose(
+                float(obj.matrix_parent_inverse[row][column]),
+                float(Matrix.Identity(4)[row][column]),
+                rel_tol=0.0,
+                abs_tol=1.0e-6,
+            )
+            for row in range(4)
+            for column in range(4)
+        ):
+            _append_error(summary, f"{node_id}/{role} matrix_parent_inverse must be identity")
+        expected_location = (
+            accent_contract.get("blenderTranslation")
+            if role == "accent" and accent_contract is not None
+            else (0.0, 0.0, 0.0)
+        )
+        if expected_location is None or not _components_close(obj.location, expected_location):
+            _append_error(
+                summary,
+                f"{node_id}/{role} child translation expected {expected_location!r}, "
+                f"found {tuple(round(float(value), 9) for value in obj.location)!r}",
+            )
+        rotation_identity, scale_identity = _identity_child_rotation_and_scale(obj)
+        if not rotation_identity:
+            _append_error(summary, f"{node_id}/{role} child rotation must be identity")
+        if not scale_identity:
+            _append_error(summary, f"{node_id}/{role} child scale must be identity")
         if obj.data is not None:
             obj.data.calc_loop_triangles()
             raw_triangles = len(obj.data.loop_triangles)
@@ -614,6 +680,21 @@ def _validate_model(
                     f"{node_id}/{role}: bevel tagged edge count invalid "
                     f"metadata={tagged_edges}, weighted={weighted_edges}",
                 )
+        minimum_tagged_edges = SPECS.PROOF_BEVEL_TAGGED_EDGE_MINIMUMS.get(
+            node_id, {}
+        ).get(role)
+        if minimum_tagged_edges is None:
+            _append_error(
+                summary,
+                f"{node_id}/{role}: missing model-specific bevel coverage contract",
+            )
+            minimum_tagged_edges = 0
+        elif tagged_edges < minimum_tagged_edges:
+            _append_error(
+                summary,
+                f"{node_id}/{role}: bevel coverage minimum {minimum_tagged_edges} "
+                f"tagged edges, found {tagged_edges}",
+            )
         evaluated_delta = int(metrics["triangles"] - raw_triangles)
         if evaluated_delta <= 0:
             _append_error(
@@ -626,6 +707,7 @@ def _validate_model(
             "evaluatedTriangleDelta": evaluated_delta,
             "limitMethod": bevel_limit_method,
             "taggedEdges": tagged_edges,
+            "minimumTaggedEdges": minimum_tagged_edges,
         }
 
     if set(metrics_by_role) != {"body", "accent"}:
@@ -694,6 +776,10 @@ def _validate_model(
         view: _projected_occupancy_mask(triangle_vertices, axes)
         for view, axes in OCCUPANCY_VIEW_AXES.items()
     }
+    blender_translation = tuple(
+        float(value) for value in accent_contract["blenderTranslation"]
+    )
+    gltf_translation = _blender_to_gltf_translation(blender_translation)
     summary["models"][node_id] = {
         "bodyTriangles": int(body["triangles"]),
         "accentTriangles": int(accent["triangles"]),
@@ -711,6 +797,11 @@ def _validate_model(
         },
         "bevels": bevels_by_role,
         "accentExtents": [round(float(value), 6) for value in accent["extent"]],
+        "accentContract": {
+            "pivotLabel": accent_contract["pivotLabel"],
+            "blenderTranslation": [round(value, 9) for value in blender_translation],
+            "gltfTranslation": [round(value, 9) for value in gltf_translation],
+        },
     }
     summary["triangles"] += model_triangles
     summary["primitives"] += 2
@@ -1171,9 +1262,40 @@ def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | N
                             summary,
                             f"GLB {node_id}/accent {key} expected {expected!r}, found {actual!r}",
                         )
+                scene_contract = summary.get("models", {}).get(node_id, {}).get(
+                    "accentContract", {}
+                )
+                expected_pivot = scene_contract.get("pivotLabel")
                 pivot = node_extras.get("econ_pivot")
-                if not isinstance(pivot, str) or not pivot.strip():
-                    _append_error(summary, f"GLB {node_id}/accent econ_pivot must be nonempty")
+                if pivot != expected_pivot:
+                    _append_error(
+                        summary,
+                        f"GLB {node_id}/accent econ_pivot expected {expected_pivot!r}, "
+                        f"found {pivot!r}",
+                    )
+            expected_translation = (
+                summary.get("models", {})
+                .get(node_id, {})
+                .get("accentContract", {})
+                .get("gltfTranslation", [0.0, 0.0, 0.0])
+                if role == "accent"
+                else [0.0, 0.0, 0.0]
+            )
+            actual_translation = node.get("translation", [0.0, 0.0, 0.0])
+            if not _components_close(actual_translation, expected_translation):
+                _append_error(
+                    summary,
+                    f"GLB {node_id}/{role} translation expected {expected_translation!r}, "
+                    f"found {actual_translation!r}",
+                )
+            if "matrix" in node:
+                _append_error(summary, f"GLB {node_id}/{role} child matrix is forbidden")
+            rotation = node.get("rotation", [0.0, 0.0, 0.0, 1.0])
+            if not _components_close(rotation, [0.0, 0.0, 0.0, 1.0]):
+                _append_error(summary, f"GLB {node_id}/{role} rotation must be identity")
+            scale = node.get("scale", [1.0, 1.0, 1.0])
+            if not _components_close(scale, [1.0, 1.0, 1.0]):
+                _append_error(summary, f"GLB {node_id}/{role} scale must be identity")
             primitives = meshes[mesh_index].get("primitives", [])
             primitive_count += len(primitives)
             if len(primitives) != 1:

@@ -22,7 +22,7 @@ The SHA-256 matches Blender's official `blender-5.1.2.sha256` manifest. The Micr
 
 ## Files and contracts
 
-- `node-specs.py`: imports the canonical 30 IDs/categories from `data/nodes.js` and fails at import if the motion map drifts.
+- `node-specs.py`: imports the canonical 30 IDs/categories from `data/nodes.js`, stores the proof models' exact pivot/child-translation contracts and per-role minimum bevel coverage, and fails at import if the motion map drifts.
 - `scaffold-econ-node-library.py`: creates the collection/material/root contract idempotently, authors the canonical 48-segment base/40-segment annulus `policy_rate`, and upgrades the legacy modifier-free policy mesh once.
 - `hard_surface.py`: shared deterministic closed-manifold assembly, normalization, real-pivot rebasing, weighted-edge three-segment bevel authoring, and two-mesh finalization helpers.
 - `author-proof-models.py`: deterministically rebuilds `policy_rate` from the shared scaffold source on every proof pass, then rebuilds any requested non-anchor proof models in canonical order while preserving all unrelated roots.
@@ -32,7 +32,9 @@ The SHA-256 matches Blender's official `blender-5.1.2.sha256` manifest. The Micr
 - `econ-node-library.blend`: authored source scene.
 - `../../data/models/econ-node-library.glb`: runtime derivative.
 
-Each ready model has one canonical empty root, one `${id}__body` mesh, and one `${id}__accent` mesh. Each mesh has exactly one material slot, so each model exports as exactly two GLB primitives.
+Each ready model has one canonical empty root, one `${id}__body` mesh, and one `${id}__accent` mesh. Each mesh has exactly one material slot, so each model exports as exactly two GLB primitives. Proof accent transforms are source-locked in `node-specs.py`: child rotation and scale remain identity, Blender translation must match the stored numeric tuple, and GLB translation must equal `(x, z, -y)` with the exact canonical pivot label.
+
+The common three-segment bevel is applied to visibly exposed hard-surface edges, with model/role minimum tagged-edge counts enforced by validation. Smooth turned stock (tori, capsules, spheres), smooth tessellation, and cylindrical ties whose end caps are buried inside adjoining parts are intentional exclusions. GDP service-gap rail caps, both oil boss shoulders and the rotating shaft/hub, and every housing portal, foundation beam, transfer beam, and gusset are explicitly tagged. This keeps curved/internal supports clean while preventing a one-shell token bevel from satisfying a complex model.
 
 ## Reproduce
 

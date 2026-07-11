@@ -264,6 +264,7 @@ class MeshAssembler:
         minor_segments: int = 8,
         location: Vec3 = (0.0, 0.0, 0.0),
         rotation: Vec3 = (0.0, 0.0, 0.0),
+        bevel: bool = False,
     ) -> None:
         vertices: list[Vec3] = []
         for major in range(arc_segments + 1):
@@ -287,7 +288,12 @@ class MeshAssembler:
         faces.append(tuple(reversed(range(minor_segments))))
         last = arc_segments * minor_segments
         faces.append(tuple(last + index for index in range(minor_segments)))
-        self.append(vertices, faces, transform_matrix(location, rotation))
+        self.append(
+            vertices,
+            faces,
+            transform_matrix(location, rotation),
+            bevel=bevel,
+        )
 
     def add_uv_sphere(
         self,
@@ -412,6 +418,7 @@ class MeshAssembler:
         corner_segments: int = 4,
         location: Vec3 = (0.0, 0.0, 0.0),
         rotation: Vec3 = (0.0, 0.0, 0.0),
+        bevel: bool = False,
     ) -> None:
         outer = rounded_rectangle_points(outer_width, outer_height, outer_radius, corner_segments)
         inner = rounded_rectangle_points(inner_width, inner_height, inner_radius, corner_segments)
@@ -440,7 +447,12 @@ class MeshAssembler:
                     (inner_front + following, inner_back + following, inner_back + index, inner_front + index),
                 ]
             )
-        self.append(vertices, faces, transform_matrix(location, rotation))
+        self.append(
+            vertices,
+            faces,
+            transform_matrix(location, rotation),
+            bevel=bevel,
+        )
 
 
 def rounded_rectangle_points(
