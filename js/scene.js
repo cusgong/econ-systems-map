@@ -637,6 +637,20 @@ export function createScene(opts) {
     const n = id ? graph.nodeById.get(id) : null;
     renderer.domElement.style.cursor = n ? (n.lever ? 'ns-resize' : 'pointer') : '';
   }, { passive: true });
+  renderer.domElement.addEventListener('pointercancel', (ev) => {
+    // interrupted drag (notification, browser gesture takeover, tab switch):
+    // undo the drag without committing a shock
+    downXY = null;
+    if (!dragState) return;
+    const { id, moved } = dragState;
+    const nv = nodeVis.get(id);
+    if (nv) nv.group.position.y = nv.n.pos.y;
+    dragState = null;
+    controls.enabled = true;
+    try { renderer.domElement.releasePointerCapture(ev.pointerId); } catch { /* ok */ }
+    // pointermove only tints after `moved`; re-render with the preview zeroed (no onLeverDragEnd)
+    if (moved) opts.onLeverDrag(id, 0);
+  });
 
   // --- label distance fade ---
   const camWorld = new THREE.Vector3();

@@ -11,7 +11,7 @@ import { buildGraph } from './graph.js';
 import { createScene } from './scene.js';
 import { createUI } from './ui.js';
 
-const APP_VERSION = 'v2.3.0';
+const APP_VERSION = 'v2.4.0';
 
 let fatalShown = false;
 function showFatal() {
@@ -50,6 +50,15 @@ function hideLoading() {
 
 function boot() {
   document.getElementById('app-version').textContent = APP_VERSION;
+
+  // the mobile header wraps to 2-3 rows; overlays positioned below it need the
+  // REAL height, not the --hud-h token (which describes the single-row desktop bar)
+  const hud = document.querySelector('.hud-top');
+  if (hud && 'ResizeObserver' in window) {
+    const setHudH = () => document.documentElement.style.setProperty('--hud-real-h', hud.offsetHeight + 'px');
+    new ResizeObserver(setHudH).observe(hud);
+    setHudH();
+  }
 
   const graph = buildGraph(NODES, EDGES);
 
@@ -111,6 +120,8 @@ function boot() {
   ui.initFromHash(); // deep link: #/v/<id>, #/case/<id>/<phase>, #/loop/<id>, #/sim/...
   ui.maybeShowOnboarding();
   window.__msBooted = true;
+  // if the 8s watchdog fired before a slow boot finished, clear the false alarm
+  document.getElementById('fatal')?.classList.remove('show');
 }
 
 try {

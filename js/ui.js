@@ -140,7 +140,7 @@ export function createUI(deps) {
     meta.append(h('span', { class: 'badge ' + (e.sign > 0 ? 'sign-pos' : 'sign-neg') },
       e.sign > 0 ? t('같은 방향') : t('반대 방향')));
     meta.append(h('span', { class: 'badge', title: t('영향 강도') }, strengthDots(e.strength)));
-    meta.append(h('span', { class: 'badge' }, '⏱ ' + L(LAG_LABELS[e.lag])));
+    meta.append(h('span', { class: 'badge' }, '⏱︎ ' + L(LAG_LABELS[e.lag])));
     meta.append(h('span', { class: 'badge conf-' + e.confidence }, t('확실성') + ': ' + L(CONF_LABELS[e.confidence])));
     if (e.flip) meta.append(h('span', { class: 'badge flip' }, '⇄ ' + t('국면 반전')));
     meta.append(h('span', { class: 'badge' }, SOURCE_NAMES[e.source] ? (window.I18n.lang === 'ko' ? SOURCE_NAMES[e.source] : e.source) : e.source));
@@ -149,7 +149,8 @@ export function createUI(deps) {
   }
 
   // ---------- mode switching ----------
-  const PANEL_TITLES = { explore: 'EXPLORE', now: 'NOW', sim: 'SIMULATOR', cases: 'CASE REPLAY', loops: 'FEEDBACK LOOPS', ai: 'ASK AI' };
+  // sim/cases/loops are contained views of Explore; their titles say so
+  const PANEL_TITLES = { explore: 'EXPLORE', now: 'NOW', sim: 'EXPLORE · SIM', cases: 'EXPLORE · CASE', loops: 'EXPLORE · LOOP', ai: 'ASK AI' };
 
   function setMode(mode, opts = {}) {
     if (state.mode === mode && !opts.force) return;
@@ -162,7 +163,8 @@ export function createUI(deps) {
     // sim/cases/loops are sub-views OF explore now — they light the 탐색 tab.
     const tabMode = (mode === 'now' || mode === 'ai') ? mode : 'explore';
     document.querySelectorAll('.mode-tab').forEach((b) => {
-      b.setAttribute('aria-pressed', String(b.dataset.mode === tabMode));
+      if (b.dataset.mode === tabMode) b.setAttribute('aria-current', 'true');
+      else b.removeAttribute('aria-current');
     });
     els.title.textContent = PANEL_TITLES[mode];
     scene?.clearHighlight();
@@ -180,14 +182,18 @@ export function createUI(deps) {
     }
     renderPanel();
     expandPanelIfMobile(mode !== 'explore' || !!state.selectedId);
-    syncHash(true);
+    // opts.quiet: caller immediately opens content (case/loop/theme/variable)
+    // which pushes its own hash — skip this push so back-button history stays clean
+    if (!opts.quiet) syncHash(true);
   }
 
   function renderPanel() {
     // preserve keyboard focus across the re-render (buttons carry data-fkey)
     const active = document.activeElement;
-    const fkey = active && els.body.contains(active) ? active.getAttribute('data-fkey') : null;
-    els.body.scrollTop = 0;
+    const wasInBody = !!(active && active !== document.body && els.body.contains(active));
+    const fkey = wasInBody ? active.getAttribute('data-fkey') : null;
+    // AI chat keeps its scroll position (the conversation lives at the bottom)
+    if (!(state.mode === 'ai' && chatLog.length)) els.body.scrollTop = 0;
     els.body.replaceChildren();
     if (state.listMode) {
       els.body.append(h('div', { class: 'card' }, h('p', {},
@@ -199,12 +205,19 @@ export function createUI(deps) {
     else if (state.mode === 'cases') renderCases();
     else if (state.mode === 'ai') renderAI();
     else renderLoops();
-    if (fkey) els.body.querySelector('[data-fkey="' + fkey + '"]')?.focus();
+    if (fkey) {
+      const back = els.body.querySelector('[data-fkey="' + fkey + '"]');
+      if (back) back.focus();
+      else els.body.focus({ preventScroll: true });
+    } else if (wasInBody) {
+      // keyboard user's focus would silently drop to <body>; anchor it on the panel
+      els.body.focus({ preventScroll: true });
+    }
   }
 
   // ---------- browsable card builders (shared by Explore home + sub-views) ----------
   function caseCardEl(c) {
-    return h('button', { class: 'case-card', onclick: () => { setMode('cases'); openCase(c.id); } },
+    return h('button', { class: 'case-card', onclick: () => { setMode('cases', { quiet: true }); openCase(c.id); } },
       h('div', { class: 'cs-period' }, c.period),
       h('div', { class: 'cs-title' }, L(c.title)),
       h('div', { class: 'cs-sub' }, L(c.phases[0].title)),
@@ -212,7 +225,7 @@ export function createUI(deps) {
   }
   function loopCardEl(lp) {
     const cyc = lp.nodes.map(nodeName).join(' → ') + ' → ' + nodeName(lp.nodes[0]);
-    return h('button', { class: 'case-card', onclick: () => { setMode('loops'); openLoop(lp.id); } },
+    return h('button', { class: 'case-card', onclick: () => { setMode('loops', { quiet: true }); openLoop(lp.id); } },
       h('div', { class: 'h-node' },
         h('span', { class: 'cs-title' }, L(lp.name)),
         h('span', { class: 'loop-type ' + lp.type }, lp.type === 'reinforcing' ? t('강화 루프') + ' ⟳' : t('균형 루프') + ' ⇄'),
@@ -263,32 +276,47 @@ export function createUI(deps) {
         h('h3', {}, t('변수를 선택하세요')),
         h('p', {}, t('지도의 점 하나가 변수 하나입니다. 변수를 클릭하면 그 변화가 어디로 번져가는지 1차 → 2차 → 3차 파급 경로가 켜집니다.')),
       ));
+
+      // section quick-nav: the home stacks ~3 screens of content — let people jump
+      const jump = (sel) => els.body.querySelector(sel)?.scrollIntoView({
+        behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start',
+      });
+      b.append(h('div', { class: 'quick-nav', role: 'navigation', 'aria-label': t('섹션 이동') },
+        h('button', { class: 'preset-btn', onclick: () => jump('#sec-sim') }, t('시뮬레이터')),
+        h('button', { class: 'preset-btn', onclick: () => jump('#sec-cases') }, t('역사 사례')),
+        h('button', { class: 'preset-btn', onclick: () => jump('#sec-loops') }, t('피드백 루프')),
+        h('button', { class: 'preset-btn', onclick: () => jump('#sec-cats') }, t('변수 분류')),
+        h('button', { class: 'preset-btn', onclick: openSearch }, '⌕ ' + t('검색')),
+      ));
+
       const quick = h('div', { class: 'card' }, h('h3', {}, t('추천 시작점')));
       const row = h('div', { class: 'presets' });
       for (const id of ['policy_rate', 'oil', 'fx', 'risk_sentiment']) {
-        row.append(h('button', { class: 'preset-btn', onclick: () => selectNode(id) }, nodeName(id)));
+        const nd = graph.nodeById.get(id);
+        row.append(h('button', { class: 'preset-btn', onclick: () => selectNode(id) },
+          h('span', { class: 'si-dot', style: 'background:' + catById.get(nd.cat).color }), nodeName(id)));
       }
       quick.append(row);
       quick.append(h('p', {}, t('드래그로 회전, 휠이나 두 손가락으로 확대·축소할 수 있습니다.')));
       b.append(quick);
 
       // scenario simulator — a view within Explore, not a separate tab
-      b.append(h('div', { class: 'card' },
+      b.append(h('div', { class: 'card', id: 'sec-sim' },
         h('h3', {}, t('시나리오 시뮬레이터')),
         h('p', {}, t('금리·유가·환율 레버를 움직여 파급을 실험합니다. 지도에서 고리 달린 레버 노드를 위아래로 잡아끌어도 됩니다.')),
         h('div', { class: 'presets', style: 'margin-top:8px' },
-          h('button', { class: 'btn primary sm', 'data-fkey': 'open-sim', onclick: () => setMode('sim') }, '🎛 ' + t('시뮬레이터 열기'))),
+          h('button', { class: 'btn primary sm', 'data-fkey': 'open-sim', onclick: () => setMode('sim') }, t('시뮬레이터 열기'))),
       ));
 
       // history cases — browse and play on the map, in place
-      b.append(h('div', { class: 'order-h' }, h('span', { class: 'n' }, '▶'), t('역사 사례')));
+      b.append(h('div', { class: 'order-h', id: 'sec-cases' }, h('span', { class: 'n' }, '▶︎'), t('역사 사례')));
       for (const c of cases) b.append(caseCardEl(c));
 
       // feedback loops — the heart of systems thinking, browsable here
-      b.append(h('div', { class: 'order-h' }, h('span', { class: 'n' }, '⟳'), t('피드백 루프')));
+      b.append(h('div', { class: 'order-h', id: 'sec-loops' }, h('span', { class: 'n' }, '⟳'), t('피드백 루프')));
       for (const lp of loops) b.append(loopCardEl(lp));
 
-      const catCard = h('div', { class: 'card' }, h('h3', {}, t('변수 분류')));
+      const catCard = h('div', { class: 'card', id: 'sec-cats' }, h('h3', {}, t('변수 분류')));
       for (const c of categories) {
         const ids = graph.nodes.filter((n) => n.cat === c.id);
         const rowEl = h('div', { class: 'presets' });
@@ -302,7 +330,8 @@ export function createUI(deps) {
 
     const n = graph.nodeById.get(state.selectedId);
     const cat = catById.get(n.cat);
-    const head = h('div', { class: 'h-node' },
+    b.append(h('button', { class: 'btn sm', 'data-fkey': 'back-hub', onclick: () => selectNode(null) }, '← ' + t('탐색')));
+    const head = h('div', { class: 'h-node', style: 'margin-top:10px' },
       h('span', { class: 'nm' }, L(n.name)),
       h('span', { class: 'cat-chip', style: 'color:' + cat.color }, L(cat.name)),
     );
@@ -310,6 +339,10 @@ export function createUI(deps) {
     b.append(head);
     const d = descById.get(n.id);
     if (d) b.append(h('p', { class: 'desc' }, L(d)));
+    // the signature interaction, hinted at the moment it is relevant
+    if (n.lever && !state.listMode) {
+      b.append(h('p', { class: 'rd-src' }, '⇅ ' + t('지도에서 이 노드를 위아래로 잡아끌면 즉석 충격을 줄 수 있습니다.')));
+    }
 
     // NOW instrument strip: what this variable reads today (tap -> NOW board)
     const rd = situation.readings.find((r) => r.node === n.id);
@@ -327,10 +360,10 @@ export function createUI(deps) {
     if (relLoops.length || relCases.length) {
       const row = h('div', { class: 'presets rel-row' });
       for (const lp of relLoops) {
-        row.append(h('button', { class: 'preset-btn', onclick: () => { setMode('loops'); openLoop(lp.id); } }, '⟳ ' + L(lp.name)));
+        row.append(h('button', { class: 'preset-btn', onclick: () => { setMode('loops', { quiet: true }); openLoop(lp.id); } }, '⟳ ' + L(lp.name)));
       }
       for (const c of relCases) {
-        row.append(h('button', { class: 'preset-btn', onclick: () => { setMode('cases'); openCase(c.id); } }, '▶ ' + L(c.title)));
+        row.append(h('button', { class: 'preset-btn', onclick: () => { setMode('cases', { quiet: true }); openCase(c.id); } }, '▶︎ ' + L(c.title)));
       }
       b.append(row);
     }
@@ -390,11 +423,14 @@ export function createUI(deps) {
     }
     const dirs = pathDirections(initial, edges);
     const lastEdge = edges[edges.length - 1];
-    // div[role=button], not <button>: the chain inside holds real (nested) buttons
-    const row = h('div', { class: 'fx-row', role: 'button', tabindex: '0', 'aria-expanded': 'false' });
-    row.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); row.click(); }
-    });
+    // a plain container (the chain inside holds real buttons, so no role=button);
+    // keyboard expand/collapse lives on a dedicated toggle button
+    const row = h('div', { class: 'fx-row' });
+    const tog = h('button', {
+      class: 'fx-toggle', 'aria-expanded': 'false',
+      'aria-label': nodeName(id) + ' — ' + t('경로 상세'),
+    }, '▾');
+    row.append(tog);
     row.append(chainEl(ids, dirs, true));
     row.append(h('div', { class: 'mech' }, L(lastEdge.mech)));
     const noteEl = lastEdge.note ? h('div', { class: 'mech', style: 'color:var(--warn)' }, '※ ' + L(lastEdge.note)) : null;
@@ -407,9 +443,13 @@ export function createUI(deps) {
     if (noteEl) row.append(noteEl);
     if (flipEl) row.append(flipEl);
     row.addEventListener('click', () => {
-      const expanded = row.getAttribute('aria-expanded') === 'true';
-      document.querySelectorAll('.fx-row[aria-expanded="true"]').forEach((x) => x.setAttribute('aria-expanded', 'false'));
-      row.setAttribute('aria-expanded', String(!expanded));
+      const expanded = row.classList.contains('open');
+      document.querySelectorAll('.fx-row.open').forEach((x) => {
+        x.classList.remove('open');
+        x.querySelector('.fx-toggle')?.setAttribute('aria-expanded', 'false');
+      });
+      row.classList.toggle('open', !expanded);
+      tog.setAttribute('aria-expanded', String(!expanded));
       if (noteEl) noteEl.style.display = expanded ? 'none' : '';
       if (flipEl) flipEl.style.display = expanded ? 'none' : '';
       // highlight just this path
@@ -531,7 +571,7 @@ export function createUI(deps) {
       bar.append(fill);
       row.append(bar);
       const sub = h('div', { class: 'imp-sub' });
-      sub.append(h('span', {}, '⏱ ' + L(LAG_BUCKET_LABELS[lagBucket(r.dominant.lagM)])));
+      sub.append(h('span', {}, '⏱︎ ' + L(LAG_BUCKET_LABELS[lagBucket(r.dominant.lagM)])));
       if (r.conflict) sub.append(h('span', { class: 'badge conflict' }, t('경로 상충')));
       const dirs = pathDirections(state.simShocks[r.dominant.path[0]] ?? 1, r.dominant.edges);
       sub.append(h('span', {}, r.dominant.path.map((pid, i) => nodeName(pid) + (dirs[i] > 0 ? '↑' : '↓')).join(' → ')));
@@ -572,7 +612,7 @@ export function createUI(deps) {
 
     const stepper = h('div', { class: 'phase-stepper', role: 'group', 'aria-label': t('단계') });
     c.phases.forEach((p, i) => {
-      const btn = h('button', { class: 'ps' + (i < state.phaseIdx ? ' done' : ''), onclick: () => gotoPhase(i) }, L(PHASE_SHORT[p.key]));
+      const btn = h('button', { class: 'ps' + (i < state.phaseIdx ? ' done' : ''), 'data-fkey': 'phase-' + i, onclick: () => gotoPhase(i) }, L(PHASE_SHORT[p.key]));
       if (i === state.phaseIdx) btn.setAttribute('aria-current', 'step');
       stepper.append(btn);
     });
@@ -584,13 +624,13 @@ export function createUI(deps) {
     ));
 
     const nav = h('div', { class: 'case-nav' });
-    nav.append(h('button', { class: 'btn', disabled: state.phaseIdx === 0 ? '' : null, onclick: () => gotoPhase(state.phaseIdx - 1) }, '← ' + t('이전')));
-    nav.append(h('button', { class: 'btn primary', onclick: () => {
+    nav.append(h('button', { class: 'btn', 'data-fkey': 'case-prev', disabled: state.phaseIdx === 0 ? '' : null, onclick: () => gotoPhase(state.phaseIdx - 1) }, '← ' + t('이전')));
+    nav.append(h('button', { class: 'btn primary', 'data-fkey': 'case-next', onclick: () => {
       if (state.phaseIdx < c.phases.length - 1) gotoPhase(state.phaseIdx + 1);
       else { stopAutoplay(); }
     }, disabled: state.phaseIdx >= c.phases.length - 1 ? '' : null }, t('다음') + ' →'));
-    const play = h('button', { class: 'btn', 'aria-pressed': String(state.autoplay), onclick: toggleAutoplay },
-      state.autoplay ? '⏸ ' + t('일시정지') : '▶ ' + t('자동 재생'));
+    const play = h('button', { class: 'btn', 'data-fkey': 'case-play', 'aria-pressed': String(state.autoplay), onclick: toggleAutoplay },
+      state.autoplay ? '⏸︎ ' + t('일시정지') : '▶︎ ' + t('자동 재생'));
     nav.append(play);
     b.append(nav);
 
@@ -704,6 +744,7 @@ export function createUI(deps) {
     state.loopId = id;
     const lp = loops.find((x) => x.id === id);
     renderPanel();
+    if (lp) announce(L(lp.name) + ' — ' + (lp.type === 'reinforcing' ? t('강화 루프') : t('균형 루프')));
     if (!lp || !scene) return;
     const edges = loopEdges(graph, lp.nodes);
     if (!edges) return;
@@ -720,14 +761,17 @@ export function createUI(deps) {
     const lb = els.legendBody;
     lb.replaceChildren();
     const row = (el, txt) => h('div', { class: 'lg-row' }, el, h('span', {}, txt));
+    lb.append(h('div', { class: 'lg-h' }, t('선과 연결')));
     lb.append(row(h('span', { class: 'lg-line' }), t('같은 방향으로 민다 (+)')));
     lb.append(row(h('span', { class: 'lg-line neg' }), t('반대 방향으로 민다 (−)')));
     lb.append(row(h('span', { class: 'lg-line dashed' }), t('점선 = 확실성 낮음')));
     lb.append(row(h('span', {}, '✦'), t('흐르는 점 = 인과 방향, 점 개수 = 강도')));
+    lb.append(row(h('span', { class: 'lg-line', style: 'border-color:#ffdf8e' }), t('금색 강조 = 국면 따라 방향 반전 가능')));
+    lb.append(h('div', { class: 'lg-h' }, t('노드와 압력')));
     lb.append(row(h('span', {}, '◎'), t('고리 달린 노드 = 시뮬레이터 레버')));
     lb.append(row(h('span', { class: 'lg-dot', style: 'background:var(--up)' }), t('상승 압력')));
     lb.append(row(h('span', { class: 'lg-dot', style: 'background:var(--down)' }), t('하락 압력')));
-    lb.append(row(h('span', { class: 'lg-line', style: 'border-color:#ffdf8e' }), t('금색 강조 = 국면 따라 방향 반전 가능')));
+    lb.append(h('div', { class: 'lg-h' }, t('공간과 조작')));
     lb.append(row(h('span', {}, '⇅'), t('레버 노드 위아래 드래그 = 즉석 충격')));
     lb.append(row(h('span', {}, '↕'), t('높이 = 심리·기대(위) ↔ 실물·원자재(아래)')));
     lb.append(row(h('span', {}, '⊙'), t('중심에서 멀수록 해외·글로벌 변수')));
@@ -752,13 +796,21 @@ export function createUI(deps) {
     },
     {
       title: t('한 곳에서: 탐색 · 지금 · AI'),
-      body: t('탐색 한 곳에서 다 이뤄집니다. 변수를 고르면 관련 역사 사례·피드백 루프가 그 자리에서 열리고, 시나리오 시뮬레이터도 탐색 안의 뷰로 지도를 벗어나지 않고 열립니다. 지도에서 고리 달린 레버 노드를 위아래로 잡아끌면 즉석 충격도 줄 수 있습니다. 지금 탭은 오늘의 경제를 지도에 비추고, AI 탭에서는 이 지도를 아는 AI와 대화하며 답변의 근거 경로를 바로 봅니다.'),
+      rows: [
+        { k: t('탐색'), v: t('변수를 고르면 관련 역사 사례·피드백 루프가 그 자리에서 열리고, 시뮬레이터도 지도를 벗어나지 않고 열립니다.') },
+        { k: t('지금'), v: t('오늘의 경제 지표를 지도 위 색으로 비춥니다.') },
+        { k: 'AI', v: t('지도를 아는 AI와 대화하면 답변의 근거 경로가 지도에 켜집니다.') },
+        { k: t('레버'), v: t('고리 달린 레버 노드를 위아래로 잡아끌면 즉석 충격을 줍니다.') },
+      ],
       svg: `<svg width="220" height="90" viewBox="0 0 220 90"><rect x="20" y="38" width="180" height="6" rx="3" fill="#1b2b4d"/><rect x="20" y="38" width="120" height="6" rx="3" fill="#54e0ff"/><circle cx="140" cy="41" r="9" fill="#eaf3ff"/><text x="20" y="70" fill="#aabfdd" font-size="10">${nodeName('policy_rate')} +75%</text></svg>`,
     },
     {
       title: t('읽는 법 요약'),
-      body: t('선의 색 = 방향, 흐르는 점 = 인과의 흐름과 강도, 점선 = 확실성 낮음. 이 지도는 교과서 메커니즘의 단순화 모형이며 예측 도구가 아닙니다. 단축키: Ctrl+K 또는 / 검색, Esc 닫기·선택 해제, ← → 사례 단계 이동. 경로 속 변수 이름을 클릭하면 그 변수로 바로 이동합니다.'),
-      svg: '<svg width="220" height="90" viewBox="0 0 220 90"><path d="M20 60 Q110 10 200 55" stroke="#3bd6f0" stroke-width="2" fill="none"/><circle cx="80" cy="38" r="3" fill="#7deeff"/><circle cx="120" cy="30" r="3" fill="#7deeff"/><circle cx="160" cy="38" r="3" fill="#7deeff"/></svg>',
+      body: t('선의 색 = 방향, 흐르는 점 = 인과의 흐름과 강도, 점선 = 확실성 낮음. 금색 선은 국면에 따라 방향이 뒤집힐 수 있는 관계입니다. 이 지도는 교과서 메커니즘의 단순화 모형이며 예측 도구가 아닙니다.')
+        + ' ' + t('검색은 상단의 검색 버튼으로 열고, 경로 속 변수 이름을 클릭하면 그 변수로 바로 이동합니다.')
+        + (window.matchMedia('(pointer: fine)').matches
+          ? ' ' + t('단축키: Ctrl+K 또는 / 검색, Esc 닫기·선택 해제, ← → 사례 단계 이동.') : ''),
+      svg: '<svg width="220" height="90" viewBox="0 0 220 90"><path d="M20 60 Q110 10 200 55" stroke="#3bd6f0" stroke-width="2" fill="none"/><circle cx="80" cy="38" r="3" fill="#7deeff"/><circle cx="120" cy="30" r="3" fill="#7deeff"/><circle cx="160" cy="38" r="3" fill="#7deeff"/><path d="M40 75 L180 75" stroke="#ffdf8e" stroke-width="2"/></svg>',
     },
   ];
 
@@ -770,10 +822,18 @@ export function createUI(deps) {
     const s = steps[obIdx];
     body.replaceChildren(
       h('h2', { id: 'ob-title' }, s.title),
-      h('div', { class: 'ob-steps' }, ...steps.map((_, i) => h('i', { class: i === obIdx ? 'on' : '' }))),
+      h('div', { class: 'ob-steps' }, ...steps.map((_, i) => h('button', {
+        class: 'ob-dot' + (i === obIdx ? ' on' : ''),
+        'aria-label': t('단계') + ' ' + (i + 1),
+        'aria-current': i === obIdx ? 'step' : null,
+        onclick: () => { obIdx = i; renderOnboarding(); },
+      }))),
       h('div', { class: 'ob-visual', html: s.svg }),
-      h('p', {}, s.body),
+      s.rows
+        ? h('div', { class: 'ob-rows' }, ...s.rows.map((r) => h('div', { class: 'obr' }, h('b', {}, r.k), h('span', {}, r.v))))
+        : h('p', {}, s.body),
       h('div', { class: 'dlg-actions' },
+        obIdx < steps.length - 1 ? h('button', { class: 'btn left', onclick: () => dlg.close() }, t('건너뛰기')) : null,
         obIdx > 0 ? h('button', { class: 'btn', onclick: () => { obIdx--; renderOnboarding(); } }, '← ' + t('이전')) : null,
         obIdx < steps.length - 1
           ? h('button', { class: 'btn primary', onclick: () => { obIdx++; renderOnboarding(); } }, t('다음') + ' →')
@@ -837,6 +897,7 @@ export function createUI(deps) {
     if (!th) return;
     state.nowThemeId = id;
     renderPanel();
+    announce(L(th.title));
     if (scene) {
       const nodeOrders = new Map(th.nodes.map((nid) => [nid, 1]));
       const edgeOrders = new Map();
@@ -868,11 +929,11 @@ export function createUI(deps) {
         const relRow = h('div', { class: 'presets' });
         if (th.relatedCase) {
           const c = cases.find((x) => x.id === th.relatedCase);
-          if (c) relRow.append(h('button', { class: 'preset-btn', onclick: () => { setMode('cases'); openCase(c.id); } }, t('닮은꼴 사례') + ': ' + L(c.title) + ' →'));
+          if (c) relRow.append(h('button', { class: 'preset-btn', onclick: () => { setMode('cases', { quiet: true }); openCase(c.id); } }, t('닮은꼴 사례') + ': ' + L(c.title) + ' →'));
         }
         if (th.relatedLoop) {
           const lp = loops.find((x) => x.id === th.relatedLoop);
-          if (lp) relRow.append(h('button', { class: 'preset-btn', onclick: () => { setMode('loops'); openLoop(lp.id); } }, t('관련 루프') + ': ' + L(lp.name) + ' →'));
+          if (lp) relRow.append(h('button', { class: 'preset-btn', onclick: () => { setMode('loops', { quiet: true }); openLoop(lp.id); } }, t('관련 루프') + ': ' + L(lp.name) + ' →'));
         }
         if (relRow.children.length) b.append(relRow);
         if (th.sources && th.sources.length) {
@@ -889,7 +950,7 @@ export function createUI(deps) {
       h('p', {}, t('아래 지표의 최근 방향(약 6개월)을 지도 위 색으로 비춥니다. 예측이 아니라, 오늘의 배치도입니다.')),
       h('div', { class: 'presets', style: 'margin-top:10px' },
         h('span', { class: 'asof-chip' },
-          t('수치') + ' ' + (situation.readingsAsOf || situation.asOf) + ' · ' + t('해설') + ' ' + (situation.themesAsOf || situation.asOf) + ' ' + t('기준')),
+          t('수치') + ' ' + (situation.readingsAsOf || situation.asOf) + ' · ' + t('해설') + ' ' + (situation.themesAsOf || situation.asOf) + (t('기준') ? ' ' + t('기준') : '')),
         h('button', {
           class: 'preset-btn', 'data-fkey': 'now-project', 'aria-pressed': String(state.nowProjected),
           onclick: () => { state.nowProjected = !state.nowProjected; applyNowTints(); renderPanel(); },
@@ -913,7 +974,7 @@ export function createUI(deps) {
       const row = h('button', {
         class: 'reading-row',
         title: t('이 변수로 이동'),
-        onclick: () => { setMode('explore'); selectNode(r.node); },
+        onclick: () => { setMode('explore', { quiet: true }); selectNode(r.node); },
       });
       row.append(h('span', { class: 'rd-name' }, nodeName(r.node)));
       row.append(h('span', { class: 'rd-value' }, L(r.value)));
@@ -928,9 +989,11 @@ export function createUI(deps) {
 
     b.append(h('div', { class: 'order-h' }, h('span', { class: 'n' }, '≋'), t('지금 주요 흐름')));
     for (const th of situation.themes) {
+      const bodyStr = L(th.body);
+      const preview = bodyStr.length > 84 ? bodyStr.slice(0, 84).replace(/\s+\S*$/, '') + '…' : bodyStr;
       b.append(h('button', { class: 'case-card', onclick: () => openTheme(th.id) },
         h('div', { class: 'cs-title' }, L(th.title)),
-        h('div', { class: 'cs-sub' }, L(th.body).slice(0, 84) + '…'),
+        h('div', { class: 'cs-sub' }, preview),
       ));
     }
 
@@ -974,7 +1037,7 @@ export function createUI(deps) {
   // and extracts {text, stop} from SSE `data:` JSON lines.
   const AI_PROVIDERS = {
     anthropic: {
-      label: 'Anthropic (Claude)',
+      label: { ko: 'Anthropic (Claude)', en: 'Anthropic (Claude)' },
       keyHint: 'sk-ant-...',
       keyUrl: 'console.anthropic.com',
       models: [
@@ -1004,7 +1067,7 @@ export function createUI(deps) {
       },
     },
     google: {
-      label: 'Google (Gemini)',
+      label: { ko: 'Google (Gemini)', en: 'Google (Gemini)' },
       keyHint: 'AIza...',
       keyUrl: 'aistudio.google.com/apikey',
       models: [
@@ -1037,16 +1100,16 @@ export function createUI(deps) {
       },
     },
     openai_compat: {
-      label: 'OpenAI 호환 (OpenRouter · Grok · Groq …)',
+      label: { ko: 'OpenAI 호환 (OpenRouter · Grok · Groq …)', en: 'OpenAI-compatible (OpenRouter · Grok · Groq …)' },
       keyHint: 'sk-... / gsk_...',
       custom: true,
       presets: [
-        { id: 'openrouter', label: 'OpenRouter (GPT·Claude·Gemini 등)', base: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini', keyUrl: 'openrouter.ai/keys' },
-        { id: 'xai', label: 'xAI (Grok)', base: 'https://api.x.ai/v1', model: 'grok-3', keyUrl: 'console.x.ai' },
-        { id: 'groq', label: 'Groq', base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile', keyUrl: 'console.groq.com/keys' },
-        { id: 'deepseek', label: 'DeepSeek', base: 'https://api.deepseek.com', model: 'deepseek-chat', keyUrl: 'platform.deepseek.com' },
-        { id: 'mistral', label: 'Mistral', base: 'https://api.mistral.ai/v1', model: 'mistral-large-latest', keyUrl: 'console.mistral.ai/api-keys' },
-        { id: 'custom', label: '직접 입력 (Base URL)', base: '', model: '', keyUrl: '' },
+        { id: 'openrouter', label: { ko: 'OpenRouter (GPT·Claude·Gemini 등)', en: 'OpenRouter (GPT, Claude, Gemini …)' }, base: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini', keyUrl: 'openrouter.ai/keys' },
+        { id: 'xai', label: { ko: 'xAI (Grok)', en: 'xAI (Grok)' }, base: 'https://api.x.ai/v1', model: 'grok-3', keyUrl: 'console.x.ai' },
+        { id: 'groq', label: { ko: 'Groq', en: 'Groq' }, base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile', keyUrl: 'console.groq.com/keys' },
+        { id: 'deepseek', label: { ko: 'DeepSeek', en: 'DeepSeek' }, base: 'https://api.deepseek.com', model: 'deepseek-chat', keyUrl: 'platform.deepseek.com' },
+        { id: 'mistral', label: { ko: 'Mistral', en: 'Mistral' }, base: 'https://api.mistral.ai/v1', model: 'mistral-large-latest', keyUrl: 'console.mistral.ai/api-keys' },
+        { id: 'custom', label: { ko: '직접 입력 (Base URL)', en: 'Custom (Base URL)' }, base: '', model: '', keyUrl: '' },
       ],
       models: [],
       validate: (k) => k.length > 8,
@@ -1162,12 +1225,17 @@ export function createUI(deps) {
       el.append(document.createTextNode(p));
     });
   }
+  // #ai-log grows; the real scroller is the panel body
+  function panelNearBottom() {
+    return els.body.scrollHeight - els.body.scrollTop - els.body.clientHeight < 48;
+  }
+  function scrollPanelBottom() { els.body.scrollTop = els.body.scrollHeight; }
   function updateStreamingBubble(entry) {
     const el = $('#ai-stream');
     if (!el) return;
+    const stick = panelNearBottom(); // don't yank a user who scrolled up to re-read
     setBubbleText(el, entry.text);
-    const log = $('#ai-log');
-    if (log) log.scrollTop = log.scrollHeight;
+    if (stick) scrollPanelBottom();
   }
 
   // scene-side application of a model-proposed map action (validated defensively)
@@ -1188,6 +1256,10 @@ export function createUI(deps) {
       });
       scene.setHighlight({ nodeOrders, edgeOrders, selectedId: null });
       scene.focusNodes([...nodeOrders.keys()]);
+      // a fresh highlight without its own shocks clears earlier chat-driven tints
+      if (!(action.shocks && typeof action.shocks === 'object' && Object.keys(action.shocks).length)) {
+        scene.setNodeTints(null);
+      }
       did = true;
     }
     if (action.shocks && typeof action.shocks === 'object') {
@@ -1212,14 +1284,17 @@ export function createUI(deps) {
       || (Array.isArray(action.edges) && action.edges.length)
       || (action.shocks && Object.keys(action.shocks).length);
     if (hasVis) {
-      host.append(h('button', { class: 'preset-btn', onclick: () => applyMapActionScene(action) }, '◈ ' + t('지도에 표시')));
+      host.append(h('button', { class: 'preset-btn', onclick: () => {
+        applyMapActionScene(action);
+        announce(t('관련 경로를 지도에 표시했습니다'));
+      } }, '◈ ' + t('지도에 다시 표시')));
     }
     const open = action.open;
     if (open && typeof open === 'object') {
       const c = open.case ? cases.find((x) => x.id === open.case) : null;
-      if (c) host.append(h('button', { class: 'preset-btn', onclick: () => { setMode('cases'); openCase(c.id); } }, '▶ ' + L(c.title)));
+      if (c) host.append(h('button', { class: 'preset-btn', onclick: () => { setMode('cases', { quiet: true }); openCase(c.id); } }, '▶︎ ' + L(c.title)));
       const lp = open.loop ? loops.find((x) => x.id === open.loop) : null;
-      if (lp) host.append(h('button', { class: 'preset-btn', onclick: () => { setMode('loops'); openLoop(lp.id); } }, '⟳ ' + L(lp.name)));
+      if (lp) host.append(h('button', { class: 'preset-btn', onclick: () => { setMode('loops', { quiet: true }); openLoop(lp.id); } }, '⟳ ' + L(lp.name)));
     }
   }
 
@@ -1237,16 +1312,24 @@ export function createUI(deps) {
     const entry = { role: 'assistant', text: '', streaming: true };
     chatLog.push(entry);
     renderPanel();
-    const logEl = $('#ai-log');
-    if (logEl) logEl.scrollTop = logEl.scrollHeight;
+    scrollPanelBottom();
 
-    // history: alternating turns, last user message carries app-state context
-    const msgs = [];
+    // history: skip streaming/errored/empty entries, then merge adjacent
+    // same-role turns (skipping can create them; providers require alternation),
+    // and attach app-state context to the final user message
+    const raw2 = [];
     for (const m of chatLog) {
-      if (m.streaming) continue;
-      msgs.push({ role: m.role, content: m.text });
+      if (m.streaming || m.error) continue;
+      if (!String(m.text || '').trim()) continue;
+      raw2.push({ role: m.role, content: m.text });
     }
-    msgs[msgs.length - 1] = { role: 'user', content: appStateContext() + '\n' + text };
+    raw2[raw2.length - 1] = { role: 'user', content: appStateContext() + '\n' + text };
+    const msgs = [];
+    for (const m of raw2) {
+      const last = msgs[msgs.length - 1];
+      if (last && last.role === m.role) last.content += '\n' + m.content;
+      else msgs.push({ ...m });
+    }
     let trimmed = msgs.slice(-12);
     while (trimmed.length && trimmed[0].role !== 'user') trimmed.shift();
 
@@ -1283,6 +1366,12 @@ export function createUI(deps) {
           if (!payload || payload === '[DONE]') continue;
           let evd;
           try { evd = JSON.parse(payload); } catch { continue; }
+          // mid-stream provider errors (overloaded, in-stream {error}) would
+          // otherwise be silently swallowed, leaving an empty bubble
+          if (evd && (evd.type === 'error' || evd.error)) {
+            const em = (evd.error && (evd.error.message || evd.error.code)) || '';
+            throw new Error(em ? String(em).slice(0, 200) : t('요청이 실패했습니다'));
+          }
           const d = prov.extract(evd);
           if (d.text) { entry.text += d.text; updateStreamingBubble(entry); }
           if (d.stop) stopReason = d.stop;
@@ -1297,32 +1386,64 @@ export function createUI(deps) {
         try { entry.action = JSON.parse(mAct[1]); } catch { entry.action = null; }
       }
     } catch (err) {
-      if (err && err.name === 'AbortError') entry.text += '\n(' + t('중단됨') + ')';
-      else entry.text = (entry.text ? entry.text + '\n\n' : '') + '⚠ ' + ((err && err.message) || t('요청이 실패했습니다'));
+      if (err && err.name === 'AbortError') {
+        entry.suffix = '(' + t('중단됨') + ')'; // display only — never replayed to the model
+      } else {
+        entry.error = true; // excluded from future request history; gets a retry button
+        const msg = (err instanceof TypeError)
+          ? t('네트워크에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.')
+          : ((err && err.message) || t('요청이 실패했습니다'));
+        entry.text = (entry.text ? entry.text + '\n\n' : '') + '⚠︎ ' + msg;
+      }
     } finally {
       entry.streaming = false;
       chatBusy = false;
       chatAbort = null;
-      renderPanel();
-      if (entry.action) applyMapActionScene(entry.action); // 답변과 동시에 지도 반영
-      const el2 = $('#ai-log');
-      if (el2) el2.scrollTop = el2.scrollHeight;
-      const ta = $('#ai-input');
-      if (ta) ta.focus();
+      // a stream that finishes after the user moved to another tab must not
+      // hijack the current panel or map; the log is correct when they return
+      if (state.mode === 'ai') {
+        renderPanel();
+        if (entry.action && !entry.error) {
+          if (applyMapActionScene(entry.action)) announce(t('관련 경로를 지도에 표시했습니다')); // 답변과 동시에 지도 반영
+        }
+        if (!entry.action || entry.error) {
+          announce(entry.error ? entry.text.slice(0, 140) : t('답변 도착'));
+        }
+        scrollPanelBottom();
+        $('#ai-input')?.focus();
+      }
     }
   }
 
   function providerSelect(p) {
     const sel = h('select', {
-      class: 'ai-model', 'aria-label': t('AI 제공자'),
+      class: 'ai-model', 'aria-label': t('AI 제공자'), 'data-fkey': 'ai-provider',
       onchange: (e) => { prefs.aiProvider = e.target.value; savePrefs(); renderPanel(); },
     });
     for (const [id, pr] of Object.entries(AI_PROVIDERS)) {
-      const o = h('option', { value: id }, pr.label);
+      const o = h('option', { value: id }, L(pr.label));
       if (id === p) o.setAttribute('selected', '');
       sel.append(o);
     }
     return sel;
+  }
+  // destructive toolbar actions: two-tap confirm, and abort any in-flight stream
+  function confirmBtn(label, fkey, action) {
+    const btn = h('button', { class: 'preset-btn', 'data-fkey': fkey });
+    let armed = false; let timer = null;
+    const paint = () => { btn.textContent = armed ? t('한 번 더 누르면 실행') : label; };
+    paint();
+    btn.addEventListener('click', () => {
+      if (!armed) {
+        armed = true; paint();
+        timer = setTimeout(() => { armed = false; paint(); }, 3000);
+        return;
+      }
+      clearTimeout(timer);
+      chatAbort?.abort();
+      action();
+    });
+    return btn;
   }
   function modelField(p, host) {
     const prov = AI_PROVIDERS[p];
@@ -1371,7 +1492,7 @@ export function createUI(deps) {
           },
         });
         for (const pr of prov.presets) {
-          const o = h('option', { value: pr.id }, pr.label);
+          const o = h('option', { value: pr.id }, L(pr.label));
           if (pr.id === curPreset) o.setAttribute('selected', '');
           presetSel.append(o);
         }
@@ -1392,7 +1513,8 @@ export function createUI(deps) {
       });
       const saveK = () => {
         const v = keyInput.value.trim();
-        if (!v || !prov.validate(v)) { toast(t('키 형식이 올바르지 않습니다')); return; }
+        if (!v) { toast(t('API 키를 입력해 주세요')); keyInput.focus(); return; }
+        if (!prov.validate(v)) { toast(t('키 형식이 올바르지 않습니다') + ' (' + prov.keyHint + ')'); keyInput.focus(); return; }
         setKey(p, v); renderPanel(); announce(t('AI 대화가 준비되었습니다'));
       };
       keyInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') saveK(); });
@@ -1408,13 +1530,13 @@ export function createUI(deps) {
     b.append(h('div', { class: 'presets ai-toolbar' },
       providerSelect(p),
       modelField(p, b),
-      h('button', { class: 'preset-btn', onclick: () => {
+      confirmBtn(t('대화 지우기'), 'ai-clear', () => {
         chatLog.length = 0;
         scene?.clearHighlight();
         scene?.setNodeTints(null);
         renderPanel();
-      } }, t('대화 지우기')),
-      h('button', { class: 'preset-btn', onclick: () => { setKey(p, ''); renderPanel(); } }, t('키 삭제')),
+      }),
+      confirmBtn(t('키 삭제'), 'ai-delkey', () => { setKey(p, ''); renderPanel(); }),
     ));
 
     const log = h('div', { id: 'ai-log' });
@@ -1425,10 +1547,22 @@ export function createUI(deps) {
     chatLog.forEach((m, i) => {
       const bubble = h('div', { class: 'ai-msg ' + (m.role === 'user' ? 'user' : 'assistant') });
       const txt = h('div', { class: 'ai-text' });
-      setBubbleText(txt, m.text || (m.streaming ? '…' : ''));
+      const shown = (m.text || '') + (m.suffix ? (m.text ? '\n' : '') + m.suffix : '');
+      setBubbleText(txt, shown || (m.streaming ? '…' : ''));
       if (m.streaming && i === chatLog.length - 1) txt.id = 'ai-stream';
       bubble.append(txt);
-      if (m.action && !m.streaming) {
+      if (m.error && !m.streaming && !chatBusy) {
+        // failed turn: offer a retry that re-sends the preceding user message
+        bubble.append(h('div', { class: 'ai-actions presets' },
+          h('button', { class: 'preset-btn', onclick: () => {
+            const idx = chatLog.indexOf(m);
+            const prev = chatLog[idx - 1];
+            if (!prev || prev.role !== 'user') return;
+            chatLog.splice(idx - 1, 2);
+            sendChat(prev.text);
+          } }, t('다시 시도'))));
+      }
+      if (m.action && !m.streaming && !m.error) {
         const actions = h('div', { class: 'ai-actions presets' });
         renderActionButtons(m.action, actions);
         if (actions.children.length) bubble.append(actions);
@@ -1454,10 +1588,19 @@ export function createUI(deps) {
       placeholder: t('예: 지금 금리가 내리면 부동산은 어떻게 되나요?'),
       'aria-label': t('질문 입력'),
     });
+    const autosize = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 160) + 'px'; };
+    ta.addEventListener('input', autosize);
     ta.addEventListener('keydown', (ev) => {
+      if (ev.isComposing || ev.keyCode === 229) return; // Hangul IME mid-composition
       if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); submit(); }
     });
-    const submit = () => { const v = ta.value; ta.value = ''; sendChat(v); };
+    const submit = () => {
+      if (chatBusy) return; // don't wipe a draft typed while a reply streams
+      const v = ta.value;
+      ta.value = '';
+      ta.style.height = '';
+      sendChat(v);
+    };
     const rowEls = [ta];
     const btns = h('div', { class: 'ai-btns' });
     if (chatBusy) btns.append(h('button', { class: 'btn sm', onclick: () => chatAbort && chatAbort.abort() }, '■ ' + t('중지')));
@@ -1467,6 +1610,7 @@ export function createUI(deps) {
     b.append(h('div', { class: 'ai-inputrow' }, ...rowEls));
     b.append(h('p', { class: 'rd-src', style: 'margin-top:6px' },
       t('교육 목적 도구입니다. 투자 조언이 아니며, 답변은 부정확할 수 있습니다.')));
+    if (chatLog.length && !chatBusy) scrollPanelBottom(); // entering the tab lands on the latest turn
   }
 
   // ---------- search palette (Ctrl+K / '/') ----------
@@ -1536,7 +1680,14 @@ export function createUI(deps) {
     host.replaceChildren();
     let list;
     if (!q) {
-      list = getSearchItems().slice(0, 8);
+      // curated empty state: the recommended entry points, not raw data order
+      const all = getSearchItems();
+      list = [
+        ...['policy_rate', 'oil', 'fx', 'risk_sentiment'].map((id) => all.find((x) => x.type === 'node' && x.id === id)),
+        all.find((x) => x.type === 'caseStudy'),
+        all.find((x) => x.type === 'loop'),
+        all.find((x) => x.type === 'theme'),
+      ].filter(Boolean);
     } else {
       const isCho = [...q].every((ch) => CHO_LIST.includes(ch));
       list = getSearchItems()
@@ -1547,14 +1698,19 @@ export function createUI(deps) {
         .map((x) => x.it);
     }
     host.__list = list;
+    const input = $('#search-input');
     if (!list.length) {
       host.append(h('div', { class: 'search-empty' }, t('결과가 없습니다. 다른 검색어를 시도해 보세요.')));
       searchActive = 0;
+      input.removeAttribute('aria-activedescendant');
+      input.setAttribute('aria-expanded', 'false');
       return;
     }
     if (searchActive >= list.length) searchActive = 0;
+    input.setAttribute('aria-activedescendant', 'sr-' + searchActive);
+    input.setAttribute('aria-expanded', 'true');
     list.forEach((it, i) => {
-      const name = it.type === 'node' ? L(it.obj.name) : it.type === 'caseStudy' ? L(it.obj.title) : L(it.obj.name);
+      const name = (it.type === 'caseStudy' || it.type === 'theme') ? L(it.obj.title) : L(it.obj.name);
       host.append(h('button', {
         class: 'search-item' + (i === searchActive ? ' active' : ''),
         id: 'sr-' + i, role: 'option', 'aria-selected': String(i === searchActive),
@@ -1580,10 +1736,10 @@ export function createUI(deps) {
   }
   function pickSearch(it) {
     $('#dlg-search').close();
-    if (it.type === 'node') { setMode('explore'); selectNode(it.id); }
-    else if (it.type === 'caseStudy') { setMode('cases'); openCase(it.id); }
-    else if (it.type === 'theme') { setMode('now'); openTheme(it.id); }
-    else { setMode('loops'); openLoop(it.id); }
+    if (it.type === 'node') { setMode('explore', { quiet: true }); selectNode(it.id); }
+    else if (it.type === 'caseStudy') { setMode('cases', { quiet: true }); openCase(it.id); }
+    else if (it.type === 'theme') { setMode('now', { quiet: true }); openTheme(it.id); }
+    else { setMode('loops', { quiet: true }); openLoop(it.id); }
   }
   function openSearch() {
     searchActive = 0;
@@ -1646,6 +1802,12 @@ export function createUI(deps) {
         if (seg[1] && situation.themes.some((x) => x.id === seg[1])) openTheme(seg[1]);
       } else if (seg[0] === 'ai') {
         setMode('ai', { force: true });
+      } else if (['v', 'case', 'loop'].includes(seg[0]) && seg[1]) {
+        // route shape is right but the id is unknown (stale/mistyped link) — say so
+        toast(t('링크가 가리키던 항목을 찾을 수 없어 처음 화면을 보여드립니다.'));
+        announce(t('링크가 가리키던 항목을 찾을 수 없어 처음 화면을 보여드립니다.'));
+        setMode('explore', { force: true });
+        if (state.selectedId) selectNode(null);
       } else if (seg[0] === 'sim') {
         setMode('sim', { force: true });
         for (const k of Object.keys(state.simShocks)) state.simShocks[k] = 0;
@@ -1689,6 +1851,9 @@ export function createUI(deps) {
 
     // search palette
     $('#btn-search').addEventListener('click', openSearch);
+    // touch has no Esc: tapping the backdrop closes the palette
+    const dlgSearch = $('#dlg-search');
+    dlgSearch.addEventListener('click', (e) => { if (e.target === dlgSearch) dlgSearch.close(); });
     const sInput = $('#search-input');
     sInput.addEventListener('input', () => { searchActive = 0; renderSearchResults(); });
     sInput.addEventListener('keydown', (ev) => {
@@ -1719,6 +1884,8 @@ export function createUI(deps) {
       const rm = reducedMotion();
       motionBtn.setAttribute('aria-pressed', String(rm));
       document.documentElement.classList.toggle('reduce-motion', rm);
+      // explicit in-app opt-in must beat the OS prefers-reduced-motion CSS kill switch
+      document.documentElement.classList.toggle('motion-on', prefs.motion === 'on');
       scene?.setReducedMotion(rm);
     }
     motionBtn.addEventListener('click', () => {
@@ -1828,11 +1995,18 @@ export function createUI(deps) {
       if (location.hash && location.hash !== '#/' && location.hash !== '#') applyHashFromLocation();
     },
     maybeShowOnboarding() {
-      if (!prefs.onboarded) {
-        openOnboarding();
-        prefs.onboarded = true;
-        savePrefs();
+      if (prefs.onboarded) return;
+      // list mode: the tour teaches 3D gestures that do not exist here
+      if (state.listMode) { prefs.onboarded = true; savePrefs(); return; }
+      // deep-linked visitor came to see specific content — don't cover it;
+      // the tour still shows on their first plain visit (onboarded stays false)
+      if (location.hash.replace(/^#\/?/, '')) {
+        toast(t('처음이시면 오른쪽 위 ? 버튼에서 읽는 법을 볼 수 있습니다.'));
+        return;
       }
+      openOnboarding();
+      prefs.onboarded = true;
+      savePrefs();
     },
     enableListMode() {
       state.listMode = true;

@@ -16,7 +16,7 @@ export const UI_DICT_EN = {
   '검색 (Ctrl+K)': 'Search (Ctrl+K)',
   '검색어': 'Search query',
   '검색 결과': 'Search results',
-  '변수·사례·루프 검색 (초성 가능)': 'Search variables, cases, and loops',
+  '변수·사례·루프·지금 흐름 검색 (초성 가능)': 'Search variables, cases, loops, and storylines',
   '↑↓ 이동 · Enter 선택 · Esc 닫기': '↑↓ move · Enter select · Esc close',
   '결과가 없습니다. 다른 검색어를 시도해 보세요.': 'No results. Try a different query.',
   '이 변수로 이동': 'Jump to this variable',
@@ -87,7 +87,6 @@ export const UI_DICT_EN = {
   '역사 사례 재생': 'Case replay',
   '과거의 큰 사건을 원인 → 확산 → 정책 대응 → 시장 심리 → 결과의 5단계로 지도 위에 재생합니다.':
     'Replay major historical episodes on the map in five acts: cause → spread → policy → psychology → outcome.',
-  '사례 목록': 'All cases',
   '단계': 'Steps',
   '이전': 'Back',
   '다음': 'Next',
@@ -104,7 +103,6 @@ export const UI_DICT_EN = {
     'Systems thinking is about feedback, not one-way arrows. Reinforcing loops snowball; balancing loops pull things back like a thermostat.',
   '강화 루프': 'Reinforcing',
   '균형 루프': 'Balancing',
-  '루프 목록': 'All loops',
   '실제 사례': 'Real-world example',
   '강화 루프: 한 바퀴 돌 때마다 같은 방향으로 커집니다. 부호를 곱하면 (+)가 됩니다.':
     'Reinforcing loop: each turn pushes further in the same direction. Multiply the signs and you get (+).',
@@ -112,6 +110,9 @@ export const UI_DICT_EN = {
     'Balancing loop: each turn pushes back toward where it started. Multiply the signs and you get (−).',
 
   // legend
+  '선과 연결': 'Lines & links',
+  '노드와 압력': 'Nodes & pressure',
+  '공간과 조작': 'Space & gestures',
   '높이 = 심리·기대(위) ↔ 실물·원자재(아래)': 'Height = sentiment & expectations (top) ↔ real economy & commodities (bottom)',
   '중심에서 멀수록 해외·글로벌 변수': 'Farther from center = more global',
   '같은 방향으로 민다 (+)': 'Pushes the same way (+)',
@@ -129,13 +130,25 @@ export const UI_DICT_EN = {
   '2차·3차 파급을 따라가기': 'Follow 2nd and 3rd-order ripples',
   '변수를 클릭하면 직접 효과(1차)만이 아니라 한 다리, 두 다리 건너의 파급(2차·3차)까지 경로가 차례로 켜집니다. 화살표 방향과 시차, 확실성을 함께 확인하세요.':
     'Click a variable and the map lights up not just direct effects but ripples one and two steps removed. Check direction, time lag, and certainty as you go.',
-  '시뮬레이터 · 사례 · 루프': 'Now · Simulator · Cases · AI',
-  '지금 탭은 오늘의 경제 상황(출처·기준일 포함)을 지도 위에 색으로 비춥니다. 지도에서 고리 달린 레버 노드를 위아래로 드래그하면 즉석에서 충격을 줄 수 있고, 역사 사례·루프 탭이 이어집니다. AI 탭에서는 이 지도를 아는 AI와 대화하며 답변의 근거 경로를 지도에서 바로 볼 수 있습니다.':
-    'The Now tab projects today\'s conditions (with sources and dates) onto the map. Grab any ringed lever node and drag it up or down for an instant shock; the Cases and Loops tabs follow. In the AI tab, talk to an AI that knows this map and watch the reasoning paths light up as it answers.',
   '읽는 법 요약': 'How to read the map',
-  '선의 색 = 방향, 흐르는 점 = 인과의 흐름과 강도, 점선 = 확실성 낮음. 이 지도는 교과서 메커니즘의 단순화 모형이며 예측 도구가 아닙니다. 단축키: Ctrl+K 또는 / 검색, Esc 닫기·선택 해제, ← → 사례 단계 이동. 경로 속 변수 이름을 클릭하면 그 변수로 바로 이동합니다.':
-    'Line color = direction, flowing dots = causal flow and strength, dashed = lower certainty. This map simplifies textbook mechanisms and is not a forecasting tool. Shortcuts: Ctrl+K or / to search, Esc to close or deselect, left/right arrows to step through a case. Click any variable name inside a path to jump straight to it.',
+  '선의 색 = 방향, 흐르는 점 = 인과의 흐름과 강도, 점선 = 확실성 낮음. 금색 선은 국면에 따라 방향이 뒤집힐 수 있는 관계입니다. 이 지도는 교과서 메커니즘의 단순화 모형이며 예측 도구가 아닙니다.':
+    'Line color = direction, flowing dots = causal flow and strength, dashed = lower certainty. Gold lines are links whose sign can flip with the regime. This map simplifies textbook mechanisms and is not a forecasting tool.',
+  '검색은 상단의 검색 버튼으로 열고, 경로 속 변수 이름을 클릭하면 그 변수로 바로 이동합니다.':
+    'Open search with the search button at the top; click any variable name inside a path to jump straight to it.',
+  '단축키: Ctrl+K 또는 / 검색, Esc 닫기·선택 해제, ← → 사례 단계 이동.':
+    'Shortcuts: Ctrl+K or / to search, Esc to close or deselect, left/right arrows to step through a case.',
+  '건너뛰기': 'Skip',
   '시작하기': 'Start exploring',
+  '변수를 고르면 관련 역사 사례·피드백 루프가 그 자리에서 열리고, 시뮬레이터도 지도를 벗어나지 않고 열립니다.':
+    'Pick a variable and its related cases and feedback loops open right there; the simulator opens without leaving the map.',
+  '오늘의 경제 지표를 지도 위 색으로 비춥니다.': 'Projects today\'s indicators onto the map as color.',
+  '지도를 아는 AI와 대화하면 답변의 근거 경로가 지도에 켜집니다.':
+    'Chat with an AI that knows the map; the paths behind each answer light up.',
+  '레버': 'Lever',
+  '고리 달린 레버 노드를 위아래로 잡아끌면 즉석 충격을 줍니다.':
+    'Grab a ringed lever node and drag it up or down for an instant shock.',
+  '처음이시면 오른쪽 위 ? 버튼에서 읽는 법을 볼 수 있습니다.':
+    'First time here? The ? button (top right) shows how to read the map.',
 
   // sources dialog
   '메커니즘 출처': 'Mechanism sources',
@@ -155,9 +168,10 @@ export const UI_DICT_EN = {
   '지금의 경제, 한눈에': 'The economy right now, at a glance',
   '아래 지표의 최근 방향(약 6개월)을 지도 위 색으로 비춥니다. 예측이 아니라, 오늘의 배치도입니다.':
     'The recent direction (about 6 months) of each indicator is projected onto the map as color. Not a forecast: a layout of today.',
-  '기준': 'as of',
-  '수치': 'data',
-  '해설': 'analysis',
+  // asOf chip: EN reads "data as of DATE · analysis as of DATE" (기준 folds into the labels)
+  '기준': '',
+  '수치': 'data as of',
+  '해설': 'analysis as of',
   '지도에 비추기': 'Project onto the map',
   '지도 비추기 끄기': 'Turn off projection',
   '흐름 해설이': 'The storyline analysis is about',
@@ -186,8 +200,12 @@ export const UI_DICT_EN = {
   '금리·유가·환율 레버를 움직여 파급을 실험합니다. 지도에서 고리 달린 레버 노드를 위아래로 잡아끌어도 됩니다.':
     'Move the rate, oil, and FX levers to experiment with ripples. You can also grab a ringed lever node on the map and drag it up or down.',
   '한 곳에서: 탐색 · 지금 · AI': 'One place: Explore · Now · AI',
-  '탐색 한 곳에서 다 이뤄집니다. 변수를 고르면 관련 역사 사례·피드백 루프가 그 자리에서 열리고, 시나리오 시뮬레이터도 탐색 안의 뷰로 지도를 벗어나지 않고 열립니다. 지도에서 고리 달린 레버 노드를 위아래로 잡아끌면 즉석 충격도 줄 수 있습니다. 지금 탭은 오늘의 경제를 지도에 비추고, AI 탭에서는 이 지도를 아는 AI와 대화하며 답변의 근거 경로를 바로 봅니다.':
-    'It all happens in Explore. Pick a variable and its related historical cases and feedback loops open right there; the scenario simulator opens as a view inside Explore too, without ever leaving the map. Grab a ringed lever node and drag it up or down for an instant shock. The Now tab projects today\'s economy onto the map, and the AI tab lets you talk to an AI that knows this map and see the reasoning paths light up as it answers.',
+  '섹션 이동': 'Sections',
+  '지도에서 이 노드를 위아래로 잡아끌면 즉석 충격을 줄 수 있습니다.':
+    'Drag this node up or down on the map for an instant shock.',
+  '경로 상세': 'path details',
+  '링크가 가리키던 항목을 찾을 수 없어 처음 화면을 보여드립니다.':
+    'The item this link pointed to no longer exists, so here is the start screen.',
 
   // v2: AI chat
   '지도와 대화하기': 'Talk to the map',
@@ -203,12 +221,9 @@ export const UI_DICT_EN = {
   '모델 이름을 찾을 수 없습니다. 모델 ID를 확인해 주세요.': 'Model not found. Check the model ID.',
   '참고: OpenAI 본체 API는 브라우저 직접 호출을 막아(CORS) 이 앱에서 직접 쓸 수 없습니다. GPT는 OpenRouter로 이용하세요.':
     'Note: OpenAI\'s own API blocks direct browser calls (CORS), so it can\'t be used directly here. Use GPT models via OpenRouter.',
-  '내 Anthropic API 키로 시작': 'Start with your Anthropic API key',
-  '서버가 없는 앱이라 본인의 API 키로 브라우저에서 Anthropic에 직접 요청합니다. 키는 이 브라우저에만 저장되고 Anthropic 외 어디로도 전송되지 않으며, 사용량은 본인 계정에 과금됩니다.':
-    'This app has no server: your browser calls Anthropic directly with your own API key. The key is stored only in this browser, sent nowhere but Anthropic, and usage is billed to your account.',
   '저장하고 시작': 'Save & start',
   '키 발급': 'Get a key',
-  'sk-ant- 로 시작하는 키를 입력해 주세요': 'Enter a key that starts with sk-ant-',
+  'API 키를 입력해 주세요': 'Enter your API key first',
   'AI 대화가 준비되었습니다': 'AI chat is ready',
   '모델': 'Model',
   '대화 지우기': 'Clear chat',
@@ -228,9 +243,14 @@ export const UI_DICT_EN = {
   '생성 중…': 'Generating…',
   '교육 목적 도구입니다. 투자 조언이 아니며, 답변은 부정확할 수 있습니다.':
     'An educational tool. Not investment advice; answers may be inaccurate.',
-  '지도에 표시': 'Show on map',
+  '지도에 다시 표시': 'Show on map again',
+  '관련 경로를 지도에 표시했습니다': 'Highlighted the relevant paths on the map',
+  '답변 도착': 'Answer ready',
+  '다시 시도': 'Retry',
+  '한 번 더 누르면 실행': 'Tap again to confirm',
   'API 키가 올바르지 않습니다. 키를 확인해 주세요.': 'Invalid API key. Please check it.',
   '요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.': 'Too many requests. Try again shortly.',
+  '네트워크에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.': 'Cannot reach the network. Check your internet connection.',
   '요청이 실패했습니다': 'Request failed',
   '안전상 이 질문에는 답변이 제한되었습니다.': 'This question was declined for safety reasons.',
   '중단됨': 'stopped',
@@ -240,8 +260,6 @@ export const UI_DICT_EN = {
   '모션을 켰습니다': 'Motion on',
   '이 기기에서는 3D를 사용할 수 없어 목록 모드로 표시합니다. 모든 설명은 아래 패널에서 그대로 볼 수 있습니다.':
     'This device cannot run 3D, so the map is shown in list mode. Every explanation is still available in the panel below.',
-  '정부가 지출을 늘리거나 줄입니다': 'The government expands or cuts spending',
-  '전쟁·분쟁 등 지정학 긴장이 높아지거나 낮아집니다': 'Geopolitical tension rises or eases',
 };
 
 export const UI_META = {
