@@ -5,6 +5,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { validateModelContract } from './model-contract.js';
+import {
+  createLatestLoadCoordinator,
+  validateNodeModelIdentity,
+} from './node-model-loader-contract.js';
 
 const COLOR_UP = new THREE.Color('#ffb36b');
 const COLOR_DOWN = new THREE.Color('#6fb5ff');
@@ -73,29 +77,41 @@ function isIdentityRoot(root) {
 
 function describeRoot(root) {
   const roles = [];
+  const meshChildren = [];
   let triangles = 0;
   root.updateWorldMatrix(true, true);
   root.traverse((object) => {
     if (!object.isMesh) return;
-    roles.push(object.userData?.econ_role);
+    const role = object.userData?.econ_role;
+    roles.push(role);
+    meshChildren.push({ name: object.name, role });
     triangles += triangleCount(object);
   });
   const bounds = new THREE.Box3().setFromObject(root, true);
   const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+  const id = typeof root.userData?.econ_id === 'string' ? root.userData.econ_id : root.name;
+  const identity = validateNodeModelIdentity(id, {
+    name: root.name,
+    econId: root.userData?.econ_id,
+    ready: root.userData?.econ_ready,
+    meshChildren,
+  });
   return {
-    id: root.userData?.econ_id || root.name,
+    id,
     roles,
     radius: sphere.radius,
     triangles,
-    rootIdentity: isIdentityRoot(root),
+    rootIdentity: isIdentityRoot(root) && identity.valid,
+    identityIssues: identity.issues,
     root,
   };
 }
 
-function findModelRoots(libraryScene) {
+function findModelRoots(libraryScene, expectedIds) {
   const roots = [];
+  const expected = new Set(expectedIds);
   libraryScene.traverse((object) => {
-    if (typeof object.userData?.econ_id === 'string') roots.push(object);
+    if (typeof object.userData?.econ_id === 'string' || expected.has(object.name)) roots.push(object);
   });
   return roots;
 }
@@ -162,7 +178,6 @@ export function createNodeVisualSystem(options) {
   let modelIssues = [];
   let warned = false;
   let disposed = false;
-  let generation = 0;
   let lastElapsed = 0;
   let previousElapsed = 0;
   let selectedId = null;
@@ -172,9 +187,9 @@ export function createNodeVisualSystem(options) {
   const records = new Map();
   const pickTargets = [];
   const ownedMaterials = new Set();
-  const loadedGeometries = new Set();
   const sourceMaterialsDisposed = new Set();
   const sharedGeometries = new Set();
+  const loadCoordinator = createLatestLoadCoordinator();
 
   const bodyTemplates = {
     darkTitanium: makeBodyTemplate(MATERIAL_PARAMS.darkTitanium, 'RUNTIME__DARK_TITANIUM'),
@@ -401,9 +416,6 @@ export function createNodeVisualSystem(options) {
 
   function restoreFallback(record) {
     if (record.loadedRoot) {
-      record.loadedRoot.traverse((object) => {
-        if (object.isMesh && object.geometry) loadedGeometries.delete(object.geometry);
-      });
       disposeTree(record.loadedRoot, ownedMaterials);
       record.loadedRoot = null;
     }
@@ -441,7 +453,6 @@ export function createNodeVisualSystem(options) {
         object.material = record.accentMaterial;
         accentRoot = object;
       }
-      loadedGeometries.add(object.geometry);
     });
     if (!bodyMeshes.length || !accentRoot) throw new Error(`${record.id}: missing body or accent role`);
 
@@ -472,12 +483,22 @@ export function createNodeVisualSystem(options) {
   }
 
   async function loadLibrary(url) {
-    const currentGeneration = ++generation;
+    const ticket = loadCoordinator.begin();
+    if (ticket === null) {
+      return {
+        status: 'fallback',
+        loadedIds: [],
+        fallbackIds: [...expectedIds],
+        issues: ['disposed'],
+      };
+    }
     resetModels();
     modelIssues = [];
     if (!url) {
-      modelStatus = 'fallback';
-      setDocumentStatus('fallback');
+      loadCoordinator.succeed(ticket, () => {
+        modelStatus = 'fallback';
+        setDocumentStatus('fallback');
+      });
       return {
         status: 'fallback',
         loadedIds: [],
@@ -491,17 +512,20 @@ export function createNodeVisualSystem(options) {
     try {
       const loader = options.loader || new GLTFLoader(options.loadingManager);
       const gltf = await loader.loadAsync(url);
-      if (disposed || currentGeneration !== generation) {
+      if (!loadCoordinator.succeed(ticket)) {
         disposeTree(gltf.scene, ownedMaterials);
+        const loadedIds = [...records.values()]
+          .filter((record) => record.modelStatus === 'ready')
+          .map((record) => record.id);
         return {
-          status: 'fallback',
-          loadedIds: [],
-          fallbackIds: [...expectedIds],
+          status: modelStatus,
+          loadedIds,
+          fallbackIds: expectedIds.filter((id) => !loadedIds.includes(id)),
           issues: ['stale-load'],
         };
       }
 
-      const described = findModelRoots(gltf.scene).map(describeRoot);
+      const described = findModelRoots(gltf.scene, expectedIds).map(describeRoot);
       const contract = validateModelContract(expectedIds, described.map((record) => ({
         id: record.id,
         roles: record.roles,
@@ -547,6 +571,17 @@ export function createNodeVisualSystem(options) {
         issues: [...modelIssues],
       };
     } catch (error) {
+      if (!loadCoordinator.fail(ticket)) {
+        const loadedIds = [...records.values()]
+          .filter((record) => record.modelStatus === 'ready')
+          .map((record) => record.id);
+        return {
+          status: modelStatus,
+          loadedIds,
+          fallbackIds: expectedIds.filter((id) => !loadedIds.includes(id)),
+          issues: ['stale-load'],
+        };
+      }
       resetModels();
       const issue = error instanceof Error ? error.message : String(error);
       modelIssues = [issue];
@@ -707,6 +742,8 @@ export function createNodeVisualSystem(options) {
       const hover = record.motionState.hovered && !reducedMotion;
       record.modelRoot.rotation.x += ((hover ? -0.018 : 0) - record.modelRoot.rotation.x) * smoothing;
       record.modelRoot.rotation.y += ((hover ? 0.03 : 0) - record.modelRoot.rotation.y) * smoothing;
+      record.fallbackRoot.rotation.x += ((hover ? -0.018 : 0) - record.fallbackRoot.rotation.x) * smoothing;
+      record.fallbackRoot.rotation.y += ((hover ? 0.03 : 0) - record.fallbackRoot.rotation.y) * smoothing;
       updateAccentMotion(record, lastElapsed);
       updateHitProxy(record);
     }
@@ -717,6 +754,7 @@ export function createNodeVisualSystem(options) {
     if (!reducedMotion) return;
     for (const record of records.values()) {
       record.modelRoot.rotation.set(0, 0, 0);
+      record.fallbackRoot.rotation.set(0, 0, 0);
       record.motionState.selectedAt = null;
       record.motionState.arrivalAt = null;
       record.accentRoot.quaternion.copy(record.motionState.accentBaseQuaternion);
@@ -740,14 +778,13 @@ export function createNodeVisualSystem(options) {
   function dispose() {
     if (disposed) return;
     disposed = true;
-    generation++;
+    loadCoordinator.dispose();
     for (const record of records.values()) {
       record.chip.removeEventListener('click', record.labelClick);
       record.labelObject.element.remove();
       if (record.loadedRoot) disposeTree(record.loadedRoot, ownedMaterials);
       record.nodeRoot.removeFromParent();
     }
-    for (const geometry of loadedGeometries) geometry.dispose();
     for (const geometry of sharedGeometries) geometry.dispose();
     for (const material of ownedMaterials) material.dispose();
     records.clear();
