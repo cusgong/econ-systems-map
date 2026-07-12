@@ -1899,6 +1899,7 @@ export function createUI(deps) {
     document.documentElement.classList.toggle('map-viewport-reserved', reserve);
   }
   function setPanelCollapsed(collapsed) {
+    if (isMobile() && !collapsed) els.legend.removeAttribute('open');
     els.panel.classList.toggle('collapsed', collapsed);
     els.toggle.setAttribute('aria-expanded', String(!collapsed));
     els.toggle.querySelector('span').textContent = collapsed ? t('펼치기') : t('접기');

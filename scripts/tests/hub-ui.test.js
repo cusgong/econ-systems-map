@@ -65,6 +65,11 @@ test('panel, legend, and settled model callback integrate the hub presentation c
   assert.match(uiSource, /t\(\s*['"]강한 직·간접 경로, 최대 3단계['"]\s*\)/);
   assert.doesNotMatch(uiSource, /setNodeTints/);
   assert.match(mainSource, /onModelStatusChange:\s*\(\)\s*=>\s*uiRef\?\.onModelStatusChange\?\.\(\)/);
+  assert.match(
+    uiSource,
+    /function\s+setPanelCollapsed\s*\(\s*collapsed\s*\)\s*{\s*if\s*\(\s*isMobile\(\)\s*&&\s*!collapsed\s*\)\s*els\.legend\.removeAttribute\(\s*['"]open['"]\s*\)/,
+    'expanding the mobile panel must close the overlapping legend',
+  );
 });
 
 test('hub UI CSS preserves contrast and fits the existing 390px legend', () => {
