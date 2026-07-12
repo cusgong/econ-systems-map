@@ -8,16 +8,21 @@
 //   angle  (sector)         : 도메인 군집 + 수직 정렬(기대인플레이션은 소비자물가 위,
 //                             투자심리는 주가 위, 기준금리는 시장금리 위, 지정학은 유가 위)
 
+// Palette re-tuned 260713 for color-vision separation between spatially adjacent
+// sectors (validated: design-dna-kit validate_palette.js, dark surface #030610 —
+// worst adjacent CVD ΔE 1.7 → 10.5, every color ≥4.5:1 as cat-chip text on panel).
+// Anchor hues kept; only confusables moved: policy ↑mint, real ↓green (policy/real
+// split), exogenous →magenta, external →indigo.
 export const CATEGORIES = [
-  { id: 'policy',      name: { ko: '정책',      en: 'Policy' },          color: '#35d0b0' },
+  { id: 'policy',      name: { ko: '정책',      en: 'Policy' },          color: '#2ff0c4' },
   { id: 'monetary',    name: { ko: '통화·금융', en: 'Money & Credit' },  color: '#4fd8ff' },
   { id: 'assets',      name: { ko: '자산시장',  en: 'Asset Markets' },   color: '#9d8cff' },
   { id: 'psychology',  name: { ko: '시장 심리', en: 'Psychology' },      color: '#ff9ecb' },
-  { id: 'real',        name: { ko: '실물경제',  en: 'Real Economy' },    color: '#6fe38a' },
+  { id: 'real',        name: { ko: '실물경제',  en: 'Real Economy' },    color: '#62d97e' },
   { id: 'prices',      name: { ko: '물가·임금', en: 'Prices & Wages' },  color: '#ff7666' },
   { id: 'commodities', name: { ko: '원자재',    en: 'Commodities' },     color: '#ffc857' },
-  { id: 'exogenous',   name: { ko: '외생 변수', en: 'Exogenous' },       color: '#c678ff' },
-  { id: 'external',    name: { ko: '대외·환율', en: 'External & FX' },   color: '#5f8dff' },
+  { id: 'exogenous',   name: { ko: '외생 변수', en: 'Exogenous' },       color: '#e26bff' },
+  { id: 'external',    name: { ko: '대외·환율', en: 'External & FX' },   color: '#4d73ff' },
 ];
 
 export const LAYERS = [

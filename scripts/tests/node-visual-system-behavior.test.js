@@ -572,7 +572,7 @@ test('delayed GLB install preserves material, selection, pressure, and pending m
 
   const policyAccent = scene.getObjectByName('policy_rate__accent');
   const fxAccent = scene.getObjectByName('fx__accent');
-  assert.equal(fxAccent.material.emissiveIntensity, 0.24, 'selected material emphasis must survive install');
+  assert.equal(fxAccent.material.emissiveIntensity, 0.9, 'selected material emphasis must survive install');
   const policyBaseScale = policyAccent.scale.x;
   const fxBaseX = fxAccent.position.x;
   visual.update(1.1);

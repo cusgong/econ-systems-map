@@ -41,6 +41,29 @@ const LABEL_SELECTED_ASSOCIATION_CAP = 160;
 const LABEL_SELECTED_LEADER_THRESHOLD = 0;
 const NODE_CENTER_CLEARANCE = 3;
 const MAX_MODEL_TRIANGLES = 3000;
+// Category halo: a camera-facing additive glow behind each instrument. Depth-tested,
+// so the opaque model occludes the core and the glow reads as a colored rim from
+// every angle — the viewpoint-invariant silhouette flat instruments lack side-on.
+const HALO_SCALE = 3.0;
+const HALO_OPACITY_BASE = 0.3;
+const HALO_OPACITY_SELECTED = 0.52;
+const HALO_OPACITY_DIMMED = 0.05;
+const HALO_BREATH_RATE = 1.4;
+const HALO_BREATH_AMOUNT = 0.08;
+// Idle presentation spin: flat dials are unidentifiable when their plane is
+// edge-on to the camera; a slow per-node yaw + slight nutation guarantees every
+// silhouette sweeps through legible orientations. Stopped under reduced motion.
+const IDLE_SPIN_BASE_RATE = 0.07; // rad/s
+const IDLE_SPIN_RATE_SPREAD = 0.06;
+const IDLE_NUTATION_X = 0.1; // rad
+const IDLE_NUTATION_Z = 0.07;
+const BODY_CATEGORY_TINT = 0.14;
+
+function hash01(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return (h % 1000) / 1000;
+}
 
 const MATERIAL_PARAMS = Object.freeze({
   darkTitanium: Object.freeze({
@@ -197,6 +220,9 @@ export function createNodeVisualSystem(options) {
 
   let lang = options.lang || 'ko';
   let reducedMotion = !!options.reducedMotion;
+  // Injected by the scene (shared canvas radial gradient). Optional: without it
+  // (e.g. DOM-less tests) nodes simply render without halos.
+  const glowTexture = options.glowTexture || null;
   let modelStatus = 'fallback';
   let modelIssues = [];
   let warned = false;
@@ -344,6 +370,23 @@ export function createNodeVisualSystem(options) {
       nodeRoot.add(leverRing);
     }
 
+    let halo = null;
+    let haloMaterial = null;
+    if (glowTexture) {
+      haloMaterial = own(new THREE.SpriteMaterial({
+        map: glowTexture,
+        color: categoryColor,
+        transparent: true,
+        opacity: HALO_OPACITY_BASE,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }));
+      halo = new THREE.Sprite(haloMaterial);
+      halo.name = `${node.id}__halo`;
+      halo.scale.setScalar(visualRadius * HALO_SCALE);
+      nodeRoot.add(halo);
+    }
+
     const hitMaterial = own(new THREE.MeshBasicMaterial({
       transparent: true,
       opacity: 0,
@@ -387,6 +430,9 @@ export function createNodeVisualSystem(options) {
       + (node.lever ? '<span class="lever-mark">LEVER</span>' : '')
       + '<span class="tint" aria-hidden="true"></span>';
     chip.querySelector('.dot').style.background = category.color;
+    // Custom property, not inline border-color: the base CSS rule reads --cat so
+    // the .hl/.selected/hover border states keep winning by specificity.
+    chip.style.setProperty?.('--cat', category.color);
     chip.querySelector('.nm').textContent = node.name[lang] || node.name.ko;
     const labelClick = (event) => {
       event.stopPropagation();
@@ -427,6 +473,11 @@ export function createNodeVisualSystem(options) {
       pressureRing,
       arrivalRing,
       leverRing,
+      halo,
+      haloMaterial,
+      haloBaseOpacity: HALO_OPACITY_BASE,
+      spinPhase: hash01(node.id),
+      spinRate: IDLE_SPIN_BASE_RATE + hash01(node.id + '::spin') * IDLE_SPIN_RATE_SPREAD,
       hitProxy,
       labelAnchor,
       chip,
@@ -450,6 +501,7 @@ export function createNodeVisualSystem(options) {
       pressure: 0,
     };
     updateLabelOffset(record);
+    applyMaterialState(record, false, false);
     scene.add(nodeRoot);
     records.set(node.id, record);
   }
@@ -682,18 +734,29 @@ export function createNodeVisualSystem(options) {
 
   function applyMaterialState(record, dimmed, selected) {
     const bodyBase = bodyTemplates[record.bodyPreset].color;
-    record.bodyMaterial.color.copy(bodyBase);
+    // The metal itself whispers the category; the accent inlay states it loudly.
+    record.bodyMaterial.color.copy(bodyBase).lerp(record.categoryColor, BODY_CATEGORY_TINT);
+    record.bodyMaterial.emissive.copy(record.categoryColor);
     record.accentMaterial.color.copy(record.categoryColor);
-    record.bodyMaterial.emissiveIntensity = 0.08;
     if (dimmed) {
       record.bodyMaterial.color.multiplyScalar(0.58);
       record.accentMaterial.color.multiplyScalar(0.52);
-      record.bodyMaterial.emissiveIntensity = 0.035;
-      record.accentMaterial.emissiveIntensity = 0.03;
+      record.bodyMaterial.emissiveIntensity = 0.03;
+      record.accentMaterial.emissiveIntensity = 0.08;
     } else {
       if (selected) record.bodyMaterial.color.lerp(COLOR_SELECTION, 0.12);
-      record.bodyMaterial.emissiveIntensity = selected ? 0.14 : 0.08;
-      record.accentMaterial.emissiveIntensity = selected ? 0.24 : 0.1;
+      record.bodyMaterial.emissiveIntensity = selected ? 0.16 : 0.1;
+      record.accentMaterial.emissiveIntensity = selected ? 0.9 : 0.55;
+    }
+    if (record.haloMaterial) {
+      record.haloBaseOpacity = dimmed
+        ? HALO_OPACITY_DIMMED
+        : selected
+          ? HALO_OPACITY_SELECTED
+          : HALO_OPACITY_BASE;
+      record.haloMaterial.opacity = record.haloBaseOpacity;
+      record.haloMaterial.color.copy(record.categoryColor);
+      if (dimmed) record.haloMaterial.color.multiplyScalar(0.6);
     }
   }
 
@@ -796,6 +859,7 @@ export function createNodeVisualSystem(options) {
     );
     record.arrivalRing.scale.setScalar(displayRadius);
     if (record.leverRing) record.leverRing.scale.setScalar(displayRadius);
+    if (record.halo) record.halo.scale.setScalar(displayRadius * HALO_SCALE);
     updateLabelOffset(record, record.normalizedTop);
   }
 
@@ -1038,6 +1102,26 @@ export function createNodeVisualSystem(options) {
       record.modelRoot.rotation.y += ((hover ? HOVER_TILT_Y : 0) - record.modelRoot.rotation.y) * smoothing;
       record.fallbackRoot.rotation.x += ((hover ? HOVER_TILT_X : 0) - record.fallbackRoot.rotation.x) * smoothing;
       record.fallbackRoot.rotation.y += ((hover ? HOVER_TILT_Y : 0) - record.fallbackRoot.rotation.y) * smoothing;
+      if (record.loadedRoot && !reducedMotion) {
+        const phase = record.spinPhase * Math.PI * 2;
+        record.loadedRoot.rotation.set(
+          Math.sin(lastElapsed * 0.31 + phase) * IDLE_NUTATION_X,
+          lastElapsed * record.spinRate + phase,
+          Math.cos(lastElapsed * 0.23 + phase) * IDLE_NUTATION_Z,
+        );
+      }
+      if (camera) {
+        // Overlay rings are flat tori; keep them camera-facing so they stay
+        // full circles (not edge-on slivers) from any orbit angle.
+        if (record.selectionRing.visible) record.selectionRing.quaternion.copy(camera.quaternion);
+        if (record.pressureRing.visible) record.pressureRing.quaternion.copy(camera.quaternion);
+        if (record.arrivalRing.visible) record.arrivalRing.quaternion.copy(camera.quaternion);
+        if (record.leverRing) record.leverRing.quaternion.copy(camera.quaternion);
+      }
+      if (record.haloMaterial && !reducedMotion) {
+        record.haloMaterial.opacity = record.haloBaseOpacity
+          * (1 + Math.sin(lastElapsed * HALO_BREATH_RATE + record.spinPhase * Math.PI * 2) * HALO_BREATH_AMOUNT);
+      }
       updateHitProxy(record);
       updateAccentMotion(record, lastElapsed);
     }
@@ -1054,6 +1138,8 @@ export function createNodeVisualSystem(options) {
     for (const record of records.values()) {
       record.modelRoot.rotation.set(0, 0, 0);
       record.fallbackRoot.rotation.set(0, 0, 0);
+      if (record.loadedRoot) record.loadedRoot.rotation.set(0, 0, 0);
+      if (record.haloMaterial) record.haloMaterial.opacity = record.haloBaseOpacity;
       record.motionState.selectedAt = null;
       record.motionState.arrivalAt = null;
       record.accentRoot.position.copy(record.motionState.accentBasePosition);

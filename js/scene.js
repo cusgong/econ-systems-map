@@ -213,6 +213,7 @@ export function createScene(opts) {
     lang,
     onSelect,
     onModelStatusChange: opts.onModelStatusChange,
+    glowTexture: glowTex, // category halos share the soft radial sprite
   });
   const nodeRuntime = new Map(visualSystem.pickTargets.map((target) => {
     const id = target.userData.nodeId;

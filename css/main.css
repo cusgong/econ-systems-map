@@ -122,7 +122,12 @@ button { font-family: inherit; }
   gap: 5px;
   padding: 3px 9px;
   border-radius: 999px;
+  /* --cat is set per chip by node-visual-system; category-tinted rim for grouping.
+     State selectors (.hl/.selected/:hover) still win on specificity.
+     Plain border first: color-mix+var() is invalid-at-computed-value-time in
+     old browsers, and a failed sole declaration would drop the border entirely. */
   border: 1px solid var(--line);
+  border-color: color-mix(in srgb, var(--cat, var(--line)) 42%, var(--line));
   background: rgba(6, 12, 26, 0.72);
   color: var(--ink);
   font-size: 12.5px;
@@ -275,6 +280,17 @@ button { font-family: inherit; }
   display: flex;
   align-items: center;
   gap: 8px;
+}
+/* i18n-kit active-state override: bring the toggle into the service cyan family
+   (kit default #2563eb is off-palette). Same pairing as .mode-tab active. */
+.lang-toggle {
+  --lt-active-bg: rgba(84, 224, 255, 0.16);
+  --lt-active-fg: #bdf0ff;
+  --lt-focus: var(--cy);
+}
+.lang-btn.is-active,
+.lang-btn[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px rgba(84, 224, 255, 0.35);
 }
 .icon-btn {
   appearance: none;
@@ -826,9 +842,9 @@ details.acc .acc-body ul { margin: 4px 0; padding-left: 18px; }
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 3px 10px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
+  /* sits under its own .lg-h heading now; no divider needed */
+  margin-top: 2px;
+  padding-bottom: 2px;
 }
 #legend .lg-cats .lg-row { margin: 2px 0; font-size: 11.5px; }
 

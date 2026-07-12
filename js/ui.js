@@ -805,6 +805,13 @@ export function createUI(deps) {
     const lb = els.legendBody;
     lb.replaceChildren();
     const row = (el, txt) => h('div', { class: 'lg-row' }, el, h('span', {}, txt));
+    // Category colors lead: node color is the first thing the map now says.
+    lb.append(h('div', { class: 'lg-h' }, t('변수 분류')));
+    const cats = h('div', { class: 'lg-cats' });
+    for (const c of categories) {
+      cats.append(h('div', { class: 'lg-row' }, h('span', { class: 'lg-dot', style: 'background:' + c.color }), h('span', {}, L(c.name))));
+    }
+    lb.append(cats);
     lb.append(h('div', { class: 'lg-h' }, t('선과 연결')));
     lb.append(row(h('span', { class: 'lg-line' }), t('같은 방향으로 민다 (+)')));
     lb.append(row(h('span', { class: 'lg-line neg' }), t('반대 방향으로 민다 (−)')));
@@ -835,11 +842,6 @@ export function createUI(deps) {
     lb.append(row(h('span', {}, '⇅'), t('레버 노드 위아래 드래그 = 즉석 충격')));
     lb.append(row(h('span', {}, '↕'), t('높이 = 심리·기대(위) ↔ 실물·원자재(아래)')));
     lb.append(row(h('span', {}, '⊙'), t('중심에서 멀수록 해외·글로벌 변수')));
-    const cats = h('div', { class: 'lg-cats' });
-    for (const c of categories) {
-      cats.append(h('div', { class: 'lg-row' }, h('span', { class: 'lg-dot', style: 'background:' + c.color }), h('span', {}, L(c.name))));
-    }
-    lb.append(cats);
   }
 
   // ---------- onboarding ----------
@@ -847,12 +849,12 @@ export function createUI(deps) {
     {
       title: t('연결로 경제 읽기'),
       body: t('점 하나가 변수(금리, 물가, 환율…)이고, 선은 인과관계입니다. 청록 선은 같은 방향, 주황 선은 반대 방향으로 밉니다. 위치에도 의미가 있습니다. 위층일수록 사람들의 마음(심리·기대)과 정책, 아래층일수록 실물과 원자재이고, 중심에서 멀수록 해외 변수입니다.'),
-      svg: '<svg width="220" height="90" viewBox="0 0 220 90"><circle cx="30" cy="45" r="9" fill="#4fd8ff"/><circle cx="110" cy="25" r="9" fill="#ff7666"/><circle cx="190" cy="55" r="9" fill="#6fe38a"/><path d="M39 42 Q75 20 101 25" stroke="#3bd6f0" stroke-width="2" fill="none"/><path d="M119 28 Q155 45 181 52" stroke="#ff9257" stroke-width="2" fill="none" stroke-dasharray="5 4"/></svg>',
+      svg: '<svg width="220" height="90" viewBox="0 0 220 90"><circle cx="30" cy="45" r="9" fill="#4fd8ff"/><circle cx="110" cy="25" r="9" fill="#ff7666"/><circle cx="190" cy="55" r="9" fill="#62d97e"/><path d="M39 42 Q75 20 101 25" stroke="#3bd6f0" stroke-width="2" fill="none"/><path d="M119 28 Q155 45 181 52" stroke="#ff9257" stroke-width="2" fill="none" stroke-dasharray="5 4"/></svg>',
     },
     {
       title: t('2차·3차 파급을 따라가기'),
       body: t('변수를 클릭하면 직접 효과(1차)만이 아니라 한 다리, 두 다리 건너의 파급(2차·3차)까지 경로가 차례로 켜집니다. 화살표 방향과 시차, 확실성을 함께 확인하세요.'),
-      svg: `<svg width="220" height="90" viewBox="0 0 220 90"><circle cx="25" cy="45" r="10" fill="#4fd8ff"/><circle cx="95" cy="30" r="8" fill="#9d8cff" opacity=".9"/><circle cx="165" cy="55" r="7" fill="#6fe38a" opacity=".8"/><path d="M35 42 L85 32" stroke="#7deeff" stroke-width="2.5"/><path d="M103 33 L156 52" stroke="#7deeff" stroke-width="1.8" opacity=".7"/><text x="52" y="22" fill="#aabfdd" font-size="10">${t('1차')}</text><text x="125" y="60" fill="#aabfdd" font-size="10">${t('2차')}</text></svg>`,
+      svg: `<svg width="220" height="90" viewBox="0 0 220 90"><circle cx="25" cy="45" r="10" fill="#4fd8ff"/><circle cx="95" cy="30" r="8" fill="#9d8cff" opacity=".9"/><circle cx="165" cy="55" r="7" fill="#62d97e" opacity=".8"/><path d="M35 42 L85 32" stroke="#7deeff" stroke-width="2.5"/><path d="M103 33 L156 52" stroke="#7deeff" stroke-width="1.8" opacity=".7"/><text x="52" y="22" fill="#aabfdd" font-size="10">${t('1차')}</text><text x="125" y="60" fill="#aabfdd" font-size="10">${t('2차')}</text></svg>`,
     },
     {
       title: t('한 곳에서: 탐색 · 지금 · AI'),
