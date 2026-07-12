@@ -6,6 +6,13 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { edgeKey } from './graph.js';
+import {
+  PASSIVE_EDGE_BASE_OPACITY,
+  PASSIVE_EDGE_GROUP_KEYS,
+  PASSIVE_EDGE_HIGHLIGHT_OPACITY,
+  buildPassiveEdgeBatches,
+  setPassiveEdgeBatchOpacity,
+} from './edge-batching.js';
 import { createNodeVisualSystem } from './node-visual-system.js';
 import { minimumFocusDistance } from './viewport-policy.js';
 
@@ -211,6 +218,7 @@ export function createScene(opts) {
 
   // --- edges ---
   const edgeVis = new Map(); // key -> vis
+  const passiveEdgeRecords = [];
   const up = new THREE.Vector3(0, 1, 0);
   for (const e of graph.edges) {
     const a = graph.nodeById.get(e.from).pos;
@@ -224,24 +232,15 @@ export function createScene(opts) {
       .addScaledVector(side, dist * 0.16 * f)
       .addScaledVector(up, dist * 0.1 + 2.5);
     const curve = new THREE.QuadraticBezierCurve3(a.clone(), mid, b.clone());
-
-    const pts = curve.getPoints(40);
-    const geo = new THREE.BufferGeometry().setFromPoints(pts);
-    const color = e.sign > 0 ? COLOR_POS : COLOR_NEG;
-    const baseOpacity = 0.1 + 0.07 * e.strength;
-    const mat = e.confidence === 1
-      ? new THREE.LineDashedMaterial({
-          color, transparent: true, opacity: baseOpacity, dashSize: 1.7, gapSize: 1.2,
-          blending: THREE.AdditiveBlending, depthWrite: false,
-        })
-      : new THREE.LineBasicMaterial({
-          color, transparent: true, opacity: baseOpacity,
-          blending: THREE.AdditiveBlending, depthWrite: false,
-        });
-    const line = new THREE.Line(geo, mat);
-    if (e.confidence === 1) line.computeLineDistances();
+    edgeVis.set(edgeKey(e), { e, curve, dimmed: false, highlighted: false });
+    passiveEdgeRecords.push({ edge: e, curve });
+  }
+  const { batches: passiveEdgeBatches } = buildPassiveEdgeBatches(
+    THREE,
+    passiveEdgeRecords,
+  );
+  for (const line of passiveEdgeBatches.values()) {
     scene.add(line);
-    edgeVis.set(edgeKey(e), { e, curve, line, baseOpacity, dimmed: false });
   }
 
   // --- flow particles (direction + strength made visible) ---
@@ -339,8 +338,8 @@ export function createScene(opts) {
       c.material?.dispose();
       hlGroup.remove(c);
     }
+    setPassiveEdgeBatchOpacity(passiveEdgeBatches, PASSIVE_EDGE_BASE_OPACITY);
     for (const ev of edgeVis.values()) {
-      ev.line.material.opacity = ev.baseOpacity;
       ev.dimmed = false;
       ev.highlighted = false;
     }
@@ -357,13 +356,12 @@ export function createScene(opts) {
     visualSystem.setHighlight(spec);
     const { edgeOrders } = spec;
     const now = clock.getElapsedTime();
+    setPassiveEdgeBatchOpacity(passiveEdgeBatches, PASSIVE_EDGE_HIGHLIGHT_OPACITY);
     for (const [key, ev] of edgeVis) {
       if (edgeOrders.has(key)) {
         ev.highlighted = true;
-        ev.line.material.opacity = 0.05; // replaced visually by tube
       } else {
         ev.dimmed = true;
-        ev.line.material.opacity = 0.018;
       }
     }
     particleColors();
@@ -652,9 +650,18 @@ export function createScene(opts) {
   }
   document.addEventListener('visibilitychange', onVisibilityChange);
 
+  function getDiagnostics() {
+    return {
+      ...visualSystem.getDiagnostics(),
+      passiveEdgeBatchCapacity: PASSIVE_EDGE_GROUP_KEYS.length,
+      passiveEdgeBatchCount: passiveEdgeBatches.size,
+      passiveEdgeCount: edgeVis.size,
+    };
+  }
+
   return {
     setHighlight, clearHighlight, setPressures, setNodeTints, focusNodes, resetView,
-    getDiagnostics: visualSystem.getDiagnostics,
+    getDiagnostics,
     getNodeModelStatus: visualSystem.getNodeModelStatus,
     setLang(l) {
       lang = l;

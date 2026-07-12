@@ -12,7 +12,7 @@ import { computeHubMetrics } from './hub-metrics.js';
 import { createScene } from './scene.js';
 import { createUI } from './ui.js';
 
-const APP_VERSION = 'v2.4.0';
+const APP_VERSION = 'v2.5.0';
 
 let fatalShown = false;
 function showFatal() {

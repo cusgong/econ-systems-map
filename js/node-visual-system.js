@@ -17,15 +17,7 @@ const COLOR_UP = new THREE.Color('#ffb36b');
 const COLOR_DOWN = new THREE.Color('#6fb5ff');
 const COLOR_SELECTION = new THREE.Color('#dbe5ef');
 const NEUTRAL_HUB_METRIC = Object.freeze({ hubScore: 0.5, score100: 50, radiusScale: 1 });
-const VERTICAL_SLICE_ANCHOR_ID = 'policy_rate';
-const VERTICAL_SLICE_MODEL_IDS = new Set([
-  'policy_rate',
-  'fx',
-  'oil',
-  'housing',
-  'gdp',
-  'risk_sentiment',
-]);
+const MODEL_LOAD_ANCHOR_ID = 'policy_rate';
 const BASE_VISUAL_RADIUS = 1.82;
 const MIN_HUB_RADIUS_SCALE = 0.82;
 const MAX_HUB_RADIUS_SCALE = 1.28;
@@ -145,7 +137,7 @@ function findModelRoots(libraryScene, expectedIds) {
 
 function issueSummary(contract) {
   const issues = [];
-  const missing = contract.missing.filter((id) => VERTICAL_SLICE_MODEL_IDS.has(id));
+  const missing = contract.missing;
   if (missing.length) issues.push(`missing:${missing.join(',')}`);
   if (contract.extra.length) issues.push(`extra:${contract.extra.join(',')}`);
   if (contract.duplicates.length) issues.push(`duplicates:${contract.duplicates.join(',')}`);
@@ -630,8 +622,8 @@ export function createNodeVisualSystem(options) {
         }
       }
 
-      // Deliberately absent non-proof IDs remain quiet sphere fallbacks. Contract
-      // issues for the six proof instruments still surface as one aggregate warning.
+      // Every canonical ID is expected in the production library. Invalid or absent
+      // instruments still fail soft to their individual sphere fallback.
       disposeTree(gltf.scene, ownedMaterials);
       const fallbackIds = expectedIds.filter((id) => !loadedIds.includes(id));
       modelIssues = [...issueSummary(contract), ...modelIssues];
@@ -1047,7 +1039,7 @@ export function createNodeVisualSystem(options) {
       calls: renderer?.info?.render?.calls ?? 0,
       triangles: renderer?.info?.render?.triangles ?? 0,
       issues: [...modelIssues],
-      anchorReady: records.get(VERTICAL_SLICE_ANCHOR_ID)?.modelStatus === 'ready',
+      anchorReady: records.get(MODEL_LOAD_ANCHOR_ID)?.modelStatus === 'ready',
     };
   }
 

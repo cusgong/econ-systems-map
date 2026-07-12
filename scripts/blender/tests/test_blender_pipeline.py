@@ -43,8 +43,34 @@ def summary_from(output: str) -> dict:
     for line in reversed(output.splitlines()):
         line = line.strip()
         if line.startswith("{") and '"errors"' in line:
-            return json.loads(line)
+            return json.JSONDecoder().raw_decode(line)[0]
     raise AssertionError(f"No JSON validation summary in Blender output:\n{output}")
+
+
+def author_proof_library(output: Path) -> None:
+    scaffold = run_blender(
+        "--python-exit-code",
+        "1",
+        "--python",
+        str(BLENDER_DIR / "scaffold-econ-node-library.py"),
+        "--",
+        "--output",
+        str(output),
+    )
+    if scaffold.returncode != 0:
+        raise AssertionError(scaffold.stdout)
+    proof = run_blender(
+        str(output),
+        "--python-exit-code",
+        "1",
+        "--python",
+        str(BLENDER_DIR / "author-proof-models.py"),
+        "--",
+        "--output",
+        str(output),
+    )
+    if proof.returncode != 0:
+        raise AssertionError(proof.stdout)
 
 
 def glb_json(path: Path) -> dict:
@@ -533,7 +559,7 @@ class BlenderPipelineContractTests(unittest.TestCase):
         summary = summary_from(validation.stdout)
         self.assertEqual([], summary["errors"])
         self.assertEqual(6, summary["readyCount"])
-        self.assertEqual(24, summary["fallbackCount"])
+        self.assertEqual(0, summary["fallbackCount"])
         self.assertEqual(12, summary["primitives"])
         self.assertEqual(proof_ids, set(summary["models"]))
         self.assertGreaterEqual(summary["triangles"], 10_600)
@@ -634,12 +660,10 @@ class BlenderPipelineContractTests(unittest.TestCase):
                 }
                 self.assertEqual(proof_ids, root_names)
             self.assertEqual(exports[0], exports[1], "proof GLB export must be byte-deterministic")
-            committed_glb = PROJECT_ROOT / "data" / "models" / "econ-node-library.glb"
-            self.assertTrue(committed_glb.is_file(), "committed proof GLB is missing")
             self.assertEqual(
+                "169345374e5b19bcf83c3c74ed4e8a34908a64d05135a2a871739891abb57d82",
                 exports[0],
-                hashlib.sha256(committed_glb.read_bytes()).hexdigest(),
-                "committed proof GLB must be byte-identical to a fresh canonical export",
+                "proof geometry/export hash changed while expanding the ready library",
             )
 
     def test_proof_authoring_is_idempotent_at_the_export_boundary(self):
@@ -662,7 +686,7 @@ class BlenderPipelineContractTests(unittest.TestCase):
                     str(authored_blend),
                 )
                 self.assertEqual(0, author.returncode, author.stdout)
-                self.assertIn('"readyCount":6', author.stdout)
+                self.assertIn('"readyCount":30', author.stdout)
 
                 output_glb = temp / f"proof-{iteration}.glb"
                 export = run_blender(
@@ -681,6 +705,611 @@ class BlenderPipelineContractTests(unittest.TestCase):
                 self.assertEqual([], summary_from(export.stdout)["errors"])
                 hashes.append(hashlib.sha256(output_glb.read_bytes()).hexdigest())
             self.assertEqual(hashes[0], hashes[1], "reauthoring changed proof GLB bytes")
+
+    def test_money_price_authoring_produces_exact_twelve_ready_models(self):
+        money_price_ids = {
+            "market_rate",
+            "liquidity",
+            "credit_spread",
+            "bank_lending",
+            "cpi",
+            "inflation_exp",
+        }
+        expected_ready_ids = {
+            "policy_rate",
+            "fx",
+            "oil",
+            "housing",
+            "gdp",
+            "risk_sentiment",
+            *money_price_ids,
+        }
+        triangle_bands = {
+            "market_rate": (1_500, 1_900),
+            "liquidity": (1_900, 2_300),
+            "credit_spread": (1_400, 1_800),
+            "bank_lending": (1_700, 2_100),
+            "cpi": (1_800, 2_200),
+            "inflation_exp": (1_600, 2_000),
+        }
+        author_script = BLENDER_DIR / "author-money-price-models.py"
+        geometry_source = BLENDER_DIR / "money_price_models.py"
+        batch_source = BLENDER_DIR / "model_authoring.py"
+        self.assertTrue(author_script.is_file(), f"missing Task 7 author source: {author_script}")
+        self.assertTrue(geometry_source.is_file(), f"missing Task 7 geometry source: {geometry_source}")
+        self.assertTrue(batch_source.is_file(), f"missing reusable batch author source: {batch_source}")
+
+        with tempfile.TemporaryDirectory(prefix="econ-money-price-author-") as temp_dir:
+            authored_blend = Path(temp_dir) / "money-price.blend"
+            author_proof_library(authored_blend)
+            author = run_blender(
+                str(authored_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(author_script),
+                "--",
+                "--output",
+                str(authored_blend),
+            )
+            self.assertEqual(0, author.returncode, author.stdout)
+            self.assertIn('"readyCount":12', author.stdout)
+
+            validation = run_blender(
+                str(authored_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "validate-econ-node-library.py"),
+                "--",
+                "--scope",
+                "ready",
+            )
+            self.assertEqual(0, validation.returncode, validation.stdout)
+            summary = summary_from(validation.stdout)
+            self.assertEqual([], summary["errors"])
+            self.assertEqual(12, summary["readyCount"])
+            self.assertEqual(18, summary["fallbackCount"])
+            self.assertEqual(24, summary["primitives"])
+            self.assertEqual(expected_ready_ids, set(summary["models"]))
+            self.assertGreaterEqual(summary["triangles"], 22_572)
+            self.assertLessEqual(summary["triangles"], 24_972)
+            for node_id, (minimum, maximum) in triangle_bands.items():
+                model = summary["models"][node_id]
+                self.assertGreaterEqual(model["triangles"], minimum, node_id)
+                self.assertLessEqual(model["triangles"], maximum, node_id)
+                self.assertGreaterEqual(model["accentAreaRatio"], 0.10, node_id)
+                self.assertLessEqual(model["accentAreaRatio"], 0.20, node_id)
+                self.assertGreaterEqual(model["radius"], 0.98, node_id)
+                self.assertLessEqual(model["radius"], 1.02, node_id)
+                self.assertLessEqual(model["centerError"], 0.05, node_id)
+                for role in ("body", "accent"):
+                    bevel = model["bevels"][role]
+                    self.assertGreaterEqual(
+                        bevel["taggedEdges"],
+                        bevel["minimumTaggedEdges"],
+                        f"{node_id}/{role}",
+                    )
+
+    def test_money_price_authoring_is_idempotent_and_preserves_proof_export(self):
+        author_script = BLENDER_DIR / "author-money-price-models.py"
+        self.assertTrue(author_script.is_file(), f"missing Task 7 author source: {author_script}")
+        with tempfile.TemporaryDirectory(prefix="econ-money-price-idempotent-") as temp_dir:
+            temp = Path(temp_dir)
+            authored_blend = temp / "money-price.blend"
+            author_proof_library(authored_blend)
+
+            proof_before = temp / "proof-before.glb"
+            before_export = run_blender(
+                str(authored_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "export-econ-node-library.py"),
+                "--",
+                "--scope",
+                "proof",
+                "--output",
+                str(proof_before),
+            )
+            self.assertEqual(0, before_export.returncode, before_export.stdout)
+            proof_hash = hashlib.sha256(proof_before.read_bytes()).hexdigest()
+
+            ready_hashes = []
+            for iteration in range(2):
+                author = run_blender(
+                    str(authored_blend),
+                    "--python-exit-code",
+                    "1",
+                    "--python",
+                    str(author_script),
+                    "--",
+                    "--output",
+                    str(authored_blend),
+                )
+                self.assertEqual(0, author.returncode, author.stdout)
+                self.assertIn('"readyCount":12', author.stdout)
+                ready_glb = temp / f"ready-{iteration}.glb"
+                ready_export = run_blender(
+                    str(authored_blend),
+                    "--python-exit-code",
+                    "1",
+                    "--python",
+                    str(BLENDER_DIR / "export-econ-node-library.py"),
+                    "--",
+                    "--scope",
+                    "ready",
+                    "--output",
+                    str(ready_glb),
+                )
+                self.assertEqual(0, ready_export.returncode, ready_export.stdout)
+                ready_hashes.append(hashlib.sha256(ready_glb.read_bytes()).hexdigest())
+
+            proof_after = temp / "proof-after.glb"
+            after_export = run_blender(
+                str(authored_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "export-econ-node-library.py"),
+                "--",
+                "--scope",
+                "proof",
+                "--output",
+                str(proof_after),
+            )
+            self.assertEqual(0, after_export.returncode, after_export.stdout)
+            self.assertEqual(proof_hash, hashlib.sha256(proof_after.read_bytes()).hexdigest())
+            self.assertEqual(ready_hashes[0], ready_hashes[1])
+
+    def test_all_authoring_batches_produce_exact_thirty_ready_models(self):
+        batch_scripts = (
+            ("author-money-price-models.py", 12),
+            ("author-wage-external-models.py", 18),
+            ("author-real-equity-models.py", 24),
+            ("author-asset-policy-models.py", 30),
+        )
+        for filename, _ready_count in batch_scripts:
+            self.assertTrue((BLENDER_DIR / filename).is_file(), filename)
+
+        with tempfile.TemporaryDirectory(prefix="econ-full-author-") as temp_dir:
+            temp = Path(temp_dir)
+            authored_blend = temp / "full-library.blend"
+            author_proof_library(authored_blend)
+            for filename, ready_count in batch_scripts:
+                author = run_blender(
+                    str(authored_blend),
+                    "--python-exit-code",
+                    "1",
+                    "--python",
+                    str(BLENDER_DIR / filename),
+                    "--",
+                    "--output",
+                    str(authored_blend),
+                )
+                self.assertEqual(0, author.returncode, author.stdout)
+                self.assertIn(f'"readyCount":{ready_count}', author.stdout)
+
+            validation = run_blender(
+                str(authored_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "validate-econ-node-library.py"),
+                "--",
+                "--scope",
+                "ready",
+            )
+            self.assertEqual(0, validation.returncode, validation.stdout)
+            summary = summary_from(validation.stdout)
+            self.assertEqual([], summary["errors"])
+            self.assertEqual(30, summary["readyCount"])
+            self.assertEqual(0, summary["fallbackCount"])
+            self.assertEqual(60, summary["primitives"])
+            self.assertEqual(30, len(summary["models"]))
+            self.assertGreaterEqual(summary["triangles"], 50_000)
+            self.assertLessEqual(summary["triangles"], 70_000)
+            for node_id, model in summary["models"].items():
+                self.assertGreaterEqual(model["accentAreaRatio"], 0.10, node_id)
+                self.assertLessEqual(model["accentAreaRatio"], 0.20, node_id)
+                self.assertGreaterEqual(model["radius"], 0.98, node_id)
+                self.assertLessEqual(model["radius"], 1.02, node_id)
+                self.assertLessEqual(model["centerError"], 0.05, node_id)
+
+    def test_ready_scope_exports_committed_thirty_models_deterministically(self):
+        expected_ids = {
+            "policy_rate",
+            "market_rate",
+            "liquidity",
+            "credit_spread",
+            "bank_lending",
+            "cpi",
+            "inflation_exp",
+            "fx",
+            "oil",
+            "housing",
+            "gdp",
+            "risk_sentiment",
+            "wages",
+            "exports",
+            "current_account",
+            "capital_flows",
+            "fed_rate",
+            "global_growth",
+            "consumption",
+            "investment",
+            "employment",
+            "earnings",
+            "defaults",
+            "stocks",
+            "household_debt",
+            "commodity",
+            "fiscal",
+            "geopolitics",
+            "tech",
+            "consumer_conf",
+        }
+        library_blend = BLENDER_DIR / "econ-node-library.blend"
+        validation = run_blender(
+            str(library_blend),
+            "--python-exit-code",
+            "1",
+            "--python",
+            str(BLENDER_DIR / "validate-econ-node-library.py"),
+            "--",
+            "--scope",
+            "ready",
+        )
+        self.assertEqual(0, validation.returncode, validation.stdout)
+        summary = summary_from(validation.stdout)
+        self.assertEqual(30, summary["readyCount"])
+        self.assertEqual(0, summary["fallbackCount"])
+        self.assertEqual(expected_ids, set(summary["models"]))
+
+        with tempfile.TemporaryDirectory(prefix="econ-ready-thirty-export-") as temp_dir:
+            exports = []
+            for filename in ("ready-a.glb", "ready-b.glb"):
+                output = Path(temp_dir) / filename
+                result = run_blender(
+                    str(library_blend),
+                    "--python-exit-code",
+                    "1",
+                    "--python",
+                    str(BLENDER_DIR / "export-econ-node-library.py"),
+                    "--",
+                    "--scope",
+                    "ready",
+                    "--output",
+                    str(output),
+                )
+                self.assertEqual(0, result.returncode, result.stdout)
+                exported = summary_from(result.stdout)
+                self.assertEqual(60, exported["primitives"])
+                self.assertLessEqual(exported["bytes"], 2_000_000)
+                document = glb_json(output)
+                active_scene = document.get("scene", 0)
+                root_names = {
+                    document["nodes"][index].get("name")
+                    for index in document["scenes"][active_scene].get("nodes", [])
+                }
+                self.assertEqual(expected_ids, root_names)
+                exports.append(output.read_bytes())
+            self.assertEqual(exports[0], exports[1])
+            committed_glb = PROJECT_ROOT / "data" / "models" / "econ-node-library.glb"
+            self.assertTrue(committed_glb.is_file(), "committed ready GLB is missing")
+            self.assertEqual(exports[0], committed_glb.read_bytes())
+
+    def test_batch_authoring_material_snapshot_detects_pbr_property_drift(self):
+        library_blend = BLENDER_DIR / "econ-node-library.blend"
+        script = "\n".join(
+            (
+                "import sys",
+                f"sys.path.insert(0,{str(BLENDER_DIR)!r})",
+                "import bpy",
+                "from model_authoring import snapshot_material_contract",
+                "material=bpy.data.materials['MAT__DARK_TITANIUM']",
+                "before=snapshot_material_contract(material)",
+                "principled=material.node_tree.nodes['Principled BSDF']",
+                "principled.inputs['IOR'].default_value+=0.125",
+                "after_ior=snapshot_material_contract(material)",
+                "assert before != after_ior, 'material snapshot ignored IOR drift'",
+                "value=material.node_tree.nodes.new('ShaderNodeValue')",
+                "after_node=snapshot_material_contract(material)",
+                "value.outputs[0].default_value=0.371",
+                "after_output=snapshot_material_contract(material)",
+                "assert after_node != after_output, 'material snapshot ignored output default drift'",
+                "material.node_tree.links.new(value.outputs[0],principled.inputs['Roughness'])",
+                "after_link=snapshot_material_contract(material)",
+                "assert after_output != after_link, 'material snapshot ignored node/link drift'",
+            )
+        )
+        result = run_blender(
+            str(library_blend),
+            "--python-exit-code",
+            "1",
+            "--python-expr",
+            f"exec({script!r})",
+        )
+        self.assertEqual(0, result.returncode, result.stdout)
+
+    def test_batch_authoring_root_snapshot_detects_bevel_and_smoothing_drift(self):
+        library_blend = BLENDER_DIR / "econ-node-library.blend"
+        script = "\n".join(
+            (
+                "import sys",
+                f"sys.path.insert(0,{str(BLENDER_DIR)!r})",
+                "import bpy",
+                "from model_authoring import snapshot_root_contract",
+                "root=bpy.data.objects['policy_rate']",
+                "body=bpy.data.objects['policy_rate__body']",
+                "before=snapshot_root_contract(root)",
+                "bevel=next(modifier for modifier in body.modifiers if modifier.type=='BEVEL')",
+                "bevel.profile=0.31",
+                "after_profile=snapshot_root_contract(root)",
+                "assert before != after_profile, 'root snapshot ignored bevel profile drift'",
+                "body.data.polygons[0].use_smooth=not body.data.polygons[0].use_smooth",
+                "after_smooth=snapshot_root_contract(root)",
+                "assert after_profile != after_smooth, 'root snapshot ignored polygon smoothing drift'",
+                "normals=[normal.vector.copy() for normal in body.data.corner_normals]",
+                "normals[0]=(1.0,0.0,0.0) if abs(normals[0].x)<0.9 else (0.0,1.0,0.0)",
+                "body.data.normals_split_custom_set(normals)",
+                "body.data.update()",
+                "after_custom=snapshot_root_contract(root)",
+                "assert after_smooth != after_custom, 'root snapshot ignored custom corner-normal drift'",
+            )
+        )
+        result = run_blender(
+            str(library_blend),
+            "--python-exit-code",
+            "1",
+            "--python-expr",
+            f"exec({script!r})",
+        )
+        self.assertEqual(0, result.returncode, result.stdout)
+
+    def test_validator_rejects_frozen_pbr_and_custom_normal_drift(self):
+        with tempfile.TemporaryDirectory(prefix="econ-frozen-render-drift-") as temp_dir:
+            mutant_blend = Path(temp_dir) / "render-drift.blend"
+            author_proof_library(mutant_blend)
+            script = "\n".join(
+                (
+                    "import bpy",
+                    "material=bpy.data.materials['MAT__DARK_TITANIUM']",
+                    "material.node_tree.nodes['Principled BSDF'].inputs['IOR'].default_value=1.731",
+                    "body=bpy.data.objects['fx__body']",
+                    "normals=[normal.vector.copy() for normal in body.data.corner_normals]",
+                    "normals[0]=(1.0,0.0,0.0) if abs(normals[0].x)<0.9 else (0.0,1.0,0.0)",
+                    "body.data.normals_split_custom_set(normals)",
+                    "body.data.update()",
+                    f"bpy.ops.wm.save_as_mainfile(filepath={str(mutant_blend)!r},check_existing=False)",
+                )
+            )
+            mutation = run_blender(
+                str(mutant_blend),
+                "--python-exit-code",
+                "1",
+                "--python-expr",
+                f"exec({script!r})",
+            )
+            self.assertEqual(0, mutation.returncode, mutation.stdout)
+            validation = run_blender(
+                str(mutant_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "validate-econ-node-library.py"),
+                "--",
+                "--scope",
+                "ready",
+            )
+            self.assertNotEqual(0, validation.returncode, validation.stdout)
+            errors = "\n".join(summary_from(validation.stdout)["errors"])
+            self.assertIn("frozen PBR/node contract drift", errors)
+            self.assertIn("custom split normals are forbidden", errors)
+            self.assertIn("frozen root contract drift", errors)
+
+    def test_batch_authoring_rejects_corrupt_ready_predecessor_without_resaving(self):
+        with tempfile.TemporaryDirectory(prefix="econ-corrupt-ready-gate-") as temp_dir:
+            authored_blend = Path(temp_dir) / "corrupt-ready.blend"
+            author_proof_library(authored_blend)
+            expression = (
+                "import bpy;"
+                "root=bpy.data.objects['fx'];"
+                "accent=bpy.data.objects['fx__accent'];"
+                "accent['econ_pivot']='wrong-but-nonempty';"
+                f"bpy.ops.wm.save_as_mainfile(filepath={str(authored_blend)!r},check_existing=False)"
+            )
+            mutation = run_blender(
+                str(authored_blend),
+                "--python-exit-code",
+                "1",
+                "--python-expr",
+                expression,
+            )
+            self.assertEqual(0, mutation.returncode, mutation.stdout)
+            corrupted_hash = hashlib.sha256(authored_blend.read_bytes()).hexdigest()
+
+            author = run_blender(
+                str(authored_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "author-money-price-models.py"),
+                "--",
+                "--output",
+                str(authored_blend),
+            )
+            self.assertNotEqual(0, author.returncode, author.stdout)
+            self.assertIn("Existing ready library failed frozen contract", author.stdout)
+            self.assertEqual(corrupted_hash, hashlib.sha256(authored_blend.read_bytes()).hexdigest())
+
+    def test_batch_authoring_rejects_preexisting_pbr_drift_without_resaving(self):
+        with tempfile.TemporaryDirectory(prefix="econ-corrupt-pbr-gate-") as temp_dir:
+            authored_blend = Path(temp_dir) / "corrupt-pbr.blend"
+            author_proof_library(authored_blend)
+            expression = (
+                "import bpy;"
+                "material=bpy.data.materials['MAT__DARK_TITANIUM'];"
+                "material.node_tree.nodes['Principled BSDF'].inputs['IOR'].default_value=1.731;"
+                f"bpy.ops.wm.save_as_mainfile(filepath={str(authored_blend)!r},check_existing=False)"
+            )
+            mutation = run_blender(
+                str(authored_blend),
+                "--python-exit-code",
+                "1",
+                "--python-expr",
+                expression,
+            )
+            self.assertEqual(0, mutation.returncode, mutation.stdout)
+            corrupted_hash = hashlib.sha256(authored_blend.read_bytes()).hexdigest()
+            author = run_blender(
+                str(authored_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "author-money-price-models.py"),
+                "--",
+                "--output",
+                str(authored_blend),
+            )
+            self.assertNotEqual(0, author.returncode, author.stdout)
+            self.assertIn("Existing ready library failed frozen contract", author.stdout)
+            self.assertEqual(corrupted_hash, hashlib.sha256(authored_blend.read_bytes()).hexdigest())
+
+    def test_batch_authoring_rejects_invalid_new_geometry_without_resaving(self):
+        with tempfile.TemporaryDirectory(prefix="econ-invalid-post-gate-") as temp_dir:
+            authored_blend = Path(temp_dir) / "invalid-post.blend"
+            author_proof_library(authored_blend)
+            before_hash = hashlib.sha256(authored_blend.read_bytes()).hexdigest()
+            script = "\n".join(
+                (
+                    "import dataclasses, importlib.util, pathlib, sys",
+                    f"sys.path.insert(0,{str(BLENDER_DIR)!r})",
+                    "from model_authoring import author_models",
+                    "from money_price_models import build_market_rate",
+                    f"spec_path=pathlib.Path({str(BLENDER_DIR / 'node-specs.py')!r})",
+                    "module_spec=importlib.util.spec_from_file_location('post_gate_specs',spec_path)",
+                    "specs=importlib.util.module_from_spec(module_spec)",
+                    "module_spec.loader.exec_module(specs)",
+                    "def invalid_builder():",
+                    "    return dataclasses.replace(build_market_rate(),accent_pivot='wrong-but-nonempty')",
+                    f"author_models(output=pathlib.Path({str(authored_blend)!r}),specs=specs,builders={{'market_rate':invalid_builder}},requested=('market_rate',),required_ready=specs.PROOF_IDS)",
+                )
+            )
+            author = run_blender(
+                str(authored_blend),
+                "--python-exit-code",
+                "1",
+                "--python-expr",
+                f"exec({script!r})",
+            )
+            self.assertNotEqual(0, author.returncode, author.stdout)
+            self.assertIn("Authored ready library failed validation", author.stdout)
+            self.assertEqual(before_hash, hashlib.sha256(authored_blend.read_bytes()).hexdigest())
+
+    def test_batch_authoring_rejects_valid_but_off_contract_geometry_without_resaving(self):
+        with tempfile.TemporaryDirectory(prefix="econ-frozen-post-gate-") as temp_dir:
+            authored_blend = Path(temp_dir) / "frozen-post.blend"
+            author_proof_library(authored_blend)
+            before_hash = hashlib.sha256(authored_blend.read_bytes()).hexdigest()
+            script = "\n".join(
+                (
+                    "import dataclasses, importlib.util, pathlib, sys",
+                    f"sys.path.insert(0,{str(BLENDER_DIR)!r})",
+                    "from model_authoring import author_models",
+                    "from money_price_models import build_market_rate",
+                    f"spec_path=pathlib.Path({str(BLENDER_DIR / 'node-specs.py')!r})",
+                    "module_spec=importlib.util.spec_from_file_location('frozen_post_specs',spec_path)",
+                    "specs=importlib.util.module_from_spec(module_spec)",
+                    "module_spec.loader.exec_module(specs)",
+                    "def valid_but_off_contract_builder():",
+                    "    return dataclasses.replace(build_market_rate(),body_detail='valid alternate body detail')",
+                    f"author_models(output=pathlib.Path({str(authored_blend)!r}),specs=specs,builders={{'market_rate':valid_but_off_contract_builder}},requested=('market_rate',),required_ready=specs.PROOF_IDS)",
+                )
+            )
+            author = run_blender(
+                str(authored_blend),
+                "--python-exit-code",
+                "1",
+                "--python-expr",
+                f"exec({script!r})",
+            )
+            self.assertNotEqual(0, author.returncode, author.stdout)
+            self.assertIn("Serialized authored ready library failed frozen contract", author.stdout)
+            self.assertEqual(before_hash, hashlib.sha256(authored_blend.read_bytes()).hexdigest())
+
+    def test_validator_declares_triangle_bands_for_all_thirty_authored_models(self):
+        expected = {
+            "policy_rate": (2_500, 2_750),
+            "fx": (2_200, 2_600),
+            "oil": (1_800, 2_200),
+            "housing": (1_500, 1_900),
+            "gdp": (1_800, 2_200),
+            "risk_sentiment": (1_500, 1_900),
+            "market_rate": (1_500, 1_900),
+            "liquidity": (1_900, 2_300),
+            "credit_spread": (1_400, 1_800),
+            "bank_lending": (1_700, 2_100),
+            "cpi": (1_800, 2_200),
+            "inflation_exp": (1_600, 2_000),
+            "wages": (1_950, 2_250),
+            "exports": (2_500, 2_950),
+            "current_account": (1_950, 2_200),
+            "capital_flows": (2_250, 2_650),
+            "fed_rate": (2_350, 2_990),
+            "global_growth": (1_950, 2_350),
+            "consumption": (1_800, 2_200),
+            "investment": (1_800, 2_200),
+            "employment": (1_450, 1_900),
+            "earnings": (1_650, 2_100),
+            "defaults": (1_700, 2_150),
+            "stocks": (1_650, 2_050),
+            "household_debt": (1_800, 2_300),
+            "commodity": (1_400, 1_900),
+            "fiscal": (2_050, 2_350),
+            "geopolitics": (2_200, 2_550),
+            "tech": (2_450, 2_850),
+            "consumer_conf": (1_400, 1_900),
+        }
+        script = "\n".join(
+            (
+                "import importlib.util",
+                f"path={str(BLENDER_DIR / 'validate-econ-node-library.py')!r}",
+                "spec=importlib.util.spec_from_file_location('validator',path)",
+                "module=importlib.util.module_from_spec(spec)",
+                "spec.loader.exec_module(module)",
+                f"assert module.MODEL_TRIANGLE_BANDS == {expected!r}, module.MODEL_TRIANGLE_BANDS",
+            )
+        )
+        result = run_blender(
+            "--python-exit-code",
+            "1",
+            "--python-expr",
+            f"exec({script!r})",
+        )
+        self.assertEqual(0, result.returncode, result.stdout)
+
+    def test_validator_thin_axis_contract_distinguishes_rotor_and_lens_planes(self):
+        script = "\n".join(
+            (
+                "import importlib.util",
+                f"path={str(BLENDER_DIR / 'validate-econ-node-library.py')!r}",
+                "spec=importlib.util.spec_from_file_location('validator',path)",
+                "module=importlib.util.module_from_spec(spec)",
+                "spec.loader.exec_module(module)",
+                "assert module._thin_axis_contract_error('liquidity',(1.0,0.9,0.40)) is None",
+                "assert module._thin_axis_contract_error('liquidity',(1.0,0.9,0.41)) is not None",
+                "assert module._thin_axis_contract_error('cpi',(1.0,0.44,1.0)) is None",
+                "assert module._thin_axis_contract_error('cpi',(1.0,0.46,1.0)) is not None",
+            )
+        )
+        result = run_blender(
+            "--python-exit-code",
+            "1",
+            "--python-expr",
+            f"exec({script!r})",
+        )
+        self.assertEqual(0, result.returncode, result.stdout)
 
     def test_validator_rejects_geometry_duplicate_despite_unique_description(self):
         with tempfile.TemporaryDirectory(prefix="econ-proof-duplicate-geometry-") as temp_dir:
@@ -1178,6 +1807,77 @@ class BlenderPipelineContractTests(unittest.TestCase):
                 "GLB policy_rate/body POSITION/INDEX payload fingerprint mismatch",
                 errors,
             )
+
+    def test_glb_validator_rejects_non_unit_normal_payload_with_unchanged_json(self):
+        with tempfile.TemporaryDirectory(prefix="econ-glb-normal-payload-") as temp_dir:
+            temp = Path(temp_dir)
+            ready_blend = temp / "ready.blend"
+            valid_glb = temp / "valid.glb"
+            invalid_glb = temp / "invalid-normal.glb"
+            scaffold = run_blender(
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "scaffold-econ-node-library.py"),
+                "--",
+                "--output",
+                str(ready_blend),
+            )
+            self.assertEqual(0, scaffold.returncode, scaffold.stdout)
+            export = run_blender(
+                str(ready_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "export-econ-node-library.py"),
+                "--",
+                "--scope",
+                "ready",
+                "--output",
+                str(valid_glb),
+            )
+            self.assertEqual(0, export.returncode, export.stdout)
+
+            magic, version, chunks = glb_chunks(valid_glb)
+            json_payload = next(payload for chunk_type, payload in chunks if chunk_type == 0x4E4F534A)
+            bin_payload = bytearray(
+                next(payload for chunk_type, payload in chunks if chunk_type == 0x004E4942)
+            )
+            document = json.loads(json_payload.rstrip(b" \t\r\n\x00").decode("utf-8"))
+            body_node = next(
+                node for node in document["nodes"] if node.get("name") == "policy_rate__body"
+            )
+            primitive = document["meshes"][body_node["mesh"]]["primitives"][0]
+            normal_accessor = document["accessors"][primitive["attributes"]["NORMAL"]]
+            normal_view = document["bufferViews"][normal_accessor["bufferView"]]
+            payload_offset = normal_view.get("byteOffset", 0) + normal_accessor.get("byteOffset", 0)
+            struct.pack_into("<fff", bin_payload, payload_offset, 0.0, 0.0, 0.0)
+            write_glb_chunks(
+                invalid_glb,
+                magic,
+                version,
+                [
+                    (chunk_type, bytes(bin_payload) if chunk_type == 0x004E4942 else payload)
+                    for chunk_type, payload in chunks
+                ],
+            )
+            self.assertEqual(glb_json(valid_glb), glb_json(invalid_glb))
+
+            validation = run_blender(
+                str(ready_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "validate-econ-node-library.py"),
+                "--",
+                "--scope",
+                "ready",
+                "--glb",
+                str(invalid_glb),
+            )
+            self.assertNotEqual(0, validation.returncode, validation.stdout)
+            errors = "\n".join(summary_from(validation.stdout)["errors"])
+            self.assertIn("GLB policy_rate/body NORMAL payload must contain unit vectors", errors)
 
 
 if __name__ == "__main__":

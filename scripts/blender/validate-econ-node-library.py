@@ -19,6 +19,11 @@ from mathutils import Matrix, Vector
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from model_authoring import snapshot_material_contract, snapshot_root_contract  # noqa: E402
+
 MAX_MODEL_TRIANGLES = 3_000
 MAX_TOTAL_TRIANGLES = 100_000
 MAX_GLB_BYTES = 3_000_000
@@ -26,13 +31,37 @@ PROOF_MAX_GLB_BYTES = 600_000
 PROOF_TOTAL_TRIANGLES_MIN = 10_600
 PROOF_TOTAL_TRIANGLES_MAX = 13_000
 PROOF_HARD_TRIANGLES_MAX = 18_000
-PROOF_TRIANGLE_BANDS = {
+MODEL_TRIANGLE_BANDS = {
     "policy_rate": (2_500, 2_750),
     "fx": (2_200, 2_600),
     "oil": (1_800, 2_200),
     "housing": (1_500, 1_900),
     "gdp": (1_800, 2_200),
     "risk_sentiment": (1_500, 1_900),
+    "market_rate": (1_500, 1_900),
+    "liquidity": (1_900, 2_300),
+    "credit_spread": (1_400, 1_800),
+    "bank_lending": (1_700, 2_100),
+    "cpi": (1_800, 2_200),
+    "inflation_exp": (1_600, 2_000),
+    "wages": (1_950, 2_250),
+    "exports": (2_500, 2_950),
+    "current_account": (1_950, 2_200),
+    "capital_flows": (2_250, 2_650),
+    "fed_rate": (2_350, 2_990),
+    "global_growth": (1_950, 2_350),
+    "consumption": (1_800, 2_200),
+    "investment": (1_800, 2_200),
+    "employment": (1_450, 1_900),
+    "earnings": (1_650, 2_100),
+    "defaults": (1_700, 2_150),
+    "stocks": (1_650, 2_050),
+    "household_debt": (1_800, 2_300),
+    "commodity": (1_400, 1_900),
+    "fiscal": (2_050, 2_350),
+    "geopolitics": (2_200, 2_550),
+    "tech": (2_450, 2_850),
+    "consumer_conf": (1_400, 1_900),
 }
 NORMALIZED_RADIUS_MIN = 0.98
 NORMALIZED_RADIUS_MAX = 1.02
@@ -125,6 +154,23 @@ def _components_close(actual, expected, tolerance: float = 1.0e-6) -> bool:
     )
 
 
+def _thin_axis_contract_error(node_id: str, extent) -> str | None:
+    contract = SPECS.ACCENT_THIN_AXIS_CONTRACTS.get(node_id)
+    if contract is None:
+        return None
+    axis_name, maximum_ratio = contract
+    axis_index = {"x": 0, "y": 1, "z": 2}[axis_name]
+    other = [float(extent[index]) for index in range(3) if index != axis_index]
+    thin_extent = float(extent[axis_index])
+    maximum = float(maximum_ratio) * min(other)
+    if thin_extent <= maximum:
+        return None
+    return (
+        f"thin {axis_name.upper()} extent must be <= {maximum_ratio:.2f} of both "
+        f"orthogonal extents, found {tuple(round(float(value), 6) for value in extent)}"
+    )
+
+
 def _blender_to_gltf_translation(translation) -> tuple[float, float, float]:
     return (
         float(translation[0]),
@@ -179,7 +225,11 @@ def _scope_roots(roots: dict[str, bpy.types.Object], scope: str, summary: dict):
     return [roots[node_id] for node_id in selected_ids if node_id in roots]
 
 
-def _check_global_scene_contract(summary: dict) -> dict[str, bpy.types.Object]:
+def _check_global_scene_contract(
+    summary: dict,
+    *,
+    enforce_frozen_roots: bool = True,
+) -> dict[str, bpy.types.Object]:
     material_names = [material.name for material in bpy.data.materials]
     collection_names = [collection.name for collection in bpy.data.collections]
     expected_collections = {
@@ -326,6 +376,34 @@ def _check_global_scene_contract(summary: dict) -> dict[str, bpy.types.Object]:
             summary,
             f"opaque closed materials must enable backface culling: {non_culled_materials}",
         )
+    for material_name, expected_hash in SPECS.MATERIAL_CONTRACT_HASHES.items():
+        material = bpy.data.materials.get(material_name)
+        if material is None:
+            continue
+        actual_hash = snapshot_material_contract(material)
+        if actual_hash != expected_hash:
+            _append_error(
+                summary,
+                f"{material_name}: frozen PBR/node contract drift "
+                f"expected={expected_hash} actual={actual_hash}",
+            )
+
+    root_hashes = getattr(SPECS, "ROOT_CONTRACT_HASHES", {})
+    if root_hashes and enforce_frozen_roots:
+        for node_id, root in roots.items():
+            if not bool(root.get("econ_ready", False)):
+                continue
+            expected_hash = root_hashes.get(node_id)
+            if expected_hash is None:
+                _append_error(summary, f"{node_id}: missing frozen root contract hash")
+                continue
+            actual_hash = snapshot_root_contract(root)
+            if actual_hash != expected_hash:
+                _append_error(
+                    summary,
+                    f"{node_id}: frozen root contract drift "
+                    f"expected={expected_hash} actual={actual_hash}",
+                )
 
     unsupported_cameras = sorted(
         obj.name
@@ -599,7 +677,7 @@ def _validate_model(
     metrics_by_role: dict[str, dict] = {}
     bevels_by_role: dict[str, dict] = {}
     geometry_by_role: dict[str, dict] = {}
-    accent_contract = SPECS.PROOF_ACCENT_CONTRACTS.get(node_id)
+    accent_contract = SPECS.ACCENT_CONTRACTS.get(node_id)
     if accent_contract is None:
         _append_error(summary, f"{node_id}: missing canonical accent transform contract")
         accent_contract = {
@@ -626,6 +704,11 @@ def _validate_model(
                 summary,
                 f"{node_id}/{role}: unique mesh ownership required, "
                 f"data {obj.data.name} has {obj.data.users} users",
+            )
+        if obj.data is not None and obj.data.has_custom_normals:
+            _append_error(
+                summary,
+                f"{node_id}/{role}: custom split normals are forbidden; use canonical smooth/sharp topology",
             )
         if len(obj.material_slots) != 1 or obj.material_slots[0].material is None:
             _append_error(summary, f"{node_id}: {obj.name} must have exactly one material slot")
@@ -781,7 +864,7 @@ def _validate_model(
                     f"{node_id}/{role}: bevel tagged edge count invalid "
                     f"metadata={tagged_edges}, weighted={weighted_edges}",
                 )
-        minimum_tagged_edges = SPECS.PROOF_BEVEL_TAGGED_EDGE_MINIMUMS.get(
+        minimum_tagged_edges = SPECS.BEVEL_TAGGED_EDGE_MINIMUMS.get(
             node_id, {}
         ).get(role)
         if minimum_tagged_edges is None:
@@ -823,12 +906,12 @@ def _validate_model(
             summary,
             f"policy_rate: body triangles {body['triangles']} outside 1800..2200",
         )
-    if node_id in PROOF_TRIANGLE_BANDS:
-        minimum, maximum = PROOF_TRIANGLE_BANDS[node_id]
+    if node_id in MODEL_TRIANGLE_BANDS:
+        minimum, maximum = MODEL_TRIANGLE_BANDS[node_id]
         if not minimum <= model_triangles <= maximum:
             _append_error(
                 summary,
-                f"{node_id}: triangles {model_triangles} outside proof band {minimum}..{maximum}",
+                f"{node_id}: triangles {model_triangles} outside model band {minimum}..{maximum}",
             )
 
     all_vertices = body["vertices"] + accent["vertices"]
@@ -863,6 +946,9 @@ def _validate_model(
                 "oil/accent: side valve must lie in Blender XZ with a thin Y normal "
                 f"for exported rotate-z, found extents={tuple(round(float(v), 6) for v in accent_extent)}",
             )
+    thin_axis_error = _thin_axis_contract_error(node_id, accent["extent"])
+    if thin_axis_error is not None:
+        _append_error(summary, f"{node_id}/accent: {thin_axis_error}")
 
     silhouette = root.get("econ_silhouette")
     if not isinstance(silhouette, str) or len(silhouette.split(";")) != 3:
@@ -910,7 +996,11 @@ def _validate_model(
     return occupancy_masks
 
 
-def validate_scene(scope: str) -> tuple[dict, list[bpy.types.Object]]:
+def validate_scene(
+    scope: str,
+    *,
+    enforce_frozen_roots: bool = True,
+) -> tuple[dict, list[bpy.types.Object]]:
     summary = _fresh_summary(scope)
     try:
         SPECS.require_blender_version(bpy.app.version[:3])
@@ -922,7 +1012,10 @@ def validate_scene(scope: str) -> tuple[dict, list[bpy.types.Object]]:
             summary,
             f"scene name expected SCENE__ECON_NODE_LIBRARY, found {bpy.context.scene.name}",
         )
-    roots = _check_global_scene_contract(summary)
+    roots = _check_global_scene_contract(
+        summary,
+        enforce_frozen_roots=enforce_frozen_roots,
+    )
     selected_roots = _scope_roots(roots, scope, summary)
     depsgraph = bpy.context.evaluated_depsgraph_get()
     masks_by_id: dict[str, dict[str, set[int]]] = {}
@@ -1261,6 +1354,53 @@ def _primitive_payload_geometry_contract(
         return None
 
 
+def _validate_primitive_normal_payload(
+    gltf: dict,
+    bin_payload: bytes,
+    primitive: dict,
+    summary: dict,
+    label: str,
+) -> None:
+    attributes = primitive.get("attributes", {})
+    positions = _decode_accessor(
+        gltf,
+        bin_payload,
+        attributes.get("POSITION"),
+        summary,
+        f"{label} POSITION",
+    )
+    normals = _decode_accessor(
+        gltf,
+        bin_payload,
+        attributes.get("NORMAL"),
+        summary,
+        f"{label} NORMAL",
+    )
+    if positions is None or normals is None:
+        return
+    if len(normals) != len(positions):
+        _append_error(
+            summary,
+            f"GLB {label} NORMAL count {len(normals)} must equal POSITION count {len(positions)}",
+        )
+        return
+    invalid = []
+    for index, normal in enumerate(normals):
+        if not isinstance(normal, tuple) or len(normal) != 3:
+            invalid.append(index)
+            continue
+        components = tuple(float(value) for value in normal)
+        length = math.sqrt(sum(value * value for value in components))
+        if not all(math.isfinite(value) for value in components) or not 0.9 <= length <= 1.1:
+            invalid.append(index)
+    if invalid:
+        _append_error(
+            summary,
+            f"GLB {label} NORMAL payload must contain unit vectors; "
+            f"invalid={len(invalid)} firstIndex={invalid[0]}",
+        )
+
+
 def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | None = None) -> dict:
     summary = base_summary if base_summary is not None else _fresh_summary("glb")
     summary["bytes"] = path.stat().st_size if path.is_file() else 0
@@ -1590,6 +1730,13 @@ def validate_glb(path: Path, expected_ids: Iterable[str], base_summary: dict | N
                 if accessor.get("type") != "SCALAR" or accessor.get("componentType") not in {5121, 5123, 5125}:
                     _append_error(summary, f"GLB {node_id}/{role}: invalid index accessor format")
                 actual_geometry = _primitive_payload_geometry_contract(
+                    gltf,
+                    bin_payload,
+                    primitive,
+                    summary,
+                    f"{node_id}/{role}",
+                )
+                _validate_primitive_normal_payload(
                     gltf,
                     bin_payload,
                     primitive,

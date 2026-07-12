@@ -93,30 +93,16 @@ test('supports the sphere kill switch and exposes the model loading lifecycle', 
   assert.match(visualSource, /if\s*\(\s*!url\s*\)/);
 });
 
-test('keeps GLB loading fail-soft with the deliberate six-model proof set', () => {
+test('keeps full 30-model GLB loading fail-soft without hiding missing instruments', () => {
   assert.match(visualSource, /async function loadLibrary\s*\(/);
   assert.match(visualSource, /try\s*{/);
   assert.match(visualSource, /catch\s*\(/);
   assert.match(visualSource, /console\.warn\s*\(/);
-  const proofSet = visualSource.match(/const VERTICAL_SLICE_MODEL_IDS\s*=\s*new Set\s*\(\s*\[([^\]]+)]\s*\)/);
-  assert.ok(proofSet, 'missing deliberate precision-model ID set');
-  const proofIds = [...proofSet[1].matchAll(/['"]([a-z0-9_]+)['"]/g)].map((match) => match[1]);
-  assert.deepEqual(proofIds, [
-    'policy_rate',
-    'fx',
-    'oil',
-    'housing',
-    'gdp',
-    'risk_sentiment',
-  ]);
   assert.match(visualSource, /loadedIds/);
   assert.match(visualSource, /fallbackIds/);
   assert.match(visualSource, /issues/);
-  assert.match(visualSource, /VERTICAL_SLICE_MODEL_IDS/);
-  assert.match(
-    visualSource,
-    /contract\.missing\.filter\s*\(\s*\(id\)\s*=>\s*VERTICAL_SLICE_MODEL_IDS\.has\s*\(id\)\s*\)/,
-  );
+  assert.match(visualSource, /const missing\s*=\s*contract\.missing\s*;/);
+  assert.doesNotMatch(visualSource, /VERTICAL_SLICE_MODEL_IDS/);
   assert.doesNotMatch(visualSource, /showFatal|unhandledrejection/);
 });
 
