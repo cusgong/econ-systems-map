@@ -538,7 +538,17 @@ def _canonical_geometry_contract(triangles) -> dict:
             )
             quantized.append(point)
             points.append(point)
-        canonical_triangles.append(tuple(sorted(quantized)))
+        # Triangle-list order and the choice of first corner are semantically
+        # irrelevant, but winding is not: all proof materials are single-sided.
+        # Canonicalize only across the three cyclic rotations.  Reversing B/C
+        # therefore produces a different digest and cannot silently flip every
+        # rendered face while preserving the GLB JSON contract.
+        cyclic_rotations = (
+            tuple(quantized),
+            (quantized[1], quantized[2], quantized[0]),
+            (quantized[2], quantized[0], quantized[1]),
+        )
+        canonical_triangles.append(min(cyclic_rotations))
     canonical_triangles.sort()
     digest = hashlib.sha256()
     for triangle in canonical_triangles:

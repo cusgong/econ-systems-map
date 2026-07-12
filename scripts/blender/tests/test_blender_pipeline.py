@@ -1074,6 +1074,111 @@ class BlenderPipelineContractTests(unittest.TestCase):
                 errors,
             )
 
+    def test_glb_validator_rejects_reversed_winding_with_unchanged_json(self):
+        with tempfile.TemporaryDirectory(prefix="econ-proof-glb-winding-payload-") as temp_dir:
+            temp = Path(temp_dir)
+            ready_blend = temp / "ready.blend"
+            valid_glb = temp / "valid.glb"
+            invalid_glb = temp / "invalid-winding.glb"
+            scaffold = run_blender(
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "scaffold-econ-node-library.py"),
+                "--",
+                "--output",
+                str(ready_blend),
+            )
+            self.assertEqual(0, scaffold.returncode, scaffold.stdout)
+            export = run_blender(
+                str(ready_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "export-econ-node-library.py"),
+                "--",
+                "--scope",
+                "ready",
+                "--output",
+                str(valid_glb),
+            )
+            self.assertEqual(0, export.returncode, export.stdout)
+
+            magic, version, chunks = glb_chunks(valid_glb)
+            json_payload = next(payload for chunk_type, payload in chunks if chunk_type == 0x4E4F534A)
+            bin_payload = bytearray(
+                next(payload for chunk_type, payload in chunks if chunk_type == 0x004E4942)
+            )
+            document = json.loads(
+                json_payload.rstrip(b" \t\r\n\x00").decode("utf-8")
+            )
+            body_node = next(
+                node for node in document["nodes"] if node.get("name") == "policy_rate__body"
+            )
+            primitive = document["meshes"][body_node["mesh"]]["primitives"][0]
+            index_accessor = document["accessors"][primitive["indices"]]
+            index_view = document["bufferViews"][index_accessor["bufferView"]]
+            component_format = {
+                5121: "B",
+                5123: "H",
+                5125: "I",
+            }[index_accessor["componentType"]]
+            component_size = struct.calcsize("<" + component_format)
+            stride = index_view.get("byteStride", component_size)
+            base_offset = (
+                index_view.get("byteOffset", 0)
+                + index_accessor.get("byteOffset", 0)
+            )
+            self.assertEqual(0, index_accessor["count"] % 3)
+            for triangle_offset in range(0, index_accessor["count"], 3):
+                second_offset = base_offset + (triangle_offset + 1) * stride
+                third_offset = base_offset + (triangle_offset + 2) * stride
+                second = struct.unpack_from(
+                    "<" + component_format, bin_payload, second_offset
+                )[0]
+                third = struct.unpack_from(
+                    "<" + component_format, bin_payload, third_offset
+                )[0]
+                struct.pack_into(
+                    "<" + component_format, bin_payload, second_offset, third
+                )
+                struct.pack_into(
+                    "<" + component_format, bin_payload, third_offset, second
+                )
+            write_glb_chunks(
+                invalid_glb,
+                magic,
+                version,
+                [
+                    (chunk_type, bytes(bin_payload) if chunk_type == 0x004E4942 else payload)
+                    for chunk_type, payload in chunks
+                ],
+            )
+
+            self.assertEqual(
+                glb_json(valid_glb),
+                glb_json(invalid_glb),
+                "winding mutant must preserve the complete GLB JSON chunk",
+            )
+            validation = run_blender(
+                str(ready_blend),
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(BLENDER_DIR / "validate-econ-node-library.py"),
+                "--",
+                "--scope",
+                "ready",
+                "--glb",
+                str(invalid_glb),
+            )
+            self.assertNotEqual(0, validation.returncode, validation.stdout)
+            errors = "\n".join(summary_from(validation.stdout)["errors"])
+            self.assertIn(
+                "GLB policy_rate/body POSITION/INDEX payload fingerprint mismatch",
+                errors,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
