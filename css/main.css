@@ -162,6 +162,7 @@ button { font-family: inherit; }
   box-shadow: 0 0 18px rgba(84, 224, 255, 0.22);
 }
 .node-label.selected {
+  border-width: 2px;
   border-color: var(--cy);
   box-shadow: 0 0 22px rgba(84, 224, 255, 0.4);
 }
@@ -179,6 +180,7 @@ button { font-family: inherit; }
   padding-left: 26px;
   -webkit-user-select: none;
   user-select: none;
+  transition: opacity 0.3s ease; /* smooth yield when a node label overlaps */
 }
 .layer-tag::before {
   content: "";

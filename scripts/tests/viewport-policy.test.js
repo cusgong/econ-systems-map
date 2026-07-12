@@ -14,15 +14,24 @@ function source(relativePath) {
   return readFileSync(new URL(relativePath, import.meta.url), 'utf8');
 }
 
-test('narrow viewports focus the selected model instead of the ripple group', async () => {
+test('every variable selection frames the selected instrument for inspection', async () => {
   const { focusIdsForViewport, minimumFocusDistance } = await loadPolicy();
   const rippleIds = ['policy_rate', 'market_rate', 'liquidity'];
 
   assert.deepEqual(focusIdsForViewport('policy_rate', rippleIds, 390), ['policy_rate']);
   assert.deepEqual(focusIdsForViewport('policy_rate', rippleIds, 900), ['policy_rate']);
-  assert.deepEqual(focusIdsForViewport('policy_rate', rippleIds, 901), rippleIds);
-  assert.equal(minimumFocusDistance(1), 28);
+  assert.deepEqual(focusIdsForViewport('policy_rate', rippleIds, 1365), ['policy_rate']);
+  assert.equal(minimumFocusDistance(1), 40);
   assert.equal(minimumFocusDistance(2), 36);
+});
+
+test('label opacity keeps selected and causal context readable at distance', async () => {
+  const { labelOpacityForState } = await loadPolicy();
+  assert.equal(typeof labelOpacityForState, 'function');
+  assert.equal(labelOpacityForState(180, { selected: true }), 1);
+  assert.ok(labelOpacityForState(180, { highlighted: true }) >= 0.92);
+  assert.ok(labelOpacityForState(180, { dimmed: true }) >= 0.35);
+  assert.ok(labelOpacityForState(260, {}) >= 0.35);
 });
 
 test('map viewport is reserved only for an expanded narrow-screen panel', async () => {
@@ -48,4 +57,5 @@ test('UI, CSS, and scene integrate the safe viewport policy', () => {
   assert.match(css, /:root\.map-viewport-reserved\s+#stage/);
   assert.match(css, /:root\.map-viewport-reserved\s+#labels/);
   assert.match(css, /--mobile-panel-reserve/);
+  assert.match(css, /\.node-label\.selected\s*{[^}]*border-width:\s*2px/s);
 });

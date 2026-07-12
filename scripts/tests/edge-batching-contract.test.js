@@ -3,7 +3,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import * as THREE from '../../vendor/three.module.min.js';
 import { EDGES } from '../../data/edges.js';
-import {
+import * as edgeBatching from '../../js/edge-batching.js';
+
+const {
+  HIGHLIGHT_ARROW_HEIGHT,
+  HIGHLIGHT_ARROW_RADIUS,
+  HIGHLIGHT_EDGE_OPACITY,
+  HIGHLIGHT_EDGE_BASE_RADIUS,
+  HIGHLIGHT_EDGE_STRENGTH_RADIUS,
+  HIGHLIGHT_PULSE_SCALE,
   PASSIVE_EDGE_BASE_OPACITY,
   PASSIVE_EDGE_GROUP_KEYS,
   PASSIVE_EDGE_HIGHLIGHT_OPACITY,
@@ -11,7 +19,8 @@ import {
   buildPassiveEdgeBatches,
   disposePassiveEdgeBatches,
   setPassiveEdgeBatchOpacity,
-} from '../../js/edge-batching.js';
+  trimEdgeEndpoints,
+} = edgeBatching;
 
 
 const sceneSource = fs.readFileSync(new URL('../../js/scene.js', import.meta.url), 'utf8');
@@ -120,10 +129,31 @@ test('strength colors preserve the old effective alpha ladder', () => {
   const effectiveAlpha = [1, 2, 3].map((strength) => (
     PASSIVE_EDGE_BASE_OPACITY * (0.3 + strength * 0.2)
   ));
-  for (const [index, expected] of [0.17, 0.238, 0.306].entries()) {
+  for (const [index, expected] of [0.13, 0.182, 0.234].entries()) {
     assert.ok(Math.abs(effectiveAlpha[index] - expected) < 1e-12);
   }
   disposePassiveEdgeBatches(batches);
+});
+
+
+test('edge endpoints stop outside both instrument silhouettes', () => {
+  assert.equal(typeof trimEdgeEndpoints, 'function');
+  const trimmed = trimEdgeEndpoints(
+    { x: 0, y: 0, z: 0 },
+    { x: 12, y: 0, z: 0 },
+    0.82,
+    1.28,
+  );
+  assert.ok(trimmed.start.x >= 2.2);
+  assert.ok(trimmed.end.x <= 8.5);
+  assert.ok(trimmed.start.x < trimmed.end.x);
+  assert.deepEqual([trimmed.start.y, trimmed.start.z, trimmed.end.y, trimmed.end.z], [0, 0, 0, 0]);
+  assert.ok(HIGHLIGHT_EDGE_OPACITY <= 0.6);
+  assert.ok(HIGHLIGHT_EDGE_BASE_RADIUS <= 0.05);
+  assert.ok(HIGHLIGHT_EDGE_STRENGTH_RADIUS <= 0.02);
+  assert.ok(HIGHLIGHT_ARROW_RADIUS <= 0.22);
+  assert.ok(HIGHLIGHT_ARROW_HEIGHT <= 0.75);
+  assert.ok(HIGHLIGHT_PULSE_SCALE <= 1.1);
 });
 
 
@@ -150,6 +180,10 @@ test('scene integrates populated-batch diagnostics and preserves edge highlights
   assert.match(sceneSource, /passiveEdgeBatchCount:\s*passiveEdgeBatches\.size/);
   assert.match(sceneSource, /passiveEdgeCount:\s*edgeVis\.size/);
   assert.match(sceneSource, /setPassiveEdgeBatchOpacity\s*\(/);
+  assert.match(sceneSource, /trimEdgeEndpoints\s*\(/);
+  assert.match(sceneSource, /target:\s*HIGHLIGHT_EDGE_OPACITY/);
+  assert.match(sceneSource, /HIGHLIGHT_EDGE_BASE_RADIUS\s*\+\s*HIGHLIGHT_EDGE_STRENGTH_RADIUS/);
+  assert.match(sceneSource, /spr\.scale\.setScalar\s*\(\s*HIGHLIGHT_PULSE_SCALE\s*\)/);
   assert.match(sceneSource, /new THREE\.TubeGeometry\s*\(\s*ev\.curve/);
   assert.match(sceneSource, /new THREE\.ConeGeometry/);
   assert.doesNotMatch(sceneSource, /edgeVis\.set[^\n]+\bline\b/);

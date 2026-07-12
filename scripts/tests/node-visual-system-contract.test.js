@@ -65,13 +65,16 @@ test('configures the approved PBR color, environment, light, shadow, and DPR pol
   assert.match(sceneSource, /RoomEnvironment/);
   assert.match(sceneSource, /renderer\.outputColorSpace\s*=\s*THREE\.SRGBColorSpace/);
   assert.match(sceneSource, /renderer\.toneMapping\s*=\s*THREE\.ACESFilmicToneMapping/);
-  assert.match(sceneSource, /renderer\.toneMappingExposure\s*=\s*0\.95/);
+  assert.match(sceneSource, /renderer\.toneMappingExposure\s*=\s*1\.08/);
   assert.match(sceneSource, /new THREE\.PMREMGenerator\s*\(/);
   assert.match(sceneSource, /scene\.environment\s*=/);
   assert.ok(
     (sceneSource.match(/new THREE\.DirectionalLight\s*\(/g) || []).length >= 2,
     'expected a directional key light and a directional rim light',
   );
+  assert.match(sceneSource, /new THREE\.HemisphereLight\s*\(\s*0xbfdcff\s*,\s*0x08101f\s*,\s*0\.7\s*\)/);
+  assert.match(sceneSource, /new THREE\.DirectionalLight\s*\(\s*0xf2f5ff\s*,\s*1\.45\s*\)/);
+  assert.match(sceneSource, /new THREE\.DirectionalLight\s*\(\s*0x7298d8\s*,\s*0\.9\s*\)/);
   assert.match(sceneSource, /position\.set\s*\(\s*24\s*,\s*36\s*,\s*18\s*\)/);
   assert.match(sceneSource, /position\.set\s*\(\s*-24\s*,\s*16\s*,\s*-18\s*\)/);
   assert.match(sceneSource, /shadowMap\.enabled\s*=\s*false/);

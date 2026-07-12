@@ -9,9 +9,8 @@ function finiteWidth(width) {
 
 export function focusIdsForViewport(selectedId, contextualIds, viewportWidth) {
   const ids = Array.isArray(contextualIds) ? [...contextualIds] : [];
-  if (finiteWidth(viewportWidth) <= NARROW_VIEWPORT_MAX && selectedId) {
-    return [selectedId];
-  }
+  finiteWidth(viewportWidth);
+  if (selectedId) return [selectedId];
   return ids;
 }
 
@@ -20,5 +19,14 @@ export function shouldReserveMapViewport(viewportWidth, panelCollapsed) {
 }
 
 export function minimumFocusDistance(focusCount) {
-  return Number(focusCount) <= 1 ? 28 : 36;
+  return Number(focusCount) <= 1 ? 40 : 36;
+}
+
+export function labelOpacityForState(distance, state = {}) {
+  const d = Number.isFinite(Number(distance)) ? Math.max(0, Number(distance)) : 0;
+  let opacity = d > 95 ? Math.max(0.35, 1 - (d - 95) / 130) : 1;
+  if (state.selected) return 1;
+  if (state.highlighted) return Math.max(0.92, opacity);
+  if (state.dimmed) return Math.max(0.38, Math.min(0.42, opacity));
+  return opacity;
 }

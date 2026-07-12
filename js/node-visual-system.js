@@ -19,6 +19,9 @@ const COLOR_SELECTION = new THREE.Color('#dbe5ef');
 const NEUTRAL_HUB_METRIC = Object.freeze({ hubScore: 0.5, score100: 50, radiusScale: 1 });
 const MODEL_LOAD_ANCHOR_ID = 'policy_rate';
 const BASE_VISUAL_RADIUS = 1.82;
+const MIN_BASE_SCREEN_RADIUS_PX = 17;
+const MAX_BASE_SCREEN_RADIUS_PX = 26;
+const MAX_SELECTED_BASE_SCREEN_RADIUS_PX = 44;
 const MIN_HUB_RADIUS_SCALE = 0.82;
 const MAX_HUB_RADIUS_SCALE = 1.28;
 const HOVER_TILT_X = THREE.MathUtils.degToRad(-1);
@@ -41,10 +44,10 @@ const MAX_MODEL_TRIANGLES = 3000;
 
 const MATERIAL_PARAMS = Object.freeze({
   darkTitanium: Object.freeze({
-    color: '#202a35', metalness: 0.9, roughness: 0.25, envMapIntensity: 1.1,
+    color: '#3a4654', metalness: 0.76, roughness: 0.32, envMapIntensity: 1.25,
   }),
   satinAlloy: Object.freeze({
-    color: '#718091', metalness: 0.82, roughness: 0.34, envMapIntensity: 1.0,
+    color: '#8798aa', metalness: 0.72, roughness: 0.36, envMapIntensity: 1.18,
   }),
   technicalCeramic: Object.freeze({
     color: '#c5cbd0', metalness: 0.08, roughness: 0.42, envMapIntensity: 0.8,
@@ -54,8 +57,8 @@ const MATERIAL_PARAMS = Object.freeze({
 function makeBodyTemplate(params, name) {
   const material = new THREE.MeshStandardMaterial({
     ...params,
-    emissive: '#05080b',
-    emissiveIntensity: 0.03,
+    emissive: '#101820',
+    emissiveIntensity: 0.07,
     flatShading: false,
   });
   material.name = name;
@@ -220,7 +223,7 @@ export function createNodeVisualSystem(options) {
   };
   const fallbackSphereGeometry = new THREE.SphereGeometry(1, 28, 20);
   const fallbackAccentGeometry = new THREE.TorusGeometry(0.76, 0.065, 10, 40);
-  const selectionGeometry = new THREE.TorusGeometry(1.22, 0.022, 8, 48);
+  const selectionGeometry = new THREE.TorusGeometry(1.22, 0.045, 8, 48);
   const pressureGeometry = new THREE.TorusGeometry(1.32, 0.05, 8, 48);
   const arrivalGeometry = new THREE.TorusGeometry(1.5, 0.025, 8, 48);
   const leverGeometry = new THREE.TorusGeometry(1.43, 0.035, 8, 48);
@@ -270,7 +273,8 @@ export function createNodeVisualSystem(options) {
   }
 
   function updateLabelOffset(record, normalizedTop = 1) {
-    const top = Math.max(0.72, normalizedTop) * record.visualRadius;
+    record.normalizedTop = normalizedTop;
+    const top = Math.max(0.72, normalizedTop) * record.displayRadius;
     record.labelAnchor.position.set(0, top + LABEL_GAP, 0);
   }
 
@@ -432,6 +436,8 @@ export function createNodeVisualSystem(options) {
       modelStatus: 'fallback',
       motionState,
       visualRadius,
+      displayRadius: visualRadius,
+      normalizedTop: 1,
       bodyMaterial,
       bodyPreset: 'darkTitanium',
       accentMaterial,
@@ -678,12 +684,16 @@ export function createNodeVisualSystem(options) {
     const bodyBase = bodyTemplates[record.bodyPreset].color;
     record.bodyMaterial.color.copy(bodyBase);
     record.accentMaterial.color.copy(record.categoryColor);
+    record.bodyMaterial.emissiveIntensity = 0.08;
     if (dimmed) {
-      record.bodyMaterial.color.multiplyScalar(0.28);
-      record.accentMaterial.color.multiplyScalar(0.24);
-      record.accentMaterial.emissiveIntensity = 0.01;
+      record.bodyMaterial.color.multiplyScalar(0.58);
+      record.accentMaterial.color.multiplyScalar(0.52);
+      record.bodyMaterial.emissiveIntensity = 0.035;
+      record.accentMaterial.emissiveIntensity = 0.03;
     } else {
-      record.accentMaterial.emissiveIntensity = selected ? 0.18 : 0.07;
+      if (selected) record.bodyMaterial.color.lerp(COLOR_SELECTION, 0.12);
+      record.bodyMaterial.emissiveIntensity = selected ? 0.14 : 0.08;
+      record.accentMaterial.emissiveIntensity = selected ? 0.24 : 0.1;
     }
   }
 
@@ -728,7 +738,7 @@ export function createNodeVisualSystem(options) {
       record.pressureRing.visible = active;
       record.pressureRing.material.color.copy(value >= 0 ? COLOR_UP : COLOR_DOWN);
       record.pressureRing.material.opacity = 0.42 + Math.min(1, Math.abs(value)) * 0.42;
-      record.pressureRing.scale.setScalar(record.visualRadius * (1 + Math.min(1, Math.abs(value)) * 0.08));
+      record.pressureRing.scale.setScalar(record.displayRadius * (1 + Math.min(1, Math.abs(value)) * 0.08));
       const tint = record.chip.querySelector('.tint');
       record.chip.classList.toggle('tint-up', active && value > 0);
       record.chip.classList.toggle('tint-down', active && value < 0);
@@ -744,7 +754,7 @@ export function createNodeVisualSystem(options) {
     record.motionState.arrivalSign = sign >= 0 ? 1 : -1;
     record.arrivalRing.material.color.copy(record.motionState.arrivalSign > 0 ? COLOR_UP : COLOR_DOWN);
     record.arrivalRing.material.opacity = 0.72;
-    record.arrivalRing.scale.setScalar(record.visualRadius);
+    record.arrivalRing.scale.setScalar(record.displayRadius);
     record.arrivalRing.visible = true;
   }
 
@@ -775,17 +785,42 @@ export function createNodeVisualSystem(options) {
   const worldPosition = new THREE.Vector3();
   const labelProjection = new THREE.Vector3();
   const nodeProjection = new THREE.Vector3();
+  function applyDisplayRadius(record, displayRadius) {
+    if (Math.abs(displayRadius - record.displayRadius) <= 1e-5) return;
+    record.displayRadius = displayRadius;
+    record.modelRoot.scale.setScalar(displayRadius);
+    record.fallbackRoot.scale.setScalar(displayRadius);
+    record.selectionRing.scale.setScalar(displayRadius);
+    record.pressureRing.scale.setScalar(
+      displayRadius * (1 + Math.min(1, Math.abs(record.pressure)) * 0.08),
+    );
+    record.arrivalRing.scale.setScalar(displayRadius);
+    if (record.leverRing) record.leverRing.scale.setScalar(displayRadius);
+    updateLabelOffset(record, record.normalizedTop);
+  }
+
   function updateHitProxy(record) {
     if (!camera || !renderer?.domElement) return;
     const height = renderer.domElement.clientHeight || window.innerHeight || 1;
     record.nodeRoot.getWorldPosition(worldPosition);
     const distance = camera.position.distanceTo(worldPosition);
     const worldPerPixel = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * distance) / height;
+    const semanticBaseScreenRadiusPx = BASE_VISUAL_RADIUS / worldPerPixel;
+    const maxBaseScreenRadiusPx = record.chip.classList.contains('selected')
+      ? MAX_SELECTED_BASE_SCREEN_RADIUS_PX
+      : MAX_BASE_SCREEN_RADIUS_PX;
+    const baseScreenRadiusPx = Math.max(
+      MIN_BASE_SCREEN_RADIUS_PX,
+      Math.min(maxBaseScreenRadiusPx, semanticBaseScreenRadiusPx),
+    );
+    const baseDisplayRadius = worldPerPixel * baseScreenRadiusPx;
+    applyDisplayRadius(record, baseDisplayRadius * record.hubMetric.radiusScale);
     const minimumRadius = worldPerPixel * 22;
-    const hitRadius = Math.max(record.visualRadius * 1.18, minimumRadius);
+    const hitRadius = Math.max(record.displayRadius * 1.18, minimumRadius);
     record.hitProxy.scale.setScalar(hitRadius);
     record.chip.dataset.hitRadiusPx = (hitRadius / worldPerPixel).toFixed(2);
-    record.chip.dataset.visualRadiusPx = (record.visualRadius / worldPerPixel).toFixed(2);
+    record.chip.dataset.visualRadiusPx = (record.displayRadius / worldPerPixel).toFixed(2);
+    record.chip.dataset.semanticRadiusPx = (record.visualRadius / worldPerPixel).toFixed(2);
   }
 
   function updateAccentMotion(record, elapsed) {
@@ -796,7 +831,7 @@ export function createNodeVisualSystem(options) {
     accent.scale.copy(state.accentBaseScale);
     record.arrivalRing.visible = false;
     record.arrivalRing.material.opacity = 0;
-    record.arrivalRing.scale.setScalar(record.visualRadius);
+    record.arrivalRing.scale.setScalar(record.displayRadius);
     if (reducedMotion) return;
 
     let signature = null;
@@ -827,7 +862,7 @@ export function createNodeVisualSystem(options) {
         record.arrivalRing.visible = true;
         record.arrivalRing.material.color.copy(state.arrivalSign > 0 ? COLOR_UP : COLOR_DOWN);
         record.arrivalRing.material.opacity = 0.72 * (1 - t);
-        record.arrivalRing.scale.setScalar(record.visualRadius * (1 + 0.22 * t));
+        record.arrivalRing.scale.setScalar(record.displayRadius * (1 + 0.22 * t));
       }
     }
     if (!signature && arrivalScale === 1) return;
@@ -1003,8 +1038,8 @@ export function createNodeVisualSystem(options) {
       record.modelRoot.rotation.y += ((hover ? HOVER_TILT_Y : 0) - record.modelRoot.rotation.y) * smoothing;
       record.fallbackRoot.rotation.x += ((hover ? HOVER_TILT_X : 0) - record.fallbackRoot.rotation.x) * smoothing;
       record.fallbackRoot.rotation.y += ((hover ? HOVER_TILT_Y : 0) - record.fallbackRoot.rotation.y) * smoothing;
-      updateAccentMotion(record, lastElapsed);
       updateHitProxy(record);
+      updateAccentMotion(record, lastElapsed);
     }
     if (labelLayoutDirty || lastElapsed - lastLabelLayoutAt >= LABEL_LAYOUT_INTERVAL) {
       updateLabelLayout();
@@ -1026,7 +1061,7 @@ export function createNodeVisualSystem(options) {
       record.accentRoot.scale.copy(record.motionState.accentBaseScale);
       record.arrivalRing.visible = false;
       record.arrivalRing.material.opacity = 0;
-      record.arrivalRing.scale.setScalar(record.visualRadius);
+      record.arrivalRing.scale.setScalar(record.displayRadius);
     }
   }
 

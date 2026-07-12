@@ -9,14 +9,59 @@ export const PASSIVE_EDGE_GROUP_KEYS = Object.freeze([
   'negative|contested',
 ]);
 export const PASSIVE_EDGE_SEGMENTS = 40;
-export const PASSIVE_EDGE_BASE_OPACITY = 0.34;
-export const PASSIVE_EDGE_HIGHLIGHT_OPACITY = 0.055;
+export const PASSIVE_EDGE_BASE_OPACITY = 0.26;
+export const PASSIVE_EDGE_HIGHLIGHT_OPACITY = 0.04;
+export const HIGHLIGHT_EDGE_OPACITY = 0.5;
+export const HIGHLIGHT_EDGE_BASE_RADIUS = 0.045;
+export const HIGHLIGHT_EDGE_STRENGTH_RADIUS = 0.018;
+export const HIGHLIGHT_ARROW_RADIUS = 0.22;
+export const HIGHLIGHT_ARROW_HEIGHT = 0.75;
+export const HIGHLIGHT_PULSE_SCALE = 1.1;
+const EDGE_CLEARANCE_BASE = 2.85;
 
 
 function groupKeyFor(edge) {
   const sign = edge.sign > 0 ? 'positive' : 'negative';
   const confidence = edge.confidence === 1 ? 'contested' : 'certain';
   return `${sign}|${confidence}`;
+}
+
+
+function clampedHubScale(value) {
+  const scale = Number(value);
+  return Number.isFinite(scale) ? Math.max(0.82, Math.min(1.28, scale)) : 1;
+}
+
+
+export function trimEdgeEndpoints(from, to, fromHubScale = 1, toHubScale = 1) {
+  const dx = Number(to.x) - Number(from.x);
+  const dy = Number(to.y) - Number(from.y);
+  const dz = Number(to.z) - Number(from.z);
+  const length = Math.hypot(dx, dy, dz);
+  if (!(length > 1e-6)) {
+    return {
+      start: { x: Number(from.x), y: Number(from.y), z: Number(from.z) },
+      end: { x: Number(to.x), y: Number(to.y), z: Number(to.z) },
+    };
+  }
+  const fromClearance = EDGE_CLEARANCE_BASE * clampedHubScale(fromHubScale);
+  const toClearance = EDGE_CLEARANCE_BASE * clampedHubScale(toHubScale);
+  const trimScale = Math.min(1, (length * 0.72) / (fromClearance + toClearance));
+  const ux = dx / length;
+  const uy = dy / length;
+  const uz = dz / length;
+  return {
+    start: {
+      x: Number(from.x) + ux * fromClearance * trimScale,
+      y: Number(from.y) + uy * fromClearance * trimScale,
+      z: Number(from.z) + uz * fromClearance * trimScale,
+    },
+    end: {
+      x: Number(to.x) - ux * toClearance * trimScale,
+      y: Number(to.y) - uy * toClearance * trimScale,
+      z: Number(to.z) - uz * toClearance * trimScale,
+    },
+  };
 }
 
 

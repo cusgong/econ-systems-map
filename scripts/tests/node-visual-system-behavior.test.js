@@ -234,32 +234,77 @@ test('hub sizing clamps to the approved range and drives fallback, labels, and h
   t.after(() => visual.dispose());
 
   visual.update(1);
-  const expected = new Map([
-    ['low', 1.82 * 0.82],
-    ['mid', 1.82 * 1.074895],
-    ['high', 1.82 * 1.28],
-  ]);
   for (const node of nodes) {
-    const radius = expected.get(node.id);
     const root = scene.getObjectByName(`${node.id}__node_root`);
+    const distance = camera.position.distanceTo(root.position);
+    const worldPerPixel = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * distance) / 844;
+    const hubScale = Math.max(0.82, Math.min(1.28, hubMetrics.get(node.id).radiusScale));
+    const semanticRadius = 1.82 * hubScale;
+    const radius = Math.max(1.82, worldPerPixel * 17) * hubScale;
     assert.deepEqual(root.position.toArray(), node.pos.toArray(), 'semantic position must not move');
     assertClose(scene.getObjectByName(`${node.id}__model_root`).scale.x, radius);
     assertClose(scene.getObjectByName(`${node.id}__fallback_root`).scale.x, radius);
     assertClose(scene.getObjectByName(`${node.id}__selection_ring`).scale.x, radius);
     assertClose(scene.getObjectByName(`${node.id}__label_anchor`).position.y, radius + 0.62);
 
-    const distance = camera.position.distanceTo(root.position);
-    const worldPerPixel = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * distance) / 844;
     const hitRadius = scene.getObjectByName(`${node.id}__hit_proxy`).scale.x;
     assert.ok((hitRadius / worldPerPixel) * 2 >= 44 - 1e-6);
     const chip = nodeChip(scene, node.id);
     assert.equal(chip.dataset.hubScore, String(hubMetrics.get(node.id).score100));
-    assert.equal(chip.dataset.radiusScale, String(radius / 1.82));
+    assert.equal(chip.dataset.radiusScale, String(hubScale));
     assert.ok(Number(chip.dataset.hitRadiusPx) >= 22);
     assertClose(Number(chip.dataset.visualRadiusPx), radius / worldPerPixel, 0.02);
+    assertClose(Number(chip.dataset.semanticRadiusPx), semanticRadius / worldPerPixel, 0.02);
+    assert.ok(Number(chip.dataset.visualRadiusPx) >= 17 * hubScale - 0.02);
   }
-  assert.ok(expected.get('low') < expected.get('mid'));
-  assert.ok(expected.get('mid') < expected.get('high'));
+  const displayed = nodes.map((node) => scene.getObjectByName(`${node.id}__model_root`).scale.x);
+  assert.ok(displayed[0] < displayed[1]);
+  assert.ok(displayed[1] < displayed[2]);
+
+  camera.position.set(0, 2, 10);
+  visual.setHighlight({ selectedId: 'high', nodeOrders: new Map([['high', 0]]) });
+  visual.update(2);
+  for (const node of nodes) {
+    const hubScale = Math.max(0.82, Math.min(1.28, hubMetrics.get(node.id).radiusScale));
+    const maxBaseRadiusPx = node.id === 'high' ? 44 : 26;
+    const chip = nodeChip(scene, node.id);
+    assert.ok(
+      Number(chip.dataset.visualRadiusPx) <= maxBaseRadiusPx * hubScale + 0.02,
+      `${node.id} must not overwhelm the selected inspection view`,
+    );
+  }
+});
+
+test('selection and context materials retain readable body and accent contrast', async (t) => {
+  installFakeDom();
+  const THREE = await import('three');
+  const { createNodeVisualSystem } = await import('../../js/node-visual-system.js');
+  const scene = new THREE.Scene();
+  const nodes = [
+    { id: 'policy_rate', cat: 'policy', name: { ko: '기준금리', en: 'Policy rate' } },
+    { id: 'fx', cat: 'policy', name: { ko: '환율', en: 'FX' } },
+  ];
+  const visual = createNodeVisualSystem({
+    scene,
+    graph: { nodes },
+    categories: [{ id: 'policy', color: '#66aaff' }],
+  });
+  t.after(() => visual.dispose());
+
+  const dimmedBody = scene.getObjectByName('policy_rate__fallback_body').material;
+  const dimmedAccent = scene.getObjectByName('policy_rate__fallback_accent').material;
+  const selectedBody = scene.getObjectByName('fx__fallback_body').material;
+  const selectionRing = scene.getObjectByName('fx__selection_ring');
+  const bodyBefore = dimmedBody.color.clone();
+  const accentBefore = dimmedAccent.color.clone();
+
+  visual.setHighlight({ selectedId: 'fx', nodeOrders: new Map([['fx', 0]]) });
+
+  assert.ok(dimmedBody.color.r >= bodyBefore.r * 0.55);
+  assert.ok(dimmedAccent.color.b >= accentBefore.b * 0.5);
+  assert.ok(dimmedAccent.emissiveIntensity >= 0.025);
+  assert.ok(selectedBody.emissiveIntensity >= 0.1);
+  assert.ok(selectionRing.geometry.parameters.tube >= 0.04);
 });
 
 test('loaded models normalize source bounds to radius one before applying hub scale', async (t) => {
@@ -527,7 +572,7 @@ test('delayed GLB install preserves material, selection, pressure, and pending m
 
   const policyAccent = scene.getObjectByName('policy_rate__accent');
   const fxAccent = scene.getObjectByName('fx__accent');
-  assert.equal(fxAccent.material.emissiveIntensity, 0.18, 'selected material emphasis must survive install');
+  assert.equal(fxAccent.material.emissiveIntensity, 0.24, 'selected material emphasis must survive install');
   const policyBaseScale = policyAccent.scale.x;
   const fxBaseX = fxAccent.position.x;
   visual.update(1.1);

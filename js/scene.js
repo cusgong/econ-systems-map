@@ -7,14 +7,21 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { edgeKey } from './graph.js';
 import {
+  HIGHLIGHT_EDGE_OPACITY,
+  HIGHLIGHT_EDGE_BASE_RADIUS,
+  HIGHLIGHT_EDGE_STRENGTH_RADIUS,
+  HIGHLIGHT_ARROW_RADIUS,
+  HIGHLIGHT_ARROW_HEIGHT,
+  HIGHLIGHT_PULSE_SCALE,
   PASSIVE_EDGE_BASE_OPACITY,
   PASSIVE_EDGE_GROUP_KEYS,
   PASSIVE_EDGE_HIGHLIGHT_OPACITY,
   buildPassiveEdgeBatches,
   setPassiveEdgeBatchOpacity,
+  trimEdgeEndpoints,
 } from './edge-batching.js';
 import { createNodeVisualSystem } from './node-visual-system.js';
-import { minimumFocusDistance } from './viewport-policy.js';
+import { labelOpacityForState, minimumFocusDistance } from './viewport-policy.js';
 
 const COLOR_POS = new THREE.Color('#2fb9d8');
 const COLOR_NEG = new THREE.Color('#ff8a55');
@@ -75,7 +82,7 @@ export function createScene(opts) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.95;
+  renderer.toneMappingExposure = 1.08;
   renderer.shadowMap.enabled = false;
   function syncPixelRatio() {
     const mobile = window.matchMedia('(pointer: coarse)').matches;
@@ -99,11 +106,13 @@ export function createScene(opts) {
   const envTarget = pmrem.fromScene(room, 0.04);
   scene.environment = envTarget.texture;
 
-  const keyLight = new THREE.DirectionalLight(0xf2f5ff, 1.35);
+  const hemisphereLight = new THREE.HemisphereLight(0xbfdcff, 0x08101f, 0.7);
+  scene.add(hemisphereLight);
+  const keyLight = new THREE.DirectionalLight(0xf2f5ff, 1.45);
   keyLight.position.set(24, 36, 18);
   keyLight.castShadow = false;
   scene.add(keyLight);
-  const rimLight = new THREE.DirectionalLight(0x7298d8, 0.42);
+  const rimLight = new THREE.DirectionalLight(0x7298d8, 0.9);
   rimLight.position.set(-24, 16, -18);
   rimLight.castShadow = false;
   scene.add(rimLight);
@@ -223,15 +232,23 @@ export function createScene(opts) {
   for (const e of graph.edges) {
     const a = graph.nodeById.get(e.from).pos;
     const b = graph.nodeById.get(e.to).pos;
-    const dir = new THREE.Vector3().subVectors(b, a);
+    const trimmed = trimEdgeEndpoints(
+      a,
+      b,
+      opts.hubMetrics?.get?.(e.from)?.radiusScale,
+      opts.hubMetrics?.get?.(e.to)?.radiusScale,
+    );
+    const start = new THREE.Vector3(trimmed.start.x, trimmed.start.y, trimmed.start.z);
+    const end = new THREE.Vector3(trimmed.end.x, trimmed.end.y, trimmed.end.z);
+    const dir = new THREE.Vector3().subVectors(end, start);
     const dist = dir.length();
     const side = new THREE.Vector3().crossVectors(dir, up).normalize();
     if (!isFinite(side.x)) side.set(1, 0, 0);
     const f = hash01(e.from + e.to) * 2 - 1;
-    const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5)
+    const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5)
       .addScaledVector(side, dist * 0.16 * f)
       .addScaledVector(up, dist * 0.1 + 2.5);
-    const curve = new THREE.QuadraticBezierCurve3(a.clone(), mid, b.clone());
+    const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
     edgeVis.set(edgeKey(e), { e, curve, dimmed: false, highlighted: false });
     passiveEdgeRecords.push({ edge: e, curve });
   }
@@ -276,7 +293,7 @@ export function createScene(opts) {
       const p = particles[i];
       const ev = edgeVis.get(p.key);
       const c = p.sign > 0 ? COLOR_POS_HL : COLOR_NEG_HL;
-      const mul = ev.dimmed ? 0.05 : (ev.highlighted ? 1.3 : 0.55);
+      const mul = ev.dimmed ? 0.05 : (ev.highlighted ? 1.05 : 0.48);
       pCol[i * 3] = Math.min(1, c.r * mul);
       pCol[i * 3 + 1] = Math.min(1, c.g * mul);
       pCol[i * 3 + 2] = Math.min(1, c.b * mul);
@@ -373,7 +390,13 @@ export function createScene(opts) {
       const bright = ev.e.flip
         ? new THREE.Color('#ffdf8e')
         : (ev.e.sign > 0 ? COLOR_POS_HL : COLOR_NEG_HL);
-      const tubeGeo = new THREE.TubeGeometry(ev.curve, 40, 0.1 + 0.055 * ev.e.strength, 6, false);
+      const tubeGeo = new THREE.TubeGeometry(
+        ev.curve,
+        40,
+        HIGHLIGHT_EDGE_BASE_RADIUS + HIGHLIGHT_EDGE_STRENGTH_RADIUS * ev.e.strength,
+        6,
+        false,
+      );
       const tubeMat = new THREE.MeshBasicMaterial({
         color: bright, transparent: true, opacity: 0,
         blending: THREE.AdditiveBlending, depthWrite: false,
@@ -381,7 +404,7 @@ export function createScene(opts) {
       const tube = new THREE.Mesh(tubeGeo, tubeMat);
       hlGroup.add(tube);
 
-      const coneGeo = new THREE.ConeGeometry(0.55, 1.7, 10);
+      const coneGeo = new THREE.ConeGeometry(HIGHLIGHT_ARROW_RADIUS, HIGHLIGHT_ARROW_HEIGHT, 10);
       const coneMat = tubeMat.clone();
       const cone = new THREE.Mesh(coneGeo, coneMat);
       const pt = ev.curve.getPoint(0.88);
@@ -391,7 +414,7 @@ export function createScene(opts) {
       hlGroup.add(cone);
 
       const showAt = reducedMotion ? now : now + (order - 1) * 0.45;
-      staged.push({ materials: [tubeMat, coneMat], target: 0.85, showAt });
+      staged.push({ materials: [tubeMat, coneMat], target: HIGHLIGHT_EDGE_OPACITY, showAt });
 
       // traveling pulse for this edge: departs on its ripple order, and its
       // travel TIME is proportional to the edge's lag — 시차가 눈에 보인다
@@ -400,7 +423,7 @@ export function createScene(opts) {
           map: glowTex, color: bright, transparent: true, opacity: 0.95,
           blending: THREE.AdditiveBlending, depthWrite: false,
         }));
-        spr.scale.setScalar(3.4);
+        spr.scale.setScalar(HIGHLIGHT_PULSE_SCALE);
         spr.visible = false;
         hlGroup.add(spr);
         pulseEdges.push({
@@ -589,10 +612,35 @@ export function createScene(opts) {
     for (const { nodeRoot, chip } of nodeRuntime.values()) {
       if (!chip) continue;
       const d = camWorld.distanceTo(nodeRoot.position);
-      let o = 1;
-      if (d > 95) o = Math.max(0.25, 1 - (d - 95) / 130);
-      if (chip.classList.contains('dimmed')) o = Math.min(o, 0.14);
+      const o = labelOpacityForState(d, {
+        dimmed: chip.classList.contains('dimmed'),
+        highlighted: chip.classList.contains('hl'),
+        selected: chip.classList.contains('selected'),
+      });
       chip.style.opacity = String(o);
+    }
+  }
+
+  // --- layer tags yield to node labels ---
+  // The layer name tags are ambient orientation (a faint altitude ledger); a
+  // variable's own label is content. When a tag would collide with a visible
+  // node label it fades out so the reading surface always wins.
+  function declutterLayerTags() {
+    if (!layerTags.length) return;
+    const labelRects = [];
+    for (const { chip } of nodeRuntime.values()) {
+      if (!chip || chip.style.visibility === 'hidden') continue;
+      if (parseFloat(chip.style.opacity || '1') <= 0.12) continue;
+      labelRects.push(chip.getBoundingClientRect());
+    }
+    for (const tg of layerTags) {
+      const r = tg.el.getBoundingClientRect();
+      if (r.width === 0) { tg.el.style.opacity = ''; continue; }
+      const hit = labelRects.some((b) => (
+        r.left < b.right && r.right > b.left && r.top < b.bottom && r.bottom > b.top
+      ));
+      // ghost, not gone: content wins the collision but the altitude ledger survives
+      tg.el.style.opacity = hit ? '0.22' : '';
     }
   }
 
@@ -621,6 +669,7 @@ export function createScene(opts) {
     }
     visualSystem.update(elapsed);
     if (frame % 3 === 0) updateLabelFade();
+    if (frame % 15 === 0) declutterLayerTags();
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
     frame++;
