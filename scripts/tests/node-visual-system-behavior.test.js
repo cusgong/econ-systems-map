@@ -185,6 +185,286 @@ function makeModelRoot(THREE, id, signature) {
   return root;
 }
 
+function assertClose(actual, expected, epsilon = 1e-6) {
+  assert.ok(
+    Math.abs(actual - expected) <= epsilon,
+    `expected ${actual} to be within ${epsilon} of ${expected}`,
+  );
+}
+
+function nodeChip(scene, id) {
+  return scene
+    .getObjectByName(`${id}__label_anchor`)
+    ?.children[0]
+    ?.element
+    ?.querySelector('.node-label');
+}
+
+test('hub sizing clamps to the approved range and drives fallback, labels, and hit proxies', async (t) => {
+  installFakeDom();
+  const THREE = await import('three');
+  const { createNodeVisualSystem } = await import('../../js/node-visual-system.js');
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(55, 390 / 844, 0.1, 600);
+  camera.position.set(0, 0, 200);
+  const canvas = document.createElement('canvas');
+  canvas.clientWidth = 390;
+  canvas.clientHeight = 844;
+  canvas.offsetWidth = 390;
+  canvas.offsetHeight = 844;
+  const renderer = { domElement: canvas, info: { render: { calls: 7, triangles: 321 } } };
+  const nodes = [
+    { id: 'low', cat: 'policy', name: { ko: '낮음', en: 'Low' }, pos: new THREE.Vector3(-4, 2, 0) },
+    { id: 'mid', cat: 'policy', name: { ko: '중간', en: 'Medium' }, pos: new THREE.Vector3(0, 2, 0) },
+    { id: 'high', cat: 'policy', name: { ko: '높음', en: 'High' }, pos: new THREE.Vector3(4, 2, 0) },
+  ];
+  const hubMetrics = new Map([
+    ['low', { score100: 0, radiusScale: 0.2 }],
+    ['mid', { score100: 50, radiusScale: 1.074895 }],
+    ['high', { score100: 100, radiusScale: 2 }],
+  ]);
+  const visual = createNodeVisualSystem({
+    scene,
+    camera,
+    renderer,
+    graph: { nodes },
+    categories: [{ id: 'policy', color: '#66aaff' }],
+    hubMetrics,
+  });
+  t.after(() => visual.dispose());
+
+  visual.update(1);
+  const expected = new Map([
+    ['low', 1.82 * 0.82],
+    ['mid', 1.82 * 1.074895],
+    ['high', 1.82 * 1.28],
+  ]);
+  for (const node of nodes) {
+    const radius = expected.get(node.id);
+    const root = scene.getObjectByName(`${node.id}__node_root`);
+    assert.deepEqual(root.position.toArray(), node.pos.toArray(), 'semantic position must not move');
+    assertClose(scene.getObjectByName(`${node.id}__model_root`).scale.x, radius);
+    assertClose(scene.getObjectByName(`${node.id}__fallback_root`).scale.x, radius);
+    assertClose(scene.getObjectByName(`${node.id}__selection_ring`).scale.x, radius);
+    assertClose(scene.getObjectByName(`${node.id}__label_anchor`).position.y, radius + 0.62);
+
+    const distance = camera.position.distanceTo(root.position);
+    const worldPerPixel = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * distance) / 844;
+    const hitRadius = scene.getObjectByName(`${node.id}__hit_proxy`).scale.x;
+    assert.ok((hitRadius / worldPerPixel) * 2 >= 44 - 1e-6);
+    const chip = nodeChip(scene, node.id);
+    assert.equal(chip.dataset.hubScore, String(hubMetrics.get(node.id).score100));
+    assert.equal(chip.dataset.radiusScale, String(radius / 1.82));
+    assert.ok(Number(chip.dataset.hitRadiusPx) >= 22);
+    assertClose(Number(chip.dataset.visualRadiusPx), radius / worldPerPixel, 0.02);
+  }
+  assert.ok(expected.get('low') < expected.get('mid'));
+  assert.ok(expected.get('mid') < expected.get('high'));
+});
+
+test('loaded models normalize source bounds to radius one before applying hub scale', async (t) => {
+  installFakeDom();
+  const THREE = await import('three');
+  const { createNodeVisualSystem } = await import('../../js/node-visual-system.js');
+  const sourceRoot = makeModelRoot(THREE, 'policy_rate', 'rotate');
+  sourceRoot.updateWorldMatrix(true, true);
+  const sourceRadius = new THREE.Box3()
+    .setFromObject(sourceRoot, true)
+    .getBoundingSphere(new THREE.Sphere()).radius;
+  const library = new THREE.Group();
+  library.add(sourceRoot);
+  const scene = new THREE.Scene();
+  const visual = createNodeVisualSystem({
+    scene,
+    graph: { nodes: [{ id: 'policy_rate', cat: 'policy', name: { ko: '기준금리', en: 'Policy rate' } }] },
+    categories: [{ id: 'policy', color: '#66aaff' }],
+    hubMetrics: new Map([['policy_rate', { score100: 100, radiusScale: 1.28 }]]),
+    loader: { async loadAsync() { return { scene: library }; } },
+  });
+  t.after(() => visual.dispose());
+
+  const result = await visual.loadLibrary('/models.glb');
+  assert.equal(result.status, 'ready');
+  const normalized = scene.getObjectByName('policy_rate__normalized_model');
+  const modelRoot = scene.getObjectByName('policy_rate__model_root');
+  assertClose(normalized.scale.x, 1 / sourceRadius);
+  assertClose(sourceRadius * normalized.scale.x, 1);
+  assertClose(sourceRadius * normalized.scale.x * modelRoot.scale.x, 1.82 * 1.28);
+});
+
+test('pressure uses a separate ring and never recolors body, accent, or lever category channels', async (t) => {
+  installFakeDom();
+  const THREE = await import('three');
+  const { createNodeVisualSystem } = await import('../../js/node-visual-system.js');
+  const scene = new THREE.Scene();
+  const visual = createNodeVisualSystem({
+    scene,
+    graph: {
+      nodes: [{ id: 'policy_rate', cat: 'policy', lever: true, name: { ko: '기준금리', en: 'Policy rate' } }],
+    },
+    categories: [{ id: 'policy', color: '#66aaff' }],
+  });
+  t.after(() => visual.dispose());
+  const body = scene.getObjectByName('policy_rate__fallback_body');
+  const accent = scene.getObjectByName('policy_rate__fallback_accent');
+  const lever = scene.getObjectByName('policy_rate__lever_ring');
+  const pressure = scene.getObjectByName('policy_rate__pressure_ring');
+  const categoryHex = accent.material.color.getHexString();
+  const bodyHex = body.material.color.getHexString();
+  const leverHex = lever.material.color.getHexString();
+
+  visual.setPressures(new Map([['policy_rate', 0.35]]));
+  const weakScale = pressure.scale.x;
+  assert.equal(pressure.material.color.getHexString(), 'ffb36b');
+  assert.equal(nodeChip(scene, 'policy_rate').querySelector('.tint').textContent, '▲');
+
+  visual.setPressures(new Map([['policy_rate', -0.9]]));
+  assert.equal(pressure.material.color.getHexString(), '6fb5ff');
+  assert.ok(pressure.scale.x > weakScale, 'pressure magnitude must increase ring scale/thickness');
+  assert.equal(nodeChip(scene, 'policy_rate').querySelector('.tint').textContent, '▼');
+  assert.equal(nodeChip(scene, 'policy_rate').dataset.pressure, '-0.900');
+  assert.equal(body.material.color.getHexString(), bodyHex);
+  assert.equal(accent.material.color.getHexString(), categoryHex);
+  assert.equal(lever.material.color.getHexString(), leverHex);
+  assert.equal(body.material.transparent, false);
+  assert.equal(accent.material.transparent, false);
+});
+
+test('diagnostics expose only settled public states and per-node fallback status', async (t) => {
+  installFakeDom();
+  const THREE = await import('three');
+  const { createNodeVisualSystem } = await import('../../js/node-visual-system.js');
+  let resolveLoad;
+  const statuses = [];
+  const scene = new THREE.Scene();
+  const visual = createNodeVisualSystem({
+    scene,
+    renderer: { info: { render: { calls: 5, triangles: 144 } } },
+    graph: { nodes: [{ id: 'policy_rate', cat: 'policy', name: { ko: '기준금리', en: 'Policy rate' } }] },
+    categories: [{ id: 'policy', color: '#66aaff' }],
+    loader: {
+      loadAsync() {
+        return new Promise((resolve) => { resolveLoad = resolve; });
+      },
+    },
+    onModelStatusChange(status) { statuses.push(status); },
+  });
+  t.after(() => visual.dispose());
+
+  const loading = visual.loadLibrary('/delayed-model.glb');
+  assert.equal(visual.getDiagnostics().modelStatus, 'fallback');
+  assert.equal(visual.getNodeModelStatus('policy_rate'), null);
+  const library = new THREE.Group();
+  library.add(makeModelRoot(THREE, 'policy_rate', 'rotate'));
+  resolveLoad({ scene: library });
+  await loading;
+
+  assert.deepEqual(statuses, ['ready']);
+  assert.equal(visual.getNodeModelStatus('policy_rate'), 'ready');
+  assert.equal(nodeChip(scene, 'policy_rate').dataset.modelStatus, 'ready');
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(visual.getDiagnostics()).filter(([key]) => (
+      ['modelStatus', 'loadedModelCount', 'fallbackCount', 'calls', 'triangles'].includes(key)
+    ))),
+    { modelStatus: 'ready', loadedModelCount: 1, fallbackCount: 0, calls: 5, triangles: 144 },
+  );
+});
+
+test('hover reaches its instrument tilt in about 120ms without exceeding two degrees', async (t) => {
+  installFakeDom();
+  const THREE = await import('three');
+  const { createNodeVisualSystem } = await import('../../js/node-visual-system.js');
+  const scene = new THREE.Scene();
+  const visual = createNodeVisualSystem({
+    scene,
+    graph: { nodes: [{ id: 'policy_rate', cat: 'policy', name: { ko: '기준금리', en: 'Policy rate' } }] },
+    categories: [{ id: 'policy', color: '#66aaff' }],
+  });
+  t.after(() => visual.dispose());
+  const modelRoot = scene.getObjectByName('policy_rate__model_root');
+  const fallbackRoot = scene.getObjectByName('policy_rate__fallback_root');
+
+  visual.update(0);
+  visual.setHoveredId('policy_rate');
+  for (const elapsed of [0.04, 0.08, 0.12]) visual.update(elapsed);
+  const tiltAt120 = THREE.MathUtils.radToDeg(Math.hypot(modelRoot.rotation.x, modelRoot.rotation.y));
+  assert.ok(tiltAt120 >= 1.5, `expected a legible tilt by 120ms, received ${tiltAt120} degrees`);
+  for (let elapsed = 0.16; elapsed <= 1; elapsed += 0.04) visual.update(elapsed);
+  const settledTilt = THREE.MathUtils.radToDeg(Math.hypot(modelRoot.rotation.x, modelRoot.rotation.y));
+  assert.ok(settledTilt <= 2, `hover tilt exceeded two degrees: ${settledTilt}`);
+  assertClose(fallbackRoot.rotation.x, modelRoot.rotation.x);
+  assertClose(fallbackRoot.rotation.y, modelRoot.rotation.y);
+});
+
+test('selection signature honors exported transform and clamps duration to 220-320ms', async (t) => {
+  installFakeDom();
+  const THREE = await import('three');
+  const { createNodeVisualSystem } = await import('../../js/node-visual-system.js');
+  const sourceRoot = makeModelRoot(THREE, 'policy_rate', 'rotate');
+  sourceRoot.userData.econ_axis = 'x';
+  sourceRoot.userData.econ_amount = 0.4;
+  sourceRoot.userData.econ_duration = 0.8;
+  const library = new THREE.Group();
+  library.add(sourceRoot);
+  const scene = new THREE.Scene();
+  const visual = createNodeVisualSystem({
+    scene,
+    graph: { nodes: [{ id: 'policy_rate', cat: 'policy', name: { ko: '기준금리', en: 'Policy rate' } }] },
+    categories: [{ id: 'policy', color: '#66aaff' }],
+    loader: { async loadAsync() { return { scene: library }; } },
+  });
+  t.after(() => visual.dispose());
+  await visual.loadLibrary('/models.glb');
+  const accent = scene.getObjectByName('policy_rate__accent');
+  const baseQuaternion = accent.quaternion.clone();
+
+  visual.update(1);
+  visual.setHighlight({ selectedId: 'policy_rate', nodeOrders: new Map([['policy_rate', 0]]) });
+  visual.update(1.16);
+  assert.ok(baseQuaternion.angleTo(accent.quaternion) > 0.1, 'exported rotate signature must run');
+  visual.update(1.321);
+  assert.ok(baseQuaternion.angleTo(accent.quaternion) <= 1e-6, 'signature must end by 320ms');
+});
+
+test('arrival animates the accent and a sign-colored ring, then reduced motion restores baselines', async (t) => {
+  installFakeDom();
+  const THREE = await import('three');
+  const { createNodeVisualSystem } = await import('../../js/node-visual-system.js');
+  const scene = new THREE.Scene();
+  const visual = createNodeVisualSystem({
+    scene,
+    graph: { nodes: [{ id: 'policy_rate', cat: 'policy', name: { ko: '기준금리', en: 'Policy rate' } }] },
+    categories: [{ id: 'policy', color: '#66aaff' }],
+  });
+  t.after(() => visual.dispose());
+  const accent = scene.getObjectByName('policy_rate__fallback_accent');
+  const ring = scene.getObjectByName('policy_rate__arrival_ring');
+  const baseScale = accent.scale.clone();
+
+  visual.update(2);
+  visual.pulseArrival('policy_rate', -1);
+  visual.update(2.1);
+  assert.equal(ring.visible, true);
+  assert.equal(ring.material.color.getHexString(), '6fb5ff');
+  assert.ok(ring.scale.x > 1.82);
+  assert.ok(accent.scale.x > baseScale.x * 1.07);
+
+  visual.setHoveredId('policy_rate');
+  visual.setHighlight({ selectedId: 'policy_rate', nodeOrders: new Map([['policy_rate', 0]]) });
+  visual.update(2.12);
+  visual.setReducedMotion(true);
+  assert.deepEqual(scene.getObjectByName('policy_rate__model_root').rotation.toArray(), [0, 0, 0, 'XYZ']);
+  assert.deepEqual(scene.getObjectByName('policy_rate__fallback_root').rotation.toArray(), [0, 0, 0, 'XYZ']);
+  assert.deepEqual(accent.position.toArray(), [0, 0, 0.78]);
+  assertClose(accent.quaternion.angleTo(new THREE.Quaternion()), 0);
+  assert.deepEqual(accent.scale.toArray(), baseScale.toArray());
+  assert.equal(ring.visible, false);
+
+  visual.pulseArrival('policy_rate', 1);
+  visual.update(2.2);
+  assert.equal(ring.visible, false, 'reduced motion must suppress new arrival motion');
+});
+
 test('delayed GLB install preserves material, selection, pressure, and pending motion state', async (t) => {
   installFakeDom();
   const THREE = await import('three');

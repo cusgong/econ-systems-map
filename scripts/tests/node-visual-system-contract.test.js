@@ -11,6 +11,33 @@ const visualSource = source('../../js/node-visual-system.js');
 const sceneSource = source('../../js/scene.js');
 const mainSource = source('../../js/main.js');
 
+test('boot computes hub metrics once and shares the same map with scene and UI', () => {
+  assert.match(mainSource, /import\s*{\s*computeHubMetrics\s*}\s*from\s*['"]\.\/hub-metrics\.js['"]/);
+  assert.equal(
+    (mainSource.match(/\bcomputeHubMetrics\s*\(/g) || []).length,
+    1,
+    'boot must compute hub metrics exactly once',
+  );
+  assert.match(mainSource, /const\s+hubMetrics\s*=\s*computeHubMetrics\s*\(\s*graph\s*\)/);
+  assert.match(mainSource, /createScene\s*\(\s*{[\s\S]*?\bhubMetrics\s*,[\s\S]*?}\s*\)/);
+  assert.match(mainSource, /createUI\s*\(\s*{[\s\S]*?\bhubMetrics\s*,[\s\S]*?}\s*\)/);
+  assert.match(sceneSource, /hubMetrics:\s*opts\.hubMetrics/);
+});
+
+test('scene exposes pressure as the primary API and keeps setNodeTints as an alias', () => {
+  assert.match(sceneSource, /function\s+setPressures\s*\(\s*map\s*\)\s*{\s*visualSystem\.setPressures\s*\(\s*map\s*\)\s*;?\s*}/);
+  assert.match(sceneSource, /function\s+setNodeTints\s*\(\s*map\s*\)\s*{\s*setPressures\s*\(\s*map\s*\)\s*;?\s*}/);
+  assert.match(sceneSource, /setHighlight,\s*clearHighlight,\s*setPressures,\s*setNodeTints/);
+});
+
+test('scene keeps node motion event-driven and lever drag owns nodeRoot Y', () => {
+  assert.match(sceneSource, /controls\.autoRotate\s*=\s*false/);
+  assert.doesNotMatch(sceneSource, /controls\.autoRotate\s*=\s*!reducedMotion/);
+  const nodeRootYWrites = sceneSource.match(/runtime\.nodeRoot\.position\.y\s*=/g) || [];
+  assert.equal(nodeRootYWrites.length, 3, 'pointer drag start/end/cancel are the only nodeRoot Y writers');
+  assert.match(sceneSource, /visualSystem\.pulseArrival\s*\(\s*p\.toId\s*,\s*p\.sign\s*\)/);
+});
+
 test('defines the stable node visual system API and synchronous fallback hierarchy', () => {
   assert.match(visualSource, /export function createNodeVisualSystem\s*\(/);
   assert.match(visualSource, /graph\.nodes/);
@@ -18,7 +45,7 @@ test('defines the stable node visual system API and synchronous fallback hierarc
 
   for (const field of [
     'nodeRoot', 'modelRoot', 'fallbackRoot', 'bodyMeshes', 'accentRoot',
-    'selectionRing', 'pressureRing', 'leverRing', 'hitProxy', 'labelAnchor',
+    'selectionRing', 'pressureRing', 'arrivalRing', 'leverRing', 'hitProxy', 'labelAnchor',
     'chip', 'categoryColor', 'hubMetric', 'modelStatus', 'motionState',
   ]) {
     assert.match(visualSource, new RegExp(`\\b${field}\\b`), `missing node record field: ${field}`);
@@ -27,7 +54,8 @@ test('defines the stable node visual system API and synchronous fallback hierarc
   for (const method of [
     'pickTargets', 'loadLibrary', 'setHoveredId', 'setHighlight',
     'clearHighlight', 'setPressures', 'pulseArrival', 'setLang',
-    'setLabelTitles', 'setLabelValues', 'update', 'getDiagnostics', 'dispose',
+    'setLabelTitles', 'setLabelValues', 'update', 'getDiagnostics',
+    'getNodeModelStatus', 'dispose',
   ]) {
     assert.match(visualSource, new RegExp(`\\b${method}\\b`), `missing public API member: ${method}`);
   }

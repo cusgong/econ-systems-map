@@ -67,6 +67,12 @@ export const UI_DICT_EN = {
   '2차 · 상류 원인': '2nd order · upstream drivers',
   '3차 · 더 먼 원인': '3rd order · further upstream',
   '이 방향으로 연결된 경로가 없습니다.': 'No connected paths in this direction.',
+  '인과 허브': 'Causal hub',
+  '낮음': 'Low',
+  '중간': 'Medium',
+  '높음': 'High',
+  '강한 직·간접 경로, 최대 3단계': 'Strong direct and indirect paths, up to 3 steps',
+  '모델을 불러오지 못해 기본 형상으로 표시합니다': 'The default shape is shown because the model could not be loaded',
 
   // simulator
   '시나리오 시뮬레이터': 'Scenario simulator',

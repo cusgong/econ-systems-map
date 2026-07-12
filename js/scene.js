@@ -110,8 +110,7 @@ export function createScene(opts) {
   controls.minDistance = 26;
   controls.maxDistance = 240;
   controls.maxPolarAngle = 1.48;
-  controls.autoRotate = !reducedMotion;
-  controls.autoRotateSpeed = 0.35;
+  controls.autoRotate = false;
   function onControlsStart() {
     controls.autoRotate = false;
     camTween = null; // user input takes the camera back immediately
@@ -197,6 +196,7 @@ export function createScene(opts) {
     reducedMotion,
     lang,
     onSelect,
+    onModelStatusChange: opts.onModelStatusChange,
   });
   const nodeRuntime = new Map(visualSystem.pickTargets.map((target) => {
     const id = target.userData.nodeId;
@@ -427,9 +427,12 @@ export function createScene(opts) {
     }
   }
 
-  // --- node tints (simulator) ---
-  function setNodeTints(map) {
+  // --- node pressure (simulator) ---
+  function setPressures(map) {
     visualSystem.setPressures(map);
+  }
+  function setNodeTints(map) {
+    setPressures(map);
   }
 
   // --- camera choreography ---
@@ -650,7 +653,9 @@ export function createScene(opts) {
   document.addEventListener('visibilitychange', onVisibilityChange);
 
   return {
-    setHighlight, clearHighlight, setNodeTints, focusNodes, resetView,
+    setHighlight, clearHighlight, setPressures, setNodeTints, focusNodes, resetView,
+    getDiagnostics: visualSystem.getDiagnostics,
+    getNodeModelStatus: visualSystem.getNodeModelStatus,
     setLang(l) {
       lang = l;
       visualSystem.setLang(l);

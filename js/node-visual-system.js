@@ -27,6 +27,14 @@ const VERTICAL_SLICE_MODEL_IDS = new Set([
   'risk_sentiment',
 ]);
 const BASE_VISUAL_RADIUS = 1.82;
+const MIN_HUB_RADIUS_SCALE = 0.82;
+const MAX_HUB_RADIUS_SCALE = 1.28;
+const HOVER_TILT_X = THREE.MathUtils.degToRad(-1);
+const HOVER_TILT_Y = THREE.MathUtils.degToRad(1.7);
+const HOVER_RESPONSE_RATE = 18;
+const MIN_SIGNATURE_DURATION = 0.22;
+const MAX_SIGNATURE_DURATION = 0.32;
+const ARRIVAL_DURATION = 0.2;
 const LABEL_GAP = 0.62;
 const LABEL_SCREEN_GAP = 4;
 const LABEL_SCREEN_MARGIN = 8;
@@ -170,10 +178,11 @@ function disposeTree(root, keepMaterials = new Set()) {
 
 function cloneMetric(metric) {
   if (!metric) return { ...NEUTRAL_HUB_METRIC };
+  const radiusScale = Number.isFinite(metric.radiusScale) ? metric.radiusScale : 1;
   return {
     ...NEUTRAL_HUB_METRIC,
     ...metric,
-    radiusScale: Number.isFinite(metric.radiusScale) ? metric.radiusScale : 1,
+    radiusScale: Math.max(MIN_HUB_RADIUS_SCALE, Math.min(MAX_HUB_RADIUS_SCALE, radiusScale)),
   };
 }
 
@@ -221,12 +230,14 @@ export function createNodeVisualSystem(options) {
   const fallbackAccentGeometry = new THREE.TorusGeometry(0.76, 0.065, 10, 40);
   const selectionGeometry = new THREE.TorusGeometry(1.22, 0.022, 8, 48);
   const pressureGeometry = new THREE.TorusGeometry(1.32, 0.05, 8, 48);
+  const arrivalGeometry = new THREE.TorusGeometry(1.5, 0.025, 8, 48);
   const leverGeometry = new THREE.TorusGeometry(1.43, 0.035, 8, 48);
   const hitGeometry = new THREE.SphereGeometry(1, 12, 8);
   sharedGeometries.add(fallbackSphereGeometry);
   sharedGeometries.add(fallbackAccentGeometry);
   sharedGeometries.add(selectionGeometry);
   sharedGeometries.add(pressureGeometry);
+  sharedGeometries.add(arrivalGeometry);
   sharedGeometries.add(leverGeometry);
   sharedGeometries.add(hitGeometry);
 
@@ -319,6 +330,15 @@ export function createNodeVisualSystem(options) {
     pressureRing.visible = false;
     nodeRoot.add(pressureRing);
 
+    const arrivalRing = new THREE.Mesh(
+      arrivalGeometry,
+      makeOverlayMaterial(COLOR_UP, 0),
+    );
+    arrivalRing.name = `${node.id}__arrival_ring`;
+    arrivalRing.scale.setScalar(visualRadius);
+    arrivalRing.visible = false;
+    nodeRoot.add(arrivalRing);
+
     const leverRing = node.lever
       ? new THREE.Mesh(leverGeometry, makeOverlayMaterial(categoryColor, 0.48))
       : null;
@@ -359,6 +379,10 @@ export function createNodeVisualSystem(options) {
     chip.type = 'button';
     chip.className = 'node-label';
     chip.dataset.nodeId = node.id;
+    chip.dataset.hubScore = String(hubMetric.score100);
+    chip.dataset.radiusScale = String(hubMetric.radiusScale);
+    chip.dataset.modelStatus = 'fallback';
+    chip.dataset.pressure = '0.000';
     chip.style.position = 'absolute';
     chip.style.left = '0';
     chip.style.top = '0';
@@ -405,6 +429,7 @@ export function createNodeVisualSystem(options) {
       accentRoot: fallbackAccent,
       selectionRing,
       pressureRing,
+      arrivalRing,
       leverRing,
       hitProxy,
       labelAnchor,
@@ -473,6 +498,7 @@ export function createNodeVisualSystem(options) {
     record.fallbackAccent.quaternion.copy(record.fallbackAccentBaseline.quaternion);
     record.fallbackAccent.scale.copy(record.fallbackAccentBaseline.scale);
     record.modelStatus = 'fallback';
+    record.chip.dataset.modelStatus = 'fallback';
     configureBodyMaterial(record, 'MAT__DARK_TITANIUM');
     updateLabelOffset(record);
     resetAccentBaseline(record);
@@ -516,6 +542,7 @@ export function createNodeVisualSystem(options) {
     record.bodyMeshes = bodyMeshes;
     record.accentRoot = accentRoot;
     record.modelStatus = 'ready';
+    record.chip.dataset.modelStatus = 'ready';
     const normalizedTop = (bounds.max.y - sphere.center.y) / sphere.radius;
     updateLabelOffset(record, normalizedTop);
     resetAccentBaseline(record);
@@ -548,6 +575,7 @@ export function createNodeVisualSystem(options) {
         modelStatus = 'fallback';
         setDocumentStatus('fallback');
       });
+      options.onModelStatusChange?.('fallback');
       return {
         status: 'fallback',
         loadedIds: [],
@@ -558,6 +586,7 @@ export function createNodeVisualSystem(options) {
 
     modelStatus = 'loading';
     setDocumentStatus('loading');
+    for (const record of records.values()) record.chip.dataset.modelStatus = 'pending';
     try {
       const loader = options.loader || new GLTFLoader(options.loadingManager);
       const gltf = await loader.loadAsync(url);
@@ -612,7 +641,9 @@ export function createNodeVisualSystem(options) {
           ? 'partial'
           : 'fallback';
       setDocumentStatus(modelStatus);
+      for (const record of records.values()) record.chip.dataset.modelStatus = record.modelStatus;
       warnIssues(modelIssues);
+      options.onModelStatusChange?.(modelStatus);
       return {
         status: modelStatus,
         loadedIds,
@@ -637,6 +668,7 @@ export function createNodeVisualSystem(options) {
       modelStatus = 'fallback';
       setDocumentStatus('fallback');
       warnIssues(modelIssues);
+      options.onModelStatusChange?.('fallback');
       return {
         status: 'fallback',
         loadedIds: [],
@@ -699,6 +731,7 @@ export function createNodeVisualSystem(options) {
     for (const record of records.values()) {
       const value = map ? (map.get(record.id) ?? 0) : 0;
       record.pressure = value;
+      record.chip.dataset.pressure = Number(value).toFixed(3);
       const active = Math.abs(value) > 0.06;
       record.pressureRing.visible = active;
       record.pressureRing.material.color.copy(value >= 0 ? COLOR_UP : COLOR_DOWN);
@@ -717,6 +750,10 @@ export function createNodeVisualSystem(options) {
     if (!record || reducedMotion) return;
     record.motionState.arrivalAt = lastElapsed;
     record.motionState.arrivalSign = sign >= 0 ? 1 : -1;
+    record.arrivalRing.material.color.copy(record.motionState.arrivalSign > 0 ? COLOR_UP : COLOR_DOWN);
+    record.arrivalRing.material.opacity = 0.72;
+    record.arrivalRing.scale.setScalar(record.visualRadius);
+    record.arrivalRing.visible = true;
   }
 
   function setLang(nextLang) {
@@ -753,7 +790,10 @@ export function createNodeVisualSystem(options) {
     const distance = camera.position.distanceTo(worldPosition);
     const worldPerPixel = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * distance) / height;
     const minimumRadius = worldPerPixel * 22;
-    record.hitProxy.scale.setScalar(Math.max(record.visualRadius * 1.18, minimumRadius));
+    const hitRadius = Math.max(record.visualRadius * 1.18, minimumRadius);
+    record.hitProxy.scale.setScalar(hitRadius);
+    record.chip.dataset.hitRadiusPx = (hitRadius / worldPerPixel).toFixed(2);
+    record.chip.dataset.visualRadiusPx = (record.visualRadius / worldPerPixel).toFixed(2);
   }
 
   function updateAccentMotion(record, elapsed) {
@@ -762,6 +802,9 @@ export function createNodeVisualSystem(options) {
     accent.position.copy(state.accentBasePosition);
     accent.quaternion.copy(state.accentBaseQuaternion);
     accent.scale.copy(state.accentBaseScale);
+    record.arrivalRing.visible = false;
+    record.arrivalRing.material.opacity = 0;
+    record.arrivalRing.scale.setScalar(record.visualRadius);
     if (reducedMotion) return;
 
     let signature = null;
@@ -769,7 +812,8 @@ export function createNodeVisualSystem(options) {
     let signatureAmount = 0;
     let signatureWave = 0;
     if (state.selectedAt !== null) {
-      const duration = Number(record.loadedRoot?.children[0]?.userData?.econ_duration) || 0.28;
+      const requestedDuration = Number(record.loadedRoot?.children[0]?.userData?.econ_duration) || 0.28;
+      const duration = Math.max(MIN_SIGNATURE_DURATION, Math.min(MAX_SIGNATURE_DURATION, requestedDuration));
       const t = (elapsed - state.selectedAt) / duration;
       if (t >= 1) {
         state.selectedAt = null;
@@ -783,11 +827,15 @@ export function createNodeVisualSystem(options) {
     }
     let arrivalScale = 1;
     if (state.arrivalAt !== null) {
-      const t = (elapsed - state.arrivalAt) / 0.2;
+      const t = (elapsed - state.arrivalAt) / ARRIVAL_DURATION;
       if (t >= 1) {
         state.arrivalAt = null;
       } else if (t >= 0) {
         arrivalScale = 1 + Math.sin(Math.PI * t) * 0.08;
+        record.arrivalRing.visible = true;
+        record.arrivalRing.material.color.copy(state.arrivalSign > 0 ? COLOR_UP : COLOR_DOWN);
+        record.arrivalRing.material.opacity = 0.72 * (1 - t);
+        record.arrivalRing.scale.setScalar(record.visualRadius * (1 + 0.22 * t));
       }
     }
     if (!signature && arrivalScale === 1) return;
@@ -956,13 +1004,13 @@ export function createNodeVisualSystem(options) {
     lastElapsed = Number.isFinite(elapsed) ? elapsed : lastElapsed;
     const delta = Math.max(0, Math.min(0.05, lastElapsed - previousElapsed));
     previousElapsed = lastElapsed;
-    const smoothing = reducedMotion ? 1 : 1 - Math.exp(-delta * 18);
+    const smoothing = reducedMotion ? 1 : 1 - Math.exp(-delta * HOVER_RESPONSE_RATE);
     for (const record of records.values()) {
       const hover = record.motionState.hovered && !reducedMotion;
-      record.modelRoot.rotation.x += ((hover ? -0.018 : 0) - record.modelRoot.rotation.x) * smoothing;
-      record.modelRoot.rotation.y += ((hover ? 0.03 : 0) - record.modelRoot.rotation.y) * smoothing;
-      record.fallbackRoot.rotation.x += ((hover ? -0.018 : 0) - record.fallbackRoot.rotation.x) * smoothing;
-      record.fallbackRoot.rotation.y += ((hover ? 0.03 : 0) - record.fallbackRoot.rotation.y) * smoothing;
+      record.modelRoot.rotation.x += ((hover ? HOVER_TILT_X : 0) - record.modelRoot.rotation.x) * smoothing;
+      record.modelRoot.rotation.y += ((hover ? HOVER_TILT_Y : 0) - record.modelRoot.rotation.y) * smoothing;
+      record.fallbackRoot.rotation.x += ((hover ? HOVER_TILT_X : 0) - record.fallbackRoot.rotation.x) * smoothing;
+      record.fallbackRoot.rotation.y += ((hover ? HOVER_TILT_Y : 0) - record.fallbackRoot.rotation.y) * smoothing;
       updateAccentMotion(record, lastElapsed);
       updateHitProxy(record);
     }
@@ -984,13 +1032,16 @@ export function createNodeVisualSystem(options) {
       record.accentRoot.position.copy(record.motionState.accentBasePosition);
       record.accentRoot.quaternion.copy(record.motionState.accentBaseQuaternion);
       record.accentRoot.scale.copy(record.motionState.accentBaseScale);
+      record.arrivalRing.visible = false;
+      record.arrivalRing.material.opacity = 0;
+      record.arrivalRing.scale.setScalar(record.visualRadius);
     }
   }
 
   function getDiagnostics() {
     const loadedModelCount = [...records.values()].filter((record) => record.modelStatus === 'ready').length;
     return {
-      modelStatus,
+      modelStatus: normalizePublicLoadStatus(modelStatus),
       loadedModelCount,
       fallbackCount: records.size - loadedModelCount,
       calls: renderer?.info?.render?.calls ?? 0,
@@ -998,6 +1049,12 @@ export function createNodeVisualSystem(options) {
       issues: [...modelIssues],
       anchorReady: records.get(VERTICAL_SLICE_ANCHOR_ID)?.modelStatus === 'ready',
     };
+  }
+
+  function getNodeModelStatus(id) {
+    if (modelStatus === 'loading') return null;
+    const record = records.get(id);
+    return record ? record.modelStatus : null;
   }
 
   function dispose() {
@@ -1029,6 +1086,7 @@ export function createNodeVisualSystem(options) {
     setLabelValues,
     update,
     getDiagnostics,
+    getNodeModelStatus,
     dispose,
     setReducedMotion,
   };

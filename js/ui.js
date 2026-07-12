@@ -2,6 +2,7 @@
 // legend, onboarding, sources, prefs. Talks to scene via a narrow API.
 
 import { ripple, propagate, pathDirections, lagBucket, loopEdges, loopNetSign, edgeKey } from './graph.js';
+import { hubBandFor, radiusScaleFor } from './hub-metrics.js';
 import { focusIdsForViewport, shouldReserveMapViewport } from './viewport-policy.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -38,9 +39,35 @@ const SOURCE_NAMES = {
 };
 
 const PREFS_KEY = 'macroscope.prefs';
+const HUB_BAND_KEYS = Object.freeze({ low: '낮음', medium: '중간', high: '높음' });
+
+export function hubMetricPresentation(metric, modelStatus) {
+  const hubScore = Number.isFinite(metric?.hubScore)
+    ? Math.max(0, Math.min(1, metric.hubScore))
+    : 0.5;
+  const score100 = Number.isFinite(metric?.score100)
+    ? Math.max(0, Math.min(100, Math.round(metric.score100)))
+    : Math.round(hubScore * 100);
+  const band = Object.hasOwn(HUB_BAND_KEYS, metric?.band)
+    ? metric.band
+    : hubBandFor(hubScore);
+  return {
+    score100,
+    band,
+    bandKey: HUB_BAND_KEYS[band],
+    showFallback: modelStatus === 'fallback',
+  };
+}
+
+export function hubLegendSamples() {
+  return [0, 50, 100].map((score100) => ({
+    score100,
+    radiusScale: radiusScaleFor(score100 / 100),
+  }));
+}
 
 export function createUI(deps) {
-  const { graph, scene, categories, cases, loops, descs, version, situation } = deps;
+  const { graph, hubMetrics, scene, categories, cases, loops, descs, version, situation } = deps;
   const catById = new Map(categories.map((c) => [c.id, c]));
   const descById = new Map(descs.map((d) => [d.id, d.desc]));
   const simLevers = deps.simLevers;
@@ -169,7 +196,7 @@ export function createUI(deps) {
     });
     els.title.textContent = PANEL_TITLES[mode];
     scene?.clearHighlight();
-    scene?.setNodeTints(null);
+    scene?.setPressures(null);
     if (mode === 'sim') {
       applySimTints();
     } else if (mode === 'now') {
@@ -333,15 +360,29 @@ export function createUI(deps) {
 
     const n = graph.nodeById.get(state.selectedId);
     const cat = catById.get(n.cat);
+    const nodeModelStatus = scene?.getNodeModelStatus?.(n.id) ?? null;
+    const hub = hubMetricPresentation(hubMetrics?.get?.(n.id), nodeModelStatus);
     b.append(h('button', { class: 'btn sm', 'data-fkey': 'back-hub', onclick: () => selectNode(null) }, '← ' + t('탐색')));
     const head = h('div', { class: 'h-node', style: 'margin-top:10px' },
       h('span', { class: 'nm' }, L(n.name)),
       h('span', { class: 'cat-chip', style: 'color:' + cat.color }, L(cat.name)),
     );
     if (n.lever) head.append(h('span', { class: 'badge', style: 'color:var(--cy)' }, t('시뮬레이터 레버')));
+    head.append(h('div', {
+      class: 'hub-summary',
+      'data-hub-score': String(hub.score100),
+      'data-hub-band': hub.band,
+      'data-model-status': nodeModelStatus || 'pending',
+    },
+    h('span', { class: 'hub-score' }, `${t('인과 허브')} ${hub.score100}/100`),
+    h('span', { class: `hub-band hub-band-${hub.band}` }, t(hub.bandKey))));
     b.append(head);
     const d = descById.get(n.id);
     if (d) b.append(h('p', { class: 'desc' }, L(d)));
+    if (hub.showFallback) {
+      b.append(h('p', { class: 'model-fallback-note' },
+        t('모델을 불러오지 못해 기본 형상으로 표시합니다')));
+    }
     // the signature interaction, hinted at the moment it is relevant
     if (n.lever && !state.listMode) {
       b.append(h('p', { class: 'rd-src' }, '⇅ ' + t('지도에서 이 노드를 위아래로 잡아끌면 즉석 충격을 줄 수 있습니다.')));
@@ -469,14 +510,14 @@ export function createUI(deps) {
 
   function applySimTints() {
     const shocksActive = Object.values(state.simShocks).some((v) => v !== 0);
-    if (!shocksActive) { scene?.setNodeTints(null); scene?.clearHighlight(); simResults = []; return; }
+    if (!shocksActive) { scene?.setPressures(null); scene?.clearHighlight(); simResults = []; return; }
     simResults = propagate(graph, state.simShocks);
     if (!scene) return;
     scene.clearHighlight(); // a shock change invalidates any dominant-path highlight
     const tint = new Map();
     for (const [id, v] of Object.entries(state.simShocks)) if (v) tint.set(id, v);
     for (const r of simResults) tint.set(r.id, r.value);
-    scene.setNodeTints(tint);
+    scene.setPressures(tint);
   }
 
   function highlightSimNode(id) {
@@ -688,7 +729,7 @@ export function createUI(deps) {
       if (e) { nodeOrders.set(f, nodeOrders.get(f) || 1); nodeOrders.set(tt, nodeOrders.get(tt) || 1); }
     });
     scene.setHighlight({ nodeOrders, edgeOrders, selectedId: null });
-    scene.setNodeTints(new Map(Object.entries(phase.shocks || {})));
+    scene.setPressures(new Map(Object.entries(phase.shocks || {})));
     scene.focusNodes(phase.focusNodes.length ? phase.focusNodes : [...nodeOrders.keys()]);
     announce(L(c.title) + ' — ' + L(PHASE_SHORT[phase.key]) + ': ' + L(phase.title));
   }
@@ -770,6 +811,22 @@ export function createUI(deps) {
     lb.append(row(h('span', { class: 'lg-line dashed' }), t('점선 = 확실성 낮음')));
     lb.append(row(h('span', {}, '✦'), t('흐르는 점 = 인과 방향, 점 개수 = 강도')));
     lb.append(row(h('span', { class: 'lg-line', style: 'border-color:#ffdf8e' }), t('금색 강조 = 국면 따라 방향 반전 가능')));
+    lb.append(h('div', { class: 'lg-h' }, t('인과 허브')));
+    const hubSamples = h('div', { class: 'hub-legend-samples', 'aria-label': t('인과 허브') });
+    for (const sample of hubLegendSamples()) {
+      hubSamples.append(h('div', {
+        class: 'hub-legend-sample',
+        'data-score': String(sample.score100),
+      },
+      h('span', {
+        class: 'hub-legend-dot',
+        style: `--hub-scale:${sample.radiusScale}`,
+        'aria-hidden': 'true',
+      }),
+      h('span', {}, String(sample.score100))));
+    }
+    lb.append(hubSamples);
+    lb.append(h('p', { class: 'hub-legend-help' }, t('강한 직·간접 경로, 최대 3단계')));
     lb.append(h('div', { class: 'lg-h' }, t('노드와 압력')));
     lb.append(row(h('span', {}, '◎'), t('고리 달린 노드 = 시뮬레이터 레버')));
     lb.append(row(h('span', { class: 'lg-dot', style: 'background:var(--up)' }), t('상승 압력')));
@@ -888,12 +945,12 @@ export function createUI(deps) {
   function trendGlyph(tr) { return tr > 0 ? '▲' : tr < 0 ? '▼' : '→'; }
   function applyNowTints() {
     if (!scene) return;
-    if (!state.nowProjected) { scene.setNodeTints(null); return; }
+    if (!state.nowProjected) { scene.setPressures(null); return; }
     const map = new Map();
     for (const r of situation.readings) {
       if (graph.nodeById.has(r.node) && r.trend) map.set(r.node, r.trend * 0.45);
     }
-    scene.setNodeTints(map);
+    scene.setPressures(map);
   }
   function openTheme(id) {
     const th = situation.themes.find((x) => x.id === id);
@@ -1013,7 +1070,7 @@ export function createUI(deps) {
     const tint = new Map();
     for (const [k, val] of Object.entries(preview)) if (val) tint.set(k, val);
     for (const r of res) tint.set(r.id, r.value);
-    scene.setNodeTints(tint);
+    scene.setPressures(tint);
   }
   function onLeverDragEnd(id, v) {
     state.simShocks[id] = v;
@@ -1261,7 +1318,7 @@ export function createUI(deps) {
       scene.focusNodes([...nodeOrders.keys()]);
       // a fresh highlight without its own shocks clears earlier chat-driven tints
       if (!(action.shocks && typeof action.shocks === 'object' && Object.keys(action.shocks).length)) {
-        scene.setNodeTints(null);
+        scene.setPressures(null);
       }
       did = true;
     }
@@ -1274,7 +1331,7 @@ export function createUI(deps) {
         const res = propagate(graph, sh);
         const tint = new Map(Object.entries(sh));
         for (const r of res) tint.set(r.id, r.value);
-        scene.setNodeTints(tint);
+        scene.setPressures(tint);
         did = true;
       }
     }
@@ -1536,7 +1593,7 @@ export function createUI(deps) {
       confirmBtn(t('대화 지우기'), 'ai-clear', () => {
         chatLog.length = 0;
         scene?.clearHighlight();
-        scene?.setNodeTints(null);
+        scene?.setPressures(null);
         renderPanel();
       }),
       confirmBtn(t('키 삭제'), 'ai-delkey', () => { setKey(p, ''); renderPanel(); }),
@@ -1996,6 +2053,9 @@ export function createUI(deps) {
     savePrefs,
     onLeverDrag,
     onLeverDragEnd,
+    onModelStatusChange() {
+      if (state.mode === 'explore' && state.selectedId) renderPanel();
+    },
     onLangChange() {
       renderLegend();
       renderPanel();

@@ -154,9 +154,16 @@ test('current graph produces deterministic 30-node hub snapshot', () => {
   });
 });
 
-test('radius mapping preserves the approved area scale', () => {
-  assert.equal(radiusScaleFor(0), 0.82);
-  assert.equal(radiusScaleFor(1), 1.28);
+test('radius mapping preserves the approved area scale and 0/50/100 ordering', () => {
+  const low = radiusScaleFor(0);
+  const medium = radiusScaleFor(0.5);
+  const high = radiusScaleFor(1);
+
+  assert.equal(low, 0.82);
+  assert.equal(medium, 1.074895);
+  assert.equal(high, 1.28);
+  assert.ok(low < medium);
+  assert.ok(medium < high);
 });
 
 test('hub band boundaries are low, medium, and high thirds', () => {
