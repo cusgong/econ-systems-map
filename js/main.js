@@ -8,10 +8,11 @@ import { DESCS } from '../data/descs.js';
 import { SITUATION } from '../data/situation.js';
 import { UI_DICT_EN, UI_META } from '../data/strings.js';
 import { buildGraph } from './graph.js';
+import { computeHubMetrics } from './hub-metrics.js';
 import { createScene } from './scene.js';
 import { createUI } from './ui.js';
 
-const APP_VERSION = 'v2.4.0';
+const APP_VERSION = 'v2.5.0';
 
 let fatalShown = false;
 function showFatal() {
@@ -61,6 +62,12 @@ function boot() {
   }
 
   const graph = buildGraph(NODES, EDGES);
+  const hubMetrics = computeHubMetrics(graph);
+  const searchParams = new URLSearchParams(window.location.search);
+  const sphereNodesOnly = searchParams.get('nodes') === 'sphere';
+  const nodeLibraryUrl = sphereNodesOnly
+    ? null
+    : new URL('../data/models/econ-node-library.glb', import.meta.url).href;
 
   let uiRef = null;
   let scene = null;
@@ -69,13 +76,16 @@ function boot() {
       container: document.getElementById('stage'),
       labelContainer: document.getElementById('labels'),
       graph,
+      hubMetrics,
       categories: CATEGORIES,
       layers: LAYERS,
       onSelect: (id) => uiRef && uiRef.selectNode(id),
       onLeverDrag: (id, v) => uiRef && uiRef.onLeverDrag(id, v),
       onLeverDragEnd: (id, v) => uiRef && uiRef.onLeverDragEnd(id, v),
+      onModelStatusChange: () => uiRef?.onModelStatusChange?.(),
       reducedMotion: initialReducedMotion(),
       lang: 'ko',
+      nodeLibraryUrl,
       onFirstFrame: hideLoading,
     });
   } catch (err) {
@@ -84,7 +94,7 @@ function boot() {
   }
 
   const ui = createUI({
-    graph, scene,
+    graph, hubMetrics, scene,
     categories: CATEGORIES,
     cases: CASES, loops: LOOPS, descs: DESCS, situation: SITUATION,
     simLevers: SIM_LEVERS, simPresets: SIM_PRESETS,

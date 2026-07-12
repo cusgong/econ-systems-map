@@ -13,7 +13,7 @@
 
 ## Current Status
 
-M1 스캐폴드 완료, 데이터 설계 진행 중.
+M1~M5와 v2.4.0 운영을 완료했다. M6 v2.5.0 정밀 거시경제 계기도 완료했다. 30개 고유 Blender 모델, 인과 허브 크기, 범주색 인레이, 상태 링, 개별 폴백, 최대 4개 그룹 중 현재 3개 passive-edge 배치를 구현했다. Blender 계약 35개, Node.js 74개, Chrome 데스크톱·390px 모바일·구체 폴백·GLB 실패 복구를 릴리스 게이트로 통과했다.
 
 ## Stakeholders
 
@@ -24,25 +24,29 @@ M1 스캐폴드 완료, 데이터 설계 진행 중.
 - 정적 사이트, 빌드 없음, CDN 없음(three.js 로컬 vendored).
 - 콘텐츠는 정형화된 교과서 메커니즘 + 출처 태그. 예측/투자조언 금지.
 - KO 기본 + EN 토글 (i18n-kit 재사용).
+- Blender 5.1.2 고정, 30개 모델은 각각 다른 실루엣과 정확히 body/accent 두 primitive를 사용한다.
+- 크기 0.82~1.28은 1~3홉 인과 허브성, 색은 기존 9개 역할 범주, 움직임은 선택·전파 상태만 표현한다.
 
 ## Risks
 
 - 3D 가독성 vs 밀도: 노드 30개 상한, 라벨 거리 페이드, 선택 시 딤아웃으로 관리.
 - 경제 메커니즘 단순화의 오해 소지: confidence 표기 + "모형 한계" 고지로 관리.
+- GLB 또는 일부 모델 실패: 유효한 모델만 점진 교체하고 실패한 ID만 구체 폴백으로 격리한다.
+- 렌더 예산: 107개 passive edge를 부호×확실성 최대 4개 그룹으로 분류하고 빈 그룹을 생략해 현재 3개 LineSegments로 배치하며, GLB 3MB·180 draw-call 하드캡으로 관리한다.
 
 ## Milestones
 
-- M1 스캐폴드 + canonical 스키마
-- M2 콘텐츠 저작 (Workflow 병렬, KO/EN)
-- M3 앱 구현
-- M4 검증
-- M5 리뷰 + 수정 + 보고
+- [x] M1 스캐폴드 + canonical 스키마
+- [x] M2 콘텐츠 저작 (Workflow 병렬, KO/EN)
+- [x] M3 앱 구현
+- [x] M4 검증
+- [x] M5 리뷰 + 수정 + 보고
+- [x] M6 A2 정밀 거시경제 계기: 30개 Blender 형상 + 허브 크기 + 상태·폴백 + 성능 배치
 
 ## Next Actions
 
-- 노드 30개 canonical 정의
-- 콘텐츠 Workflow 실행
-- three.js vendoring
+- 검증 수치와 독립 감사 결과는 `PLAN.md`에 고정했다.
+- 원격 push·Vercel 배포는 명시적 배포 지시 때 수행한다.
 
 ## Open Questions
 

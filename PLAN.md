@@ -6,7 +6,7 @@
 2차·3차 파급효과를 탐색하는 3D 경제 인과관계 지도로 시스템 사고를 훈련하는 웹앱.
 
 ## 지금 단계
-v2.4.0 배포 유지. **A2 정밀 거시경제 계기 설계가 승인됐고 v2.5.0 구현 계획까지 작성 완료**: 30개 고유 Blender 오브제, 범주색 인레이, 직·간접 인과 허브 크기, 단일 GLB 점진 로딩. PC에는 Microsoft Store판 Blender 5.1.2가 설치되어 있으며, WindowsApps 직접 실행 제한 때문에 자동 검증·내보내기에는 동일 버전의 명령줄 실행 가능 배포본을 사용한다. 다음 단계는 실행 방식 선택 후 Task 1 허브 점수 테스트부터 착수한다. "지금" 자동화 파이프라인은 시크릿 **3/6 등록 완료** 상태로 병행 대기한다.
+**v2.5.0 A2 정밀 거시경제 계기 로컬 릴리스 완성**. 30개 변수가 서로 다른 Blender 5.1.2 정밀 계기이며 범주색 인레이, 1~3홉 인과 허브 크기, 상태 링, ID별 폴백을 사용한다. 정본은 30 IDs, 60 primitives, 63,428 triangles, accent 10.96~18.74%, GLB 1,752,492 bytes, fallback 0이다. 107개 passive edge는 최대 4개 sign×confidence 그룹 중 현재 데이터의 3개 populated LineSegments 배치로 렌더된다. "지금" 자동화 파이프라인은 시크릿 **3/6 등록 완료** 상태로 병행 대기한다.
 
 ## Milestones  (상태는 매 작업·도달 시 갱신)
 - [x] M1 스캐폴드 + canonical 데이터 스키마/노드 정의
@@ -14,7 +14,7 @@ v2.4.0 배포 유지. **A2 정밀 거시경제 계기 설계가 승인됐고 v2.
 - [x] M3 앱 구현 (Three.js 씬 + 탐색/시뮬레이터/사례/루프/온보딩/범례/i18n)
 - [x] M4 검증 (실 Chrome: 전 모드 + EN + 모바일 390px + 모션 + 키보드, 콘솔 에러 0)
 - [x] M5 멀티에이전트 리뷰(33 에이전트, 확정 24건) + 전건 수정 + 재검증
-- [ ] M6 A2 정밀 거시경제 계기 (서면 스펙 승인 → Blender·PBR 골격 → 대표 6개 → 30개 확장 → 성능·회귀 검증)
+- [x] M6 A2 정밀 거시경제 계기 (서면 스펙 승인 → Blender·PBR 골격 → 대표 6개 → 30개 확장 → 성능·회귀 검증)
 
 ## 지금 체크리스트
 - [x] 리뷰 확정 결함 수정 (로직 7, 씬 4, 품질 9, 콘텐츠 4)
@@ -25,8 +25,12 @@ v2.4.0 배포 유지. **A2 정밀 거시경제 계기 설계가 승인됐고 v2.
 - [x] (Marcus, 260711) 서면 설계 스펙 승인
 - [x] (AI, 260711) Store판 Blender 5.1.2 설치 확인 + WindowsApps CLI 제약 확인
 - [x] (AI, 260711) 구현 계획 작성: `docs/superpowers/plans/2026-07-11-precision-macro-instruments-implementation.md`
-- [ ] (Marcus) 실행 방식 선택: subagent-driven 권장 / inline execution
-- [ ] (AI, 선택 후) 허브 점수 TDD → Blender 수직 슬라이스 → 대표 6개 제작
+- [x] (Marcus, 260711) 실행 방식 선택: subagent-driven
+- [x] (AI, 260712) 허브 점수 TDD → Blender 수직 슬라이스 → 대표 6개 → 30개 고유 계기 완성
+- [x] (AI, 260712) Blender 전체 게이트: 30 ready, fallback 0, 60 primitives, 63,428 triangles, GLB 1.75MB
+- [x] (AI, 260712) 렌더 예산: 107개 passive edge를 3개 populated 배치로 축소, Three.js r170 행동 테스트 통과
+- [x] (AI, 260712) 릴리스 회귀: Blender 계약 35개, Node.js 74개, Python 구문 20개 파일, Chrome 데스크톱·390px 모바일·KO/EN·모션 축소·구체 폴백·GLB 실패 복구 통과
+- [x] (AI, 260712) 독립 최종 감사: Critical 0, Important 0, 두 번의 신규 GLB export가 배포 자산과 바이트 단위 일치
 - [ ] (Marcus) ECOS 키 발급 → api-keys.local.env에 `ECOS_API_KEY=` 추가
 - [ ] (Marcus) FRED 키 발급 → `FRED_API_KEY=` 추가
 - [ ] (Marcus) `claude setup-token` 실행 → `CLAUDE_CODE_OAUTH_TOKEN=` 추가
@@ -45,6 +49,7 @@ v2.4.0 배포 유지. **A2 정밀 거시경제 계기 설계가 승인됐고 v2.
 - 라이브에 앱만 노출되게 `.vercelignore` 유지(Vercel CLI는 .gitignore 무시). GitHub push: cusgong 전환 + `git -c credential.helper= -c credential.helper="!gh auth git-credential" push` 후 5bu-gainge 복구.
 
 ## 최근 완료
+- v2.5.0 A2 정밀 거시경제 계기: 30개 변수별 고유 Blender 하드서피스 모델, dark titanium PBR + 범주색 10~20% 인레이, 1~3홉 허브성 반지름 0.82~1.28, 선택·전파 상태 링과 서명 동작, reduced-motion 정지, ID별 구체 폴백. Blender 저작 체인은 6→12→18→24→30을 매 배치 전후 검증하고, 직렬화된 임시 `.blend`가 unrelated root·PBR node graph·bevel·custom-normal 동결 SHA-256 계약을 모두 통과한 뒤에만 원본을 원자 교체한다. 최종 자산은 30 IDs, 60 primitives, 63,428 triangles, accent 10.96~18.74%, GLB 1,752,492 bytes다. 107개 passive edge는 3개 populated LineSegments 배치로 줄였고, contested edge의 점선 거리는 엣지 내부 40개 세그먼트에 누적한다. Blender 계약 35개와 Node.js 74개, Chrome 데스크톱·모바일·폴백 경로를 통과했고 독립 감사 결과 Critical 0, Important 0이다.
 - v2.4.0 UX 전면 개보수 (Marcus: "못다한 UI/UX 개선도 마저 해"): 7차원 멀티에이전트 감사(에이전트 8, 발견 57건) + 실브라우저 감사 → 확정 40여 건 구현. ①AI 채팅 견고화: 자동 스크롤 실제 스크롤러로 수정(stick-to-bottom), 한글 IME Enter 가드, 스트리밍 중 초안 보존, 오류 턴 히스토리 제외+다시 시도 버튼, 스트림 중 제공자 에러 표면화, 네트워크 오류 한국어 카피, 타 탭 하이재킹 방지, 대화 지우기·키 삭제 2탭 확인+진행 중 요청 중단, 입력창 자동 확장, 제공자 라벨 이중언어 ②온보딩 개편: 3단계를 라벨 4행(개념당 한 줄)으로, 금색 국면반전 설명+스와치 추가, 건너뛰기, 점 클릭 이동, 단축키는 파인 포인터만, 딥링크 방문자는 모달 대신 토스트, 리스트 모드는 3D 투어 생략 ③탐색 IA: 홈 섹션 퀵내비 칩, 변수 뷰 ←탐색 버튼+레버 드래그 힌트, 추천 시작점 카테고리 점, 서브뷰 제목 EXPLORE·SIM/CASE/LOOP, 범례 3그룹+스크롤 캡, 검색 빈 상태 큐레이션+백드롭 닫기, 크로스 점프 정크 히스토리 제거, 죽은 딥링크 안내, 테마 검색 결과 이름 공백 버그 수정 ④모바일: 범례를 실측 헤더 높이(--hud-real-h, ResizeObserver)로 배치(래핑 헤더에 묻힘 해소), 언어 토글·btn.sm·슬라이더 터치 타깃 확대, AI 입력 16px(iOS 줌 방지), :active 피드백+hover 게이트, 레버 드래그 pointercancel 복원 ⑤a11y: 탭 aria-current, 사례 스테퍼·AI 툴바 포커스 보존, 패널 포커스 앵커, 루프·테마·AI 답변 announce, fx-row 중첩 인터랙티브 해소(전용 토글), 로딩 오버레이 a11y 트리 제거, 층 이름표 AA, 모션 토글이 OS 설정 위에 작동, 도움말 버튼 라벨 ⑥아이덴티티: og-image(1200x630)+og:url+트위터 카드, apple-touch-icon, 브랜드 404.html, 버전 단일 소스, 부트 워치독 오탐 자가 복구, 이모지 글리프를 텍스트 표현형으로 ⑦i18n: 사전 기계 교차검증(죽은 키 12 제거·24 추가), EN asOf 칩 어순, 테마 프리뷰 단어 경계 말줄임. 검증: 실브라우저 전 항목(온보딩 4단계·홈·변수·사례 히스토리·검색·AI 오류경로·EN·모바일 하네스·404·라이브 v2.4.0), 콘솔 에러 0. 보류: NOW 지표 출처명 이중언어(파이프라인 변경 필요), 3D 라벨 겹침 정리, 모바일 헤더 행 병합.
 - v2.3.0 "지금" 무인 자동 업데이트 파이프라인 (Marcus 선택: "전부 무인 자동"): situation.js를 **생성 파일**로 전환(정본 = scripts/now/readings-live.json 기계층 + editorial.json 편집층, build_situation.py가 검증 후 병합·생성). ①매일 19:05 KST GH Actions 크론이 ECOS 13종+FRED 2종 공식 시리즈를 fetch(시리즈 정의 = series-map.json, 전부 2026-07-11 샘플키/공개CSV 라이브 검증, 변환 검산 일치) → 수치·기준일·트렌드 갱신 → 커밋 → Vercel CLI 배포. sanity bounds 위반·4개 이상 실패 시 발행 차단. ②주간(월 07:00 KST) claude-code-action@v1 에이전트가 EDITORIAL-PROTOCOL.md(웹 검증 2출처+, 예측·투자조언 금지, editorial.json만 수정) 수행 → 독립 재빌드 검증 스텝 통과 시에만 커밋·배포. ③앱: asOf를 수치/해설로 분리(칩 병기, 해설 4개월 경고 + 수치 피드 1개월 정지 경고 신설), 고지 카피 갱신. 표시 의미 변경: 부동산→KB 서울 아파트 월간(부동산원 ECOS 5개월 지연), 가계부채→예금취급기관, GDP→분기 실적(전망은 note), 연준·유가→FRED 일별. **CI 커밋 author=globin0806(Vercel이 CLI 배포에도 author 검증)**. 함정 파악: ECOS 적재 지연 워치리스트(수출 익월 중순, 임금 수개월), 60일 크론 비활성은 일일 커밋이 자체 keepalive. 리서치 = Workflow 6 에이전트(ECOS 라이브 프로브 15/15 확정, claude-in-CI 사실 검증: setup-token 1년 토큰·OAuth WebSearch 버그는 오진으로 종결)
 - v2.2.0 멀티 제공자 AI 키 (Marcus: "Anthropic 말고 다른 주요 AI API key도 받게"): AI 채팅이 Anthropic(Claude)·Google(Gemini)·OpenAI 호환(OpenRouter·xAI/Grok·Groq·DeepSeek·Mistral·직접입력 Base URL) 키를 받음. `AI_PROVIDERS` 레지스트리 + 제공자별 build()/extract() 어댑터 + 통합 SSE 파서. 편집 가능한 모델 필드(datalist, 모델명 드리프트 대응). 제공자별 키 저장(`macroscope.key.<id>`, 구 `macroscope.apikey`에서 자동 마이그레이션). 셋업 UI = 제공자 선택 + (openai_compat일 때) 프리셋·Base URL + 제공자별 키 힌트/발급 링크. **OpenAI 본체 API는 브라우저 CORS 차단**이라 GPT는 OpenRouter 경유 안내. 검증: Gemini 어댑터를 라이브 API로 확인(gemini-2.5-flash HTTP 200, SSE 형식=extract 일치), 4개 셋업 상태 전부 렌더·콘솔 에러 0, Anthropic 경로 v2.0.0과 동일. 라이브 v2.2.0 확인.
@@ -61,4 +66,4 @@ v2.4.0 배포 유지. **A2 정밀 거시경제 계기 설계가 승인됐고 v2.
 - 로컬: preview `econ-map` (127.0.0.1:5230) 또는 `python -m http.server 5230` (프로젝트 루트)
 - 데이터 수정: 스크래치 JSON → `python scripts/build-data.py <dir>` (data/*.js 직접 편집 금지)
 
-업데이트: 260711 (v2.4.0 배포 유지, M6 구현 계획 완료)
+업데이트: 260712 (v2.5.0 로컬 릴리스 완성, 전체 검증 완료)

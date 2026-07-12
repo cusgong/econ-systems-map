@@ -1,0 +1,11 @@
+{
+  "name": "econ-systems-map",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test scripts/tests/*.test.js",
+    "test:hub": "node --test scripts/tests/hub-metrics.test.js",
+    "test:graph": "node --test scripts/tests/graph-regression.test.js"
+  },
+  "engines": { "node": ">=24" }
+}
