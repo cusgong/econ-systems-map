@@ -634,6 +634,13 @@ class BlenderPipelineContractTests(unittest.TestCase):
                 }
                 self.assertEqual(proof_ids, root_names)
             self.assertEqual(exports[0], exports[1], "proof GLB export must be byte-deterministic")
+            committed_glb = PROJECT_ROOT / "data" / "models" / "econ-node-library.glb"
+            self.assertTrue(committed_glb.is_file(), "committed proof GLB is missing")
+            self.assertEqual(
+                exports[0],
+                hashlib.sha256(committed_glb.read_bytes()).hexdigest(),
+                "committed proof GLB must be byte-identical to a fresh canonical export",
+            )
 
     def test_proof_authoring_is_idempotent_at_the_export_boundary(self):
         source_blend = BLENDER_DIR / "econ-node-library.blend"
