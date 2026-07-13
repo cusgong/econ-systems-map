@@ -106,126 +106,95 @@ def build_housing() -> ModelGeometry:
 
 
 def build_gdp() -> ModelGeometry:
-    """Build a caged macro flywheel with an asymmetric counterweight sector.
+    """Build an iconic GDP-growth mark: a bold up-arrow over a growth chart.
 
-    Twin service-gap rails surround one incomplete load band with unequal end
-    shoes and a tangential drive dog.  The accent is a continuous mass rather
-    than disconnected radial vanes, eliminating the flower, gear, and turbine
-    readings while preserving the specified seven-percent XYZ pulse.
+    A round base disc carries three ascending chart bars and one dominant,
+    deep central arrow shaft.  The category accent is the wide chevron
+    arrowhead crowning the shaft, so the front silhouette reads as a single
+    confident rising arrow, distinct from a plain earnings bar chart.  The
+    accent scales about the arrowhead centroid to pulse the growth tip.
     """
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    cage_radius = 0.78
-    cage_depth = 0.44
-    cage_rotation = (_QUARTER_TURN, 0.0, 0.0)
+    shaft_x = 0.10
 
-    # Two unequal capped arcs on each depth rail establish a deliberate service
-    # gap.  Their exposed stock ends receive the same bevel; the curved rail
-    # tessellation remains smooth and therefore unweighted.
-    rail_arcs = (
-        (math.radians(-154.0), math.radians(58.0), 18),
-        (math.radians(104.0), math.radians(164.0), 6),
-    )
-    for y in (-cage_depth, cage_depth):
-        for start, end, segments in rail_arcs:
-            body.add_torus_arc(
-                major_radius=cage_radius,
-                minor_radius=0.055,
-                start_angle=start,
-                end_angle=end,
-                arc_segments=segments,
-                minor_segments=6,
-                location=(0.0, y, 0.0),
-                rotation=cage_rotation,
-                bevel=True,
-            )
-
-    # Three axial ties terminate inside the rails, so their circular caps are
-    # hidden intersections rather than exposed hard edges.
-    for angle_degrees in (-138.0, -28.0, 132.0):
-        angle = math.radians(angle_degrees)
-        x = cage_radius * math.cos(angle)
-        z = cage_radius * math.sin(angle)
-        body.add_cylinder_between(
-            (x, -cage_depth, z),
-            (x, cage_depth, z),
-            radius=0.05,
-            segments=8,
-        )
-
+    # Round base disc: the "base ring" the whole chart stands on.  Its circular
+    # X-Y footprint gives the model real Y depth and a filled top-view mask.
+    base_top_z = -0.72
     body.add_cylinder(
-        radius=0.27,
-        depth=0.12,
-        segments=6,
-        location=(0.0, 0.0, 0.0),
-        rotation=cage_rotation,
-        bevel=True,
-    )
-    body.add_cylinder(
-        radius=0.34,
-        depth=0.08,
-        segments=12,
-        location=(0.0, cage_depth, 0.0),
-        rotation=cage_rotation,
+        radius=0.70,
+        depth=0.16,
+        segments=44,
+        location=(0.0, 0.0, -0.80),
         bevel=True,
     )
 
-    # One continuous 225-degree plate replaces six disconnected paddles.  The
-    # start end is deliberately heavier than the finish end, forming unequal
-    # integrated shoes within the same polygon.  A single overlapping drive dog
-    # exits tangentially from the light end and is the only secondary shell.
-    start_angle = math.radians(-145.0)
-    end_angle = math.radians(80.0)
-    steps = 13
-    outer_points = []
-    inner_points = []
-    for index in range(steps + 1):
-        ratio = index / steps
-        angle = start_angle + (end_angle - start_angle) * ratio
-        outer_radius = 0.675
-        if index == 0:
-            outer_radius = 0.74
-        elif index == 1:
-            outer_radius = 0.70
-        elif index == steps:
-            outer_radius = 0.695
-        outer_points.append(
-            (outer_radius * math.cos(angle), outer_radius * math.sin(angle))
+    # Three ascending chart bars stepping up toward the arrow, standing on the
+    # base.  Kept short and deep so the arrow towers over them while they still
+    # carry Y mass for the side-view silhouette.
+    bars = (
+        # center_x, width_x, depth_y, height_z
+        (-0.60, 0.24, 0.34, 0.34),
+        (-0.37, 0.24, 0.34, 0.54),
+        (-0.14, 0.24, 0.34, 0.74),
+    )
+    for cx, wx, dy, hz in bars:
+        body.add_box(
+            size=(wx, dy, hz),
+            location=(cx, 0.0, base_top_z + hz * 0.5),
+            bevel=True,
         )
-    for index in reversed(range(steps + 1)):
-        ratio = index / steps
-        angle = start_angle + (end_angle - start_angle) * ratio
-        inner_radius = 0.595
-        if index == 0:
-            inner_radius = 0.535
-        elif index == steps:
-            inner_radius = 0.61
-        inner_points.append(
-            (inner_radius * math.cos(angle), inner_radius * math.sin(angle))
-        )
+
+    # Dominant central arrow shaft: bolder and deeper than the bars, rising well
+    # above them.  A rounded profile keeps it machined rather than blocky.
+    shaft_top_z = 0.54
+    shaft_height = shaft_top_z - base_top_z
+    body.add_rounded_box_y(
+        width=0.42,
+        height=shaft_height,
+        depth=0.48,
+        radius=0.10,
+        corner_segments=3,
+        location=(shaft_x, 0.0, (shaft_top_z + base_top_z) * 0.5),
+        bevel=True,
+    )
+
+    # Wide chevron arrowhead (accent): overhangs the shaft and points up, so the
+    # combined front silhouette is one clear rising arrow.  Extruded to real Y
+    # depth so it reads as an arrowhead from every view, not a flat plate.  A
+    # concave back notch turns the triangle into a true arrow tip.
+    head_base_z = 0.50
+    head_tip_z = 1.08
+    head_half_w = 0.48
+    head_shoulder = 0.15
+    head_notch_z = 0.63
+    head_points = [
+        (0.0, head_tip_z),                 # tip
+        (head_half_w, head_base_z),        # right wing
+        (head_shoulder, head_base_z),      # right inner shoulder
+        (0.0, head_notch_z),               # back notch
+        (-head_shoulder, head_base_z),     # left inner shoulder
+        (-head_half_w, head_base_z),       # left wing
+    ]
     accent.add_extruded_polygon_y(
-        outer_points + inner_points,
-        depth=0.08,
+        [(x + shaft_x, z) for x, z in head_points],
+        depth=0.48,
         bevel=True,
     )
-    accent.add_box(
-        size=(0.24, 0.08, 0.09),
-        location=(0.20, -0.01, 0.645),
-        rotation=(0.0, math.radians(-8.0), 0.0),
-        bevel=True,
-    )
+
+    head_centroid = (shaft_x, 0.0, 0.72)
 
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:open asymmetric counterweight sector with one drive dog;"
-            "side:twin service-gap cage rails around a thin load plate;"
-            "top:offset flywheel chassis with unequal counterweight ends"
+            "front:one bold up-arrow rising above three ascending chart bars;"
+            "side:deep arrow shaft and chevron head over a round base disc;"
+            "top:round base ring with a centered arrow mass and stepped bars"
         ),
-        body_detail="central hex hub inside asymmetric twin service-gap rails",
+        body_detail="round base disc, three ascending bars, and a bold central arrow shaft",
         accent_pivot="asymmetric counterweight hub center; scale XYZ",
-        accent_origin=(0.0, 0.0, 0.0),
+        accent_origin=head_centroid,
     )

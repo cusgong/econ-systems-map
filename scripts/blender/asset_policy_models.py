@@ -416,96 +416,77 @@ def _add_spoked_valve_y(
 
 
 def build_household_debt() -> ModelGeometry:
-    """Build a weighted balance beam around one tightening helical coil."""
+    """Build a debt ball-and-chain: heavy iron ball, chain links, locking cuff."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    beam_angle = math.radians(-4.0)
-    body.add_rounded_box_y(
-        width=1.32,
-        height=0.17,
-        depth=0.32,
-        radius=0.055,
-        corner_segments=2,
-        location=(0.0, 0.0, 0.34),
-        rotation=(0.0, beam_angle, 0.0),
-        bevel=True,
+    # A heavy iron ball is the debt burden and the dominant lower mass.
+    body.add_uv_sphere(
+        radius=0.52,
+        segments=22,
+        rings=12,
+        location=(0.0, 0.0, -0.40),
     )
-    body.add_extruded_polygon_y(
-        ((-0.30, -0.58), (0.30, -0.58), (0.0, 0.24)),
-        depth=0.56,
-        location=(0.0, 0.0, 0.0),
-        bevel=True,
-    )
+    # A short beveled stud couples the ball to the first chain link.
     body.add_cylinder(
-        radius=0.13,
-        depth=0.44,
+        radius=0.085,
+        depth=0.16,
         segments=12,
-        location=(0.0, 0.0, 0.35),
+        location=(0.0, 0.0, 0.15),
+        bevel=True,
+    )
+    # Three interlocked chain links climb from the ball toward the cuff.  Each
+    # link is rotated a quarter turn from the last so alternating rings read
+    # face-on (X-Z) then edge-on (Y-Z), the way a real chain interlocks.
+    for link_z, link_rotation in (
+        (0.27, (_QUARTER_TURN, 0.0, 0.0)),
+        (0.42, (0.0, _QUARTER_TURN, 0.0)),
+        (0.57, (_QUARTER_TURN, 0.0, 0.0)),
+    ):
+        body.add_torus(
+            major_radius=0.115,
+            minor_radius=0.046,
+            major_segments=16,
+            minor_segments=6,
+            location=(0.0, 0.0, link_z),
+            rotation=link_rotation,
+        )
+
+    # Category cuff: an open horizontal manacle ring at the top.  The 34-degree
+    # gap breaks rotational symmetry so the spin about the vertical Z axis reads,
+    # and a pin bar bridges the opening the way a real shackle locks shut.
+    accent.add_torus_arc(
+        major_radius=0.245,
+        minor_radius=0.078,
+        start_angle=math.radians(34.0),
+        end_angle=math.radians(326.0),
+        arc_segments=26,
+        minor_segments=8,
+        location=(0.0, 0.0, 0.72),
+        bevel=True,
+    )
+    accent.add_cylinder(
+        radius=0.05,
+        depth=0.30,
+        segments=10,
+        location=(0.203, 0.0, 0.72),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
-    for x, rod_top, weight_radius, weight_depth, weight_z in (
-        (-0.44, 0.38, 0.26, 0.35, -0.20),
-        (0.44, 0.30, 0.21, 0.47, -0.17),
-    ):
-        body.add_cylinder_between(
-            (x, 0.0, rod_top),
-            (x, 0.0, weight_z + weight_depth * 0.5),
-            radius=0.035,
-            segments=8,
-        )
-        body.add_cylinder(
-            radius=weight_radius,
-            depth=weight_depth,
-            segments=14,
-            location=(x, 0.0, weight_z),
-            bevel=True,
-        )
-    body.add_cylinder(
-        radius=0.16,
-        depth=0.22,
-        segments=12,
-        location=(0.0, 0.0, 0.54),
-        bevel=True,
-    )
 
-    _add_helix_tube_z(
-        accent,
-        radius=0.34,
-        height=0.56,
-        turns=2.25,
-        tube_radius=0.032,
-        path_segments=36,
-        tube_segments=6,
-    )
-    for z in (-0.335, 0.335):
-        accent.add_cylinder(
-            radius=0.15,
-            depth=0.085,
-            segments=12,
-            location=(0.0, 0.0, z),
-            bevel=True,
-        )
-    accent.add_box(
-        size=(0.11, 0.07, 0.10),
-        location=(0.30, 0.0, 0.27),
-        rotation=(0.0, math.radians(-18.0), 0.0),
-        bevel=True,
-    )
-
+    cuff_origin = (0.0, 0.0, 0.72)
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:wide weighted balance beam above a triangular compression fulcrum;"
-            "side:deep central bearing wrapped by one exposed tightening coil;"
-            "top:asymmetric suspended masses opposed across a keyed coil axis"
+            "front:a heavy iron ball hangs on three chain links beneath an open locking cuff;"
+            "side:round ball and interlocked links read in depth under a pinned manacle ring;"
+            "top:circular ball footprint centered under an open pinned cuff ring"
         ),
-        body_detail="weighted balance beam, unequal suspended masses, and compression fulcrum",
+        body_detail="heavy iron debt ball, three interlocked chain links, and coupling stud",
         accent_pivot="tightening coil axis; rotate glTF Y / Blender Z",
-        accent_origin=(0.0, 0.0, 0.0),
+        accent_origin=cuff_origin,
     )
 
 
@@ -577,110 +558,88 @@ def build_commodity() -> ModelGeometry:
 
 
 def build_fiscal() -> ModelGeometry:
-    """Build a one-to-three distribution manifold with calibrated valve faces."""
+    """Build public spending: a domed government block issuing three coin outlets."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    body.add_cylinder(
-        radius=0.23,
-        depth=1.16,
-        segments=14,
-        location=(0.0, 0.0, -0.03),
-        rotation=(0.0, _QUARTER_TURN, 0.0),
+    # Government building: a wide and DEEP institutional block (deep in Blender Y
+    # so the model carries real depth mass, not a flat plate) on a stepped plinth.
+    body.add_box(
+        size=(0.94, 1.00, 0.44),
+        location=(0.0, 0.0, 0.44),
         bevel=True,
     )
-    outlets = ((-0.48, 0.43), (0.0, 0.52), (0.48, 0.43))
+    body.add_box(
+        size=(1.08, 1.12, 0.11),
+        location=(0.0, 0.0, 0.17),
+        bevel=True,
+    )
+    # Capitol dome: a drum, a sphere cap, and a slender finial on the center line.
+    body.add_cylinder(
+        radius=0.21,
+        depth=0.12,
+        segments=16,
+        location=(0.0, 0.0, 0.70),
+        bevel=True,
+    )
+    body.add_uv_sphere(
+        radius=0.215,
+        segments=16,
+        rings=8,
+        location=(0.0, 0.0, 0.80),
+    )
+    body.add_cylinder(
+        radius=0.045,
+        depth=0.14,
+        segments=10,
+        location=(0.0, 0.0, 0.98),
+    )
+    # Three outlet chutes fan down and out from the plinth, each ending in a
+    # dark nozzle collar that frames the coin it issues.
+    outlets = ((-0.47, -0.34), (0.0, -0.46), (0.47, -0.34))
     for x, z in outlets:
         body.add_cylinder_between(
-            (x * 0.58, 0.0, 0.05),
-            (x, 0.0, z),
-            radius=0.075,
-            segments=8,
+            (x * 0.44, 0.0, 0.11),
+            (x, 0.0, z + 0.11),
+            radius=0.072,
+            segments=10,
             bevel=x == 0.0,
         )
         body.add_cylinder(
-            radius=0.15,
-            depth=0.25,
-            segments=10,
-            location=(x, 0.0, z),
+            radius=0.115,
+            depth=0.12,
+            segments=12,
+            location=(x, 0.0, z + 0.07),
             rotation=(_QUARTER_TURN, 0.0, 0.0),
-        )
-    body.add_cylinder_between(
-        (0.0, 0.0, -0.10),
-        (0.0, 0.0, -0.63),
-        radius=0.10,
-        segments=10,
-        bevel=True,
-    )
-    body.add_cylinder(
-        radius=0.19,
-        depth=0.22,
-        segments=12,
-        location=(0.0, 0.0, -0.61),
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
-        bevel=True,
-    )
-    for x in (-0.58, 0.58):
-        body.add_box(
-            size=(0.20, 0.34, 0.14),
-            location=(x, 0.0, -0.58),
             bevel=True,
         )
-    # Paired supply-header drums flanking the inlet barrel in Y (a real
-    # distribution manifold runs supply/return headers either side of the outlet
-    # rail).  Each header shares the barrel's X-Z footprint (r 0.28 stays within
-    # the barrel's Z band and inside the side feet at x +/-0.58) so the front
-    # one-inlet/three-crown silhouette is untouched; the side view gains a broad
-    # triple-barrel drum spanning y -0.66..+0.66.  Link tubes tie each header
-    # down onto the inlet barrel.
-    for header_y in (0.38, -0.38):
-        body.add_cylinder(
-            radius=0.28,
-            depth=0.90,
-            segments=14,
-            location=(0.0, header_y, -0.03),
-            rotation=(0.0, _QUARTER_TURN, 0.0),
+
+    # Category coins issued from the three outlets: flat front-facing discs
+    # (thin in Blender Y) with a raised rim, the public money flowing out to
+    # programs.  The whole coin bank rotates about the vertical Z axis.
+    for x, z in outlets:
+        accent.add_cylinder(
+            radius=0.208,
+            depth=0.125,
+            segments=16,
+            location=(x, 0.0, z - 0.03),
+            rotation=(_QUARTER_TURN, 0.0, 0.0),
             bevel=True,
         )
-        for x in (-0.30, 0.30):
-            body.add_cylinder_between(
-                (x, 0.05 * (1.0 if header_y > 0 else -1.0), -0.03),
-                (x, header_y, -0.03),
-                radius=0.06,
-                segments=8,
-            )
 
-    valve_y = -0.18
-    for index, (x, z) in enumerate(outlets):
-        _add_spoked_valve_y(
-            accent,
-            center=(x, valve_y, z),
-            radius=0.150,
-            phase=math.radians(12.0 + index * 18.0),
-        )
-    accent.add_box(
-        # The canonical 0.035 bevel needs more than 0.07 across both minor
-        # dimensions.  A 0.11 square distribution spine keeps the three valve
-        # faces mechanically linked without clamp-overlap collapsing corners
-        # into zero-area evaluated polygons.
-        size=(1.10, 0.11, 0.11),
-        location=(0.0, valve_y + 0.03, 0.17),
-        bevel=True,
-    )
-
-    valve_bank_origin = (0.0, valve_y, 0.46)
+    coin_bank_origin = (0.0, 0.0, -0.40)
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:one low inlet branches into three calibrated outlet crowns;"
-            "side:deep barrel manifold carrying a forward valve bank;"
-            "top:three spaced control faces keyed to one distribution spine"
+            "front:a domed government block issues three coins down three fanning outlets;"
+            "side:deep institutional mass and dome above one forward coin bank;"
+            "top:a broad building footprint keyed to three spaced coin faces"
         ),
-        body_detail="single-inlet budget manifold, three rising branches, and calibrated outlets",
+        body_detail="deep domed government block, stepped plinth, and three fanning outlet chutes",
         accent_pivot="three-outlet valve-bank center; glTF Z equals Blender -Y",
-        accent_origin=valve_bank_origin,
+        accent_origin=coin_bank_origin,
     )
 
 
@@ -945,80 +904,80 @@ def build_tech() -> ModelGeometry:
 
 
 def build_consumer_conf() -> ModelGeometry:
-    """Build a wide stability horizon with one central confidence vane."""
+    """Build a confidence mood-meter: a semicircular dial gauge with a rising needle."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    body.add_rounded_rect_ring_y(
-        outer_width=1.42,
-        outer_height=0.86,
-        inner_width=1.10,
-        inner_height=0.48,
-        depth=0.56,
-        outer_radius=0.13,
-        inner_radius=0.08,
-        corner_segments=3,
+    # Meter housing: a drum along Blender Y (the can behind the dial) carries the
+    # depth mass so the gauge is a real instrument, not a flat plate.  Its front
+    # (-Y) face is the dial the scale and needle sit on.
+    body.add_cylinder(
+        radius=0.50,
+        depth=0.60,
+        segments=28,
+        location=(0.0, 0.30, 0.06),
+        rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
-    for z in (-0.15, 0.15):
-        body.add_rounded_box_y(
-            width=1.06,
-            height=0.075,
-            depth=0.48,
-            radius=0.025,
-            corner_segments=2,
-            location=(0.0, 0.0, z),
-            bevel=True,
-        )
-    for x in (-0.60, 0.60):
-        body.add_cylinder(
-            radius=0.13,
-            depth=0.60,
-            segments=10,
-            location=(x, 0.0, 0.0),
-            rotation=(_QUARTER_TURN, 0.0, 0.0),
-            bevel=True,
-        )
-    body.add_box(size=(0.34, 0.54, 0.12), location=(-0.40, 0.0, -0.45))
-    body.add_box(size=(0.22, 0.54, 0.12), location=(0.44, 0.0, -0.45))
-    # Rear gauge can along Blender Y (behind the horizon frame): a real drum that
-    # carries the depth mass the flat chassis was missing.  r spans the interior
-    # window; the can reaches back to y +0.74 so the side silhouette fills.
-    body.add_cylinder(
-        radius=0.36,
-        depth=0.88,
-        segments=12,
-        location=(0.0, 0.30, 0.0),
+    # Semicircular scale arc across the top of the dial (left = low, right = high).
+    body.add_torus_arc(
+        major_radius=0.41,
+        minor_radius=0.05,
+        start_angle=math.radians(6.0),
+        end_angle=math.radians(174.0),
+        arc_segments=28,
+        minor_segments=8,
+        location=(0.0, -0.02, 0.06),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
+        bevel=True,
+    )
+    # Three scale posts: low (left), mid (top), high (right).
+    for degrees in (26.0, 90.0, 154.0):
+        angle = math.radians(degrees)
+        body.add_box(
+            size=(0.06, 0.10, 0.12),
+            location=(0.41 * math.cos(angle), -0.05, 0.06 + 0.41 * math.sin(angle)),
+            rotation=(0.0, _QUARTER_TURN - angle, 0.0),
+        )
+    # Instrument stand: a trapezoidal neck onto a footed base plate.
+    body.add_extruded_polygon_y(
+        ((-0.28, -0.26), (0.28, -0.26), (0.18, 0.12), (-0.18, 0.12)),
+        depth=0.44,
+        location=(0.0, 0.22, -0.60),
+        bevel=True,
+    )
+    body.add_rounded_box_y(
+        width=0.74,
+        height=0.10,
+        depth=0.50,
+        radius=0.035,
+        corner_segments=2,
+        location=(0.0, 0.22, -0.86),
         bevel=True,
     )
 
-    vane_origin = (0.0, -0.17, 0.0)
+    # Category needle: a bold flat pointer (thin in Blender Y) aimed up toward the
+    # HIGH side, seated on a broad hub cap.  The animation lifts it along Blender
+    # Z (glTF Y), reading as confidence rising.
+    vane_origin = (0.0, -0.24, 0.06)
     accent.add_extruded_polygon_y(
         (
-            (-0.15, -0.38),
-            (0.15, -0.38),
-            (0.21, -0.02),
-            (0.09, 0.38),
-            (-0.09, 0.38),
-            (-0.21, -0.02),
+            (-0.12, -0.07),
+            (0.07, -0.14),
+            (0.40, 0.46),
+            (0.26, 0.57),
         ),
-        depth=0.24,
-        location=vane_origin,
+        depth=0.07,
+        location=(0.0, -0.24, 0.06),
         bevel=True,
     )
     accent.add_cylinder(
-        radius=0.15,
-        depth=0.24,
-        segments=12,
-        location=(0.0, -0.17, -0.06),
+        radius=0.235,
+        depth=0.07,
+        segments=20,
+        location=(0.0, -0.27, 0.06),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
-        bevel=True,
-    )
-    accent.add_box(
-        size=(0.74, 0.14, 0.11),
-        location=(0.0, -0.17, 0.04),
         bevel=True,
     )
 
@@ -1026,11 +985,11 @@ def build_consumer_conf() -> ModelGeometry:
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:long double horizon frame crossed by one compact central vane;"
-            "side:shallow damped chassis with a forward translating stabilizer;"
-            "top:wide rectangular datum with no hanging or pendulum mass"
+            "front:a semicircular dial gauge crossed by one bold needle aimed at the high side;"
+            "side:a round meter can in depth behind a thin dial face and pointer;"
+            "top:a circular gauge footprint with a single forward needle blade"
         ),
-        body_detail="wide dual-rail horizon frame, side dampers, and unequal datum feet",
+        body_detail="semicircular dial gauge, meter can, scale posts, and instrument stand",
         accent_pivot="central confidence-vane lift center; glTF Y equals Blender Z",
         accent_origin=vane_origin,
     )

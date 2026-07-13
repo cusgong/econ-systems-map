@@ -399,7 +399,7 @@ export function createUI(deps) {
     }
     // the signature interaction, hinted at the moment it is relevant
     if (n.lever && !state.listMode) {
-      b.append(h('p', { class: 'rd-src' }, '⇅ ' + t('지도에서 이 노드를 위아래로 잡아끌면 즉석 충격을 줄 수 있습니다.')));
+      b.append(h('p', { class: 'lever-hint' }, '⇅ ' + t('지도에서 이 노드를 위아래로 잡아끌면 즉석 충격을 줄 수 있습니다.')));
     }
 
     // NOW instrument strip: what this variable reads today (tap -> NOW board)

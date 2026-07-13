@@ -40,97 +40,87 @@ def _annular_sector_points(
 
 
 def build_market_rate() -> ModelGeometry:
-    """Build a shallow twin maturity rail with one keyed moving carriage."""
+    """Build an L-axis rate chart whose stepped line climbs to a bright marker."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    rail_angle = math.radians(-10.0)
-    for y, z in ((-0.30, 0.04), (0.30, -0.04)):
-        body.add_capsule_x(
-            half_length=0.62,
-            radius=0.135,
-            segments=24,
-            hemisphere_steps=3,
-            location=(0.0, y, z),
-            rotation=(0.0, rail_angle, 0.0),
-        )
-
-    # Unequal end standards keep the rail from reading as a line chart.  The
-    # short transverse ties provide the remaining exposed primary edge tags.
-    # The standards are deepened in Y into full gantry posts that seat on the
-    # instrument bed below, so the whole stand gains genuine front-back depth.
+    # Chart backing panel: the plate the axes and line are mounted on.  It owns
+    # the Blender-Y (front-back) depth so the side and top silhouettes stay
+    # solid rather than reading as a thin plaque.
     body.add_box(
-        size=(0.24, 1.02, 1.02),
-        location=(-0.64, 0.0, 0.10),
-        rotation=(0.0, rail_angle, 0.0),
+        size=(1.48, 1.02, 0.14),
+        location=(0.0, 0.0, -0.66),
+        bevel=True,
+    )
+    # L-frame: the tall vertical value axis at the left and the horizontal time
+    # axis along the bottom.  Together they read immediately as a chart frame.
+    # The value-axis post is deepened in Blender Y so the side silhouette reads
+    # as solid rather than a thin edge.
+    body.add_box(
+        size=(0.18, 0.96, 1.34),
+        location=(-0.76, 0.0, 0.00),
         bevel=True,
     )
     body.add_box(
-        size=(0.24, 1.02, 1.14),
-        location=(0.64, 0.0, 0.16),
-        rotation=(0.0, rail_angle, 0.0),
+        size=(1.52, 0.66, 0.16),
+        location=(0.0, 0.0, -0.52),
         bevel=True,
     )
-    for x in (-0.42, 0.42):
-        slope_z = -math.sin(rail_angle) * x
-        body.add_cylinder_between(
-            (x, -0.29, slope_z + 0.04),
-            (x, 0.29, slope_z - 0.04),
-            radius=0.045,
-            segments=9,
-            bevel=True,
-        )
+    # A little mid-panel Y-bulk so the chart is not a thin plaque from the side.
     body.add_box(
-        size=(0.22, 0.16, 0.10),
-        location=(-0.58, -0.23, -0.30),
-    )
-    # Instrument bed: the chassis the rail stand is bolted to.  It owns the
-    # Blender-Y (front-back) extent that was previously the flat thin axis, now
-    # deepened so the whole stand keeps genuine front-back bulk.
-    body.add_box(
-        size=(1.30, 0.92, 0.16),
-        location=(0.0, 0.0, -0.42),
+        size=(1.20, 0.62, 0.12),
+        location=(0.0, 0.0, -0.34),
         bevel=True,
     )
 
-    carriage_origin = (0.12, 0.0, 0.02)
-    sleeve_centers = (
-        (carriage_origin[0], -0.24, 0.061),
-        (carriage_origin[0], 0.24, -0.019),
+    # Upward-stepping line: this climbing rate line is the ACCENT, so the bright
+    # category colour reads instantly as "a line trending up" against the dark
+    # chart frame. Three beams (each end higher) with plotted data-point collars,
+    # standing proud of the panel, capped by an up-arrowhead.
+    step_points = (
+        (-0.54, -0.34),
+        (-0.18, -0.04),
+        (0.18, 0.26),
+        (0.54, 0.54),
     )
-    for center in sleeve_centers:
-        accent.add_cylinder(
-            radius=0.185,
-            depth=0.38,
+    for (x0, z0), (x1, z1) in zip(step_points, step_points[1:]):
+        accent.add_cylinder_between(
+            (x0, 0.10, z0),
+            (x1, 0.10, z1),
+            radius=0.090,
             segments=12,
-            location=center,
-            rotation=(0.0, _QUARTER_TURN, 0.0),
             bevel=True,
         )
-    accent.add_cylinder_between(
-        sleeve_centers[0],
-        sleeve_centers[1],
-        radius=0.085,
-        segments=12,
-        bevel=True,
-    )
-    accent.add_box(
-        size=(0.16, 0.12, 0.24),
-        location=(0.12, -0.32, 0.17),
-    )
+    for x, z in step_points[1:-1]:
+        accent.add_cylinder(
+            radius=0.120,
+            depth=0.20,
+            segments=14,
+            location=(x, 0.10, z),
+            rotation=(_QUARTER_TURN, 0.0, 0.0),
+            bevel=True,
+        )
+    marker_origin = (0.54, 0.10, 0.54)
+    for sign in (-1.0, 1.0):
+        accent.add_box(
+            size=(0.34, 0.20, 0.12),
+            location=(0.54 + sign * 0.10, 0.10, 0.74),
+            rotation=(0.0, math.radians(sign * 45.0), 0.0),
+            bevel=True,
+        )
 
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:shallow twin maturity rails crossed by one keyed carriage;"
-            "side:staggered dual guides between unequal end standards;"
-            "top:offset carriage bridging separated parallel tracks"
+            "front:L-axis frame under a stepped line climbing to a peak marker;"
+            "side:upright value axis and line nodes on a deep chart panel;"
+            "top:stepped beams crossing the panel to a forward chevron marker"
         ),
-        body_detail="shallow twin maturity rails, unequal end standards, and transverse ties",
+        body_detail="L-axis chart frame, three-beam rising line, and plotted node collars",
         accent_pivot="maturity carriage centroid; translate along glTF X / Blender X",
-        accent_origin=carriage_origin,
+        accent_origin=marker_origin,
     )
 
 
@@ -215,172 +205,143 @@ def build_liquidity() -> ModelGeometry:
 
 
 def build_credit_spread() -> ModelGeometry:
-    """Build a horizontal calibration frame with opposed measuring jaws."""
+    """Build two unequal bars with a gap bridged by a caliper double-arrow."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    body.add_capsule_x(
-        half_length=0.66,
-        radius=0.12,
-        segments=28,
-        hemisphere_steps=4,
-        location=(0.0, 0.03, -0.42),
-    )
-    body.add_rounded_box_y(
-        width=0.18,
-        height=1.00,
-        depth=0.76,
-        radius=0.045,
-        corner_segments=2,
-        location=(-0.68, 0.03, -0.02),
-        bevel=True,
-    )
-    body.add_rounded_box_y(
-        width=0.34,
-        height=0.16,
-        depth=0.44,
-        radius=0.040,
-        corner_segments=2,
-        location=(-0.51, 0.03, 0.31),
-        bevel=True,
-    )
-    body.add_rounded_box_y(
-        width=0.38,
-        height=0.16,
-        depth=0.44,
-        radius=0.040,
-        corner_segments=2,
-        location=(-0.48, 0.03, -0.40),
-        bevel=True,
-    )
-    body.add_cylinder(
-        radius=0.16,
-        depth=0.40,
-        segments=14,
-        location=(-0.62, -0.16, 0.04),
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
-        bevel=True,
-    )
-    # Calibration bench: a mounting plate the caliper frame beds into.  It
-    # carries the Blender-Y (front-back) depth that was the flat thin axis and
-    # is deepened in Z into a solid plinth so the side (Y-Z) silhouette, the
-    # weakest view, reads as a bench block rather than a thin shelf.
+    # Base plate seats both bars and owns the front-back depth.
     body.add_box(
-        size=(1.36, 0.96, 0.46),
-        location=(0.0, 0.0, -0.50),
+        size=(1.54, 1.00, 0.16),
+        location=(0.0, 0.0, -0.66),
         bevel=True,
     )
+    # Two clearly separate upright bars of different heights.  The empty span
+    # between their inner faces is the "spread" the caliper measures.
+    body.add_box(
+        size=(0.36, 0.86, 1.16),
+        location=(-0.48, 0.0, 0.00),
+        bevel=True,
+    )
+    body.add_box(
+        size=(0.36, 0.86, 0.72),
+        location=(0.48, 0.0, -0.22),
+        bevel=True,
+    )
+    # Short plinths read each bar as a seated column rather than a slab.
+    for x in (-0.48, 0.48):
+        body.add_box(
+            size=(0.50, 0.90, 0.12),
+            location=(x, 0.0, -0.54),
+            bevel=True,
+        )
 
-    jaw_origin = (0.40, 0.0, 0.02)
-    accent.add_rounded_box_y(
-        width=0.13,
-        height=0.66,
-        depth=0.30,
-        radius=0.030,
-        corner_segments=2,
-        location=(0.40, 0.0, 0.00),
+    bridge_origin = (0.0, 0.0, 0.18)
+    # Caliper double-arrow bridging the gap, held flat on Blender Y so it reads
+    # as a thin measuring gauge laid across the two bar faces.
+    accent.add_box(
+        size=(0.62, 0.14, 0.19),
+        location=(0.0, 0.0, 0.18),
         bevel=True,
     )
-    accent.add_rounded_box_y(
-        width=0.20,
-        height=0.11,
-        depth=0.26,
-        radius=0.025,
-        corner_segments=2,
-        location=(0.28, 0.0, 0.29),
-    )
-    accent.add_cylinder(
-        radius=0.13,
-        depth=0.30,
-        segments=12,
-        location=(0.40, 0.0, -0.42),
-        rotation=(0.0, _QUARTER_TURN, 0.0),
+    arrow = 0.19
+    accent.add_extruded_polygon_y(
+        [(-0.30, 0.18), (-0.30 + arrow, 0.18 + arrow), (-0.30 + arrow, 0.18 - arrow)],
+        depth=0.14,
         bevel=True,
     )
-    # Vernier thumb roller: an unbeveled X-axis knurl that keeps the moving
-    # jaw's accent-area share up as the body gains bench mass.
-    accent.add_cylinder(
-        radius=0.07,
-        depth=0.16,
-        segments=10,
-        location=(0.54, 0.0, -0.20),
-        rotation=(0.0, _QUARTER_TURN, 0.0),
+    accent.add_extruded_polygon_y(
+        [(0.30, 0.18), (0.30 - arrow, 0.18 + arrow), (0.30 - arrow, 0.18 - arrow)],
+        depth=0.14,
+        bevel=True,
     )
+    # Vertical caliper jaws riding each bar's inner face define the span ends.
+    for x in (-0.30, 0.30):
+        accent.add_box(
+            size=(0.12, 0.15, 0.66),
+            location=(x, 0.0, 0.18),
+            bevel=True,
+        )
 
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:open horizontal caliper with opposed unequal jaws;"
-            "side:deep datum boss over a single slide beam;"
-            "top:fixed gauge head opposed by a moving keyed collar"
+            "front:two unequal bars split by a gap spanned by a caliper arrow;"
+            "side:tall seated columns behind one flat gauge bridge;"
+            "top:separated bar blocks joined by a thin cross gauge"
         ),
-        body_detail="horizontal calibration guide, fixed datum jaw, and gauge boss",
+        body_detail="two unequal seated bars with a measured gap between them",
         accent_pivot="moving jaw slide center; translate along glTF X / Blender X",
-        accent_origin=jaw_origin,
+        accent_origin=bridge_origin,
     )
 
 
 def build_bank_lending() -> ModelGeometry:
-    """Build a twin-barrel credit pump with one linked forward piston yoke."""
+    """Build a vault with a round door paying one coin out through the front."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    barrel_centers = ((-0.34, 0.02, 0.12), (0.34, 0.02, 0.12))
-    for center in barrel_centers:
-        body.add_cylinder(
-            radius=0.25,
-            depth=0.90,
-            segments=16,
-            location=center,
-            rotation=(_QUARTER_TURN, 0.0, 0.0),
-            bevel=True,
-        )
-        body.add_torus(
-            major_radius=0.25,
-            minor_radius=0.055,
-            major_segments=22,
-            minor_segments=6,
-            location=(center[0], -0.39, center[2]),
-            rotation=(_QUARTER_TURN, 0.0, 0.0),
-        )
+    # Vault body: a heavy near-cubic safe, the recognizable core of the icon.
     body.add_box(
-        size=(0.88, 0.22, 0.24),
-        location=(0.0, 0.44, 0.05),
+        size=(1.08, 0.86, 1.08),
+        location=(0.0, 0.0, 0.08),
         bevel=True,
     )
+    # Round recessed door set into the front (-Y) face, upper half.
     body.add_cylinder(
-        radius=0.15,
-        depth=0.20,
-        segments=12,
-        location=(0.40, 0.43, -0.24),
+        radius=0.36,
+        depth=0.16,
+        segments=20,
+        location=(0.0, -0.42, 0.22),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
-    # Outboard pump-housing cheeks: deep along Blender Y and tall in Z so the
-    # side (Y-Z) silhouette, previously the thin edge-on view of the barrels,
-    # reads as a solid framed housing rather than two overlapping tubes.
-    for x in (-0.62, 0.62):
-        body.add_box(
-            size=(0.18, 1.02, 0.94),
-            location=(x, 0.02, 0.12),
-        )
+    # Combination wheel: a central hub crossed by two spokes on the door.
+    body.add_cylinder(
+        radius=0.09,
+        depth=0.18,
+        segments=12,
+        location=(0.0, -0.50, 0.22),
+        rotation=(_QUARTER_TURN, 0.0, 0.0),
+        bevel=True,
+    )
+    body.add_box(size=(0.40, 0.10, 0.07), location=(0.0, -0.50, 0.22), bevel=True)
+    body.add_box(size=(0.07, 0.10, 0.40), location=(0.0, -0.50, 0.22), bevel=True)
+    # Pay-out slot lip on the lower front, where the coin emerges.
+    body.add_box(
+        size=(0.62, 0.12, 0.12),
+        location=(0.0, -0.42, -0.30),
+        bevel=True,
+    )
+    # Four short feet.
+    for x in (-0.40, 0.40):
+        for y in (-0.30, 0.30):
+            body.add_box(
+                size=(0.16, 0.16, 0.14),
+                location=(x, y, -0.52),
+                bevel=True,
+            )
 
-    piston_origin = (0.0, -0.43, 0.08)
-    for x in (-0.34, 0.34):
-        accent.add_cylinder(
-            radius=0.27,
-            depth=0.12,
-            segments=14,
-            location=(x, -0.46, 0.12),
-            rotation=(_QUARTER_TURN, 0.0, 0.0),
-            bevel=True,
-        )
-    accent.add_box(
-        size=(0.94, 0.14, 0.18),
-        location=(0.0, -0.50, -0.15),
+    coin_origin = (0.0, -0.62, -0.30)
+    # Category-colored coin: a flat disc facing front (thin on Blender Y) that
+    # advances out through the pay slot toward the viewer.
+    accent.add_cylinder(
+        radius=0.30,
+        depth=0.09,
+        segments=20,
+        location=(0.0, -0.62, -0.30),
+        rotation=(_QUARTER_TURN, 0.0, 0.0),
+        bevel=True,
+    )
+    # A raised inner relief keeps the disc reading as a struck coin.
+    accent.add_cylinder(
+        radius=0.19,
+        depth=0.12,
+        segments=16,
+        location=(0.0, -0.62, -0.30),
+        rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
 
@@ -388,195 +349,160 @@ def build_bank_lending() -> ModelGeometry:
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:twin pump faces over an asymmetric check-gate manifold;"
-            "side:long paired barrels with one forward linked yoke;"
-            "top:parallel cylinders joined by an offset rear manifold"
+            "front:round-doored vault paying a coin out through a lower slot;"
+            "side:deep safe block with a forward coin clear of the front face;"
+            "top:cubic vault footprint with a coin projecting off the front"
         ),
-        body_detail="parallel credit barrels, front collars, rear manifold, and check gate",
+        body_detail="cubic vault, round combination door, pay slot, and feet",
         accent_pivot="linked piston-face center; glTF +Z advances along Blender -Y",
-        accent_origin=piston_origin,
+        accent_origin=coin_origin,
     )
 
 
 def build_cpi() -> ModelGeometry:
-    """Build a weighted price-index drum with one broken ratchet band."""
+    """Build an open shopping basket carrying a weighted price disc of goods."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    drum_center = (0.0, 0.10, 0.02)
-    # A deep price-index drum with real barrel length along Blender Y.  The
-    # depth is the front-back (side/top silhouette) axis, so a genuine can here
-    # fills the previously thin side and top views without touching the front
-    # disc that carries the recognizable weighted-sector face.
-    body.add_cylinder(
-        radius=0.58,
-        depth=0.74,
-        segments=24,
-        location=drum_center,
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
+    # Basket floor: a solid pan that fills the top-down view and gives depth.
+    body.add_box(
+        size=(1.04, 0.86, 0.15),
+        location=(0.0, 0.0, -0.44),
         bevel=True,
     )
-    body.add_cylinder(
-        radius=0.64,
-        depth=0.13,
-        segments=28,
-        location=(0.0, 0.44, 0.02),
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
-        bevel=True,
-    )
-    body.add_cylinder(
-        radius=0.17,
-        depth=0.14,
-        segments=14,
-        location=(0.0, -0.27, 0.02),
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
-        bevel=True,
-    )
-    body.add_cylinder(
-        radius=0.14,
-        depth=0.12,
-        segments=12,
-        location=(0.0, 0.52, 0.02),
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
-    )
-
-    sector_specs = (
-        (-154.0, -99.0, 0.60),
-        (-92.0, -31.0, 0.64),
-        (-24.0, 39.0, 0.61),
-        (46.0, 111.0, 0.66),
-        (118.0, 176.0, 0.62),
-    )
-    for start_degrees, end_degrees, outer_radius in sector_specs:
-        body.add_extruded_polygon_y(
-            _annular_sector_points(
-                inner_radius=0.43,
-                outer_radius=outer_radius,
-                start_angle=math.radians(start_degrees),
-                end_angle=math.radians(end_degrees),
-            ),
-            depth=0.08,
-            location=(0.0, -0.24, 0.02),
-        )
-
-    # U-cradle widened deep in Blender Y so the bed reads as a solid saddle
-    # from the top and side, the two silhouettes that were previously thin.
-    body.add_box(size=(1.30, 0.90, 0.15), location=(0.0, 0.08, -0.66))
-    body.add_box(size=(0.16, 0.90, 0.42), location=(-0.57, 0.08, -0.49))
-    body.add_box(size=(0.16, 0.90, 0.34), location=(0.57, 0.08, -0.53))
-
-    index_origin = (0.0, -0.31, 0.02)
-    accent.add_torus_arc(
-        major_radius=0.70,
-        minor_radius=0.088,
-        start_angle=math.radians(-140.0),
-        end_angle=math.radians(160.0),
-        arc_segments=26,
+    # Four upright walls enclosing an open top; the goods sit inside the mouth.
+    body.add_box(size=(1.04, 0.11, 0.58), location=(0.0, -0.43, -0.075), bevel=True)
+    body.add_box(size=(1.04, 0.11, 0.58), location=(0.0, 0.43, -0.075), bevel=True)
+    body.add_box(size=(0.11, 0.86, 0.58), location=(-0.49, 0.0, -0.075), bevel=True)
+    body.add_box(size=(0.11, 0.86, 0.58), location=(0.49, 0.0, -0.075), bevel=True)
+    # A raised rim frames the open mouth of the basket.
+    body.add_box(size=(1.14, 0.13, 0.10), location=(0.0, -0.45, 0.20), bevel=True)
+    body.add_box(size=(1.14, 0.13, 0.10), location=(0.0, 0.45, 0.20), bevel=True)
+    body.add_box(size=(0.13, 0.98, 0.10), location=(-0.52, 0.0, 0.20), bevel=True)
+    body.add_box(size=(0.13, 0.98, 0.10), location=(0.52, 0.0, 0.20), bevel=True)
+    # Arc carry handle bowing up over the mouth (X-Z plane).
+    body.add_torus_arc(
+        major_radius=0.52,
+        minor_radius=0.058,
+        start_angle=math.radians(14.0),
+        end_angle=math.radians(166.0),
+        arc_segments=16,
         minor_segments=6,
-        location=index_origin,
+        location=(0.0, 0.0, 0.18),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
-    accent.add_box(
-        size=(0.18, 0.12, 0.20),
-        location=(0.49, -0.31, 0.53),
-        rotation=(0.0, math.radians(-8.0), math.radians(-40.0)),
+
+    goods_origin = (0.0, 0.0, 0.30)
+    # Weighted price disc: the colored basket of goods, standing so it rises
+    # above the rim, held flat on Blender Y and spinning about that axis.
+    accent.add_cylinder(
+        radius=0.31,
+        depth=0.11,
+        segments=20,
+        location=(0.0, 0.0, 0.30),
+        rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
+    # Two stacked item tiles beside the disc round out the "goods" reading.
+    accent.add_box(size=(0.23, 0.11, 0.34), location=(-0.37, 0.0, 0.24), bevel=True)
+    accent.add_box(size=(0.20, 0.11, 0.26), location=(0.38, 0.0, 0.20), bevel=True)
 
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:weighted five-sector drum in a low U cradle;"
-            "side:thick index barrel between stepped bearings;"
-            "top:broken reference band and unequal sector depths"
+            "front:open basket brimming with a price disc and stacked goods;"
+            "side:walled pan under an arc handle with goods above the rim;"
+            "top:rimmed basket mouth filled by a central weighted disc"
         ),
-        body_detail="weighted five-sector price drum, stepped bearings, and low U cradle",
+        body_detail="open shopping basket, rimmed mouth, floor pan, and arc handle",
         accent_pivot="weighted drum index axis; glTF +Z is Blender -Y",
-        accent_origin=index_origin,
+        accent_origin=goods_origin,
     )
 
 
 def build_inflation_exp() -> ModelGeometry:
-    """Build a thermal expectation core with one forward focusing lens."""
+    """Build a thermometer whose colored mercury column reads high with heat."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    body.add_capsule_x(
-        half_length=0.42,
-        radius=0.22,
-        segments=24,
-        hemisphere_steps=4,
-        location=(-0.18, 0.18, -0.05),
-        rotation=(0.0, -_QUARTER_TURN, 0.0),
+    # Base plinth: a wide stand that fills the top-down view and steadies the
+    # tall instrument, keeping genuine Blender-Y depth.
+    body.add_box(
+        size=(1.08, 1.08, 0.16),
+        location=(0.0, 0.0, -0.80),
+        bevel=True,
     )
-    for z, width in ((-0.31, 0.48), (-0.05, 0.56), (0.21, 0.44)):
-        body.add_box(
-            size=(width, 0.12, 0.075),
-            location=(-0.18, 0.31, z),
-        )
-
-    # A finely faceted collar carries the complete body bevel contract while
-    # reading as one heat shroud, not as decorative micro-detail.
+    # Round bulb at the foot of the thermometer (a flat-fronted puck so the
+    # colored mercury can seat flush on its face).
     body.add_cylinder(
-        radius=0.29,
-        depth=0.16,
-        segments=42,
-        location=(-0.18, 0.18, -0.05),
+        radius=0.31,
+        depth=0.36,
+        segments=26,
+        location=(0.0, 0.0, -0.46),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
-    # Instrument bed: a wide chassis spanning both X and Blender Y so the top
-    # (X-Y) silhouette, previously the sparse view, is filled by a solid plate.
-    body.add_box(size=(1.18, 0.90, 0.17), location=(0.05, 0.10, -0.60))
-    body.add_box(size=(0.12, 0.86, 0.70), location=(-0.43, 0.14, -0.24))
-    body.add_box(size=(0.12, 0.86, 0.58), location=(0.53, 0.14, -0.18))
-    for x in (-0.31, 0.47):
-        body.add_cylinder_between(
-            (x, -0.48, 0.23),
-            (x, 0.15, 0.23),
-            radius=0.035,
-            segments=8,
-        )
-
-    lens_origin = (0.13, -0.43, 0.23)
-    accent.add_torus_arc(
-        major_radius=0.43,
-        minor_radius=0.065,
-        start_angle=math.radians(-155.0),
-        end_angle=math.radians(170.0),
-        arc_segments=28,
+    # Vertical tube rising from the bulb, flat-fronted to carry the column.
+    body.add_rounded_box_y(
+        width=0.28,
+        height=1.06,
+        depth=0.36,
+        radius=0.13,
+        corner_segments=3,
+        location=(0.0, 0.0, 0.18),
+        bevel=True,
+    )
+    # Short neck collar where the tube meets the bulb reads as a gauge fitting.
+    body.add_cylinder(
+        radius=0.20,
+        depth=0.40,
+        segments=18,
+        location=(0.0, 0.0, -0.26),
+        rotation=(_QUARTER_TURN, 0.0, 0.0),
+        bevel=True,
+    )
+    # Fitting ring around the neck adds a machined detail and front-back bulk.
+    body.add_torus(
+        major_radius=0.23,
+        minor_radius=0.05,
+        major_segments=18,
         minor_segments=6,
-        location=lens_origin,
+        location=(0.0, 0.0, -0.08),
+        rotation=(_QUARTER_TURN, 0.0, 0.0),
+    )
+
+    column_origin = (0.0, -0.15, 0.16)
+    # Mercury: a colored column filling the tube high, plus the colored bulb
+    # face.  Both are held in a thin front slab (thin on Blender Y).
+    accent.add_box(
+        size=(0.18, 0.08, 0.94),
+        location=(0.0, -0.15, 0.16),
+        bevel=True,
+    )
+    accent.add_cylinder(
+        radius=0.23,
+        depth=0.08,
+        segments=18,
+        location=(0.0, -0.15, -0.46),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
-    )
-    accent.add_box(
-        size=(0.16, 0.10, 0.15),
-        location=(0.47, -0.43, 0.47),
-        rotation=(0.0, 0.0, math.radians(-28.0)),
-        bevel=True,
-    )
-    accent.add_box(
-        size=(0.12, 0.08, 0.12),
-        location=(-0.18, -0.43, -0.03),
-        rotation=(0.0, 0.0, math.radians(-38.0)),
     )
 
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:offset focus ring above an asymmetric thermal core;"
-            "side:floating lens ahead of twin optical rails;"
-            "top:forward lens separated from a finned rear heat spine"
+            "front:bulbed thermometer with a colored column filled high;"
+            "side:upright tube on a round bulb over a broad stand;"
+            "top:round bulb and tube centered on a square base plate"
         ),
-        body_detail="asymmetric thermal core, heat fins, open yoke, and optical rails",
+        body_detail="thermometer tube, round bulb, neck collar, and base plinth",
         accent_pivot="forward focus-lens center; glTF +Z advances along Blender -Y",
-        accent_origin=lens_origin,
+        accent_origin=column_origin,
     )
 
 

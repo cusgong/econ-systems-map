@@ -434,6 +434,16 @@ button { font-family: inherit; }
 }
 .desc { color: var(--ink-2); font-size: 13.5px; margin: 4px 0 10px; }
 
+/* lever drag hint: a quiet, right-aligned caption, not a headline */
+.lever-hint {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ink-3);
+  text-align: right;
+  opacity: .9;
+}
+
 /* panel turntable inspector: the selected instrument, large and auto-rotating.
    HUD instrument-readout styling — category-tinted glow, corner brackets, a
    vignette that focuses the eye, and a soft screen sheen. */

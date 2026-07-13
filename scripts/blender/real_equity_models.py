@@ -5,6 +5,13 @@ one body and one accent assembler while leaving normalization, materials,
 object creation, and export to the shared authoring pipeline.  Coordinates use
 Blender's +Z-up, -Y-front convention.  Runtime glTF axes therefore map back to
 Blender as ``(x, z, -y)``.
+
+This batch is authored as *iconic* machined pictograms: the dark body carries a
+recognizable 3D symbol of the concept (a shopping bag, a row of workers, a bar
+chart, a broken chain, a candlestick chart) and the category-colored accent is
+the semantically defining part (the goods, the badge, the rising arrow, the
+break spark, the leading candle).  Every icon still keeps genuine Blender-Y
+depth so the three-view silhouette stays balanced.
 """
 
 from __future__ import annotations
@@ -17,198 +24,116 @@ from hard_surface import MeshAssembler, ModelGeometry
 _QUARTER_TURN = math.pi * 0.5
 
 
-def _annular_sector_points(
-    inner_radius: float,
-    outer_radius: float,
-    start_angle: float,
-    end_angle: float,
-    steps: int = 3,
+def _up_arrow_points(
+    shaft_hw: float,
+    head_hw: float,
+    z_bottom: float,
+    z_shoulder: float,
+    z_tip: float,
 ) -> list[tuple[float, float]]:
-    """Return a deterministic XZ annular-sector loop for Y extrusion."""
+    """Return a deterministic upward-arrow XZ outline for Y extrusion."""
 
-    outer: list[tuple[float, float]] = []
-    inner: list[tuple[float, float]] = []
-    for index in range(steps + 1):
-        ratio = index / steps
-        angle = start_angle + (end_angle - start_angle) * ratio
-        outer.append(
-            (outer_radius * math.cos(angle), outer_radius * math.sin(angle))
-        )
-    for index in reversed(range(steps + 1)):
-        ratio = index / steps
-        angle = start_angle + (end_angle - start_angle) * ratio
-        inner.append(
-            (inner_radius * math.cos(angle), inner_radius * math.sin(angle))
-        )
-    return outer + inner
+    return [
+        (-shaft_hw, z_bottom),
+        (shaft_hw, z_bottom),
+        (shaft_hw, z_shoulder),
+        (head_hw, z_shoulder),
+        (0.0, z_tip),
+        (-head_hw, z_shoulder),
+        (-shaft_hw, z_shoulder),
+    ]
+
+
+def _star_points(
+    outer_radius: float,
+    inner_radius: float,
+    count: int,
+    phase: float = 0.0,
+) -> list[tuple[float, float]]:
+    """Return a deterministic sharp XZ star/burst outline for Y extrusion."""
+
+    points: list[tuple[float, float]] = []
+    for index in range(count * 2):
+        radius = outer_radius if index % 2 == 0 else inner_radius
+        angle = phase + math.pi * index / count
+        points.append((radius * math.cos(angle), radius * math.sin(angle)))
+    return points
 
 
 def build_consumption() -> ModelGeometry:
-    """Build an asymmetric demand flywheel with one keyed clutch shoe."""
+    """Build a shopping bag with two arched handles and goods rising past the mouth."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    flywheel_center = (0.0, 0.02, 0.03)
-    body.add_torus(
-        major_radius=0.58,
-        minor_radius=0.11,
-        major_segments=26,
-        minor_segments=6,
-        location=flywheel_center,
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
-    )
-    # The former shallow coin face is deepened into a full inertia drum along
-    # Blender Y (the weak side axis).  A wide, Z-spanning barrel is what fills
-    # the Y-Z silhouette; the front still reads as a flywheel inside its rim.
-    body.add_cylinder(
-        radius=0.48,
-        depth=0.92,
-        segments=24,
-        location=(0.0, 0.05, 0.05),
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
+    # Bag sack: a deep rounded box.  Its 0.94 Blender-Y depth is what fills the
+    # side and top silhouettes so the front bag face never reads as a flat plate.
+    body.add_rounded_box_y(
+        width=1.20,
+        height=1.02,
+        depth=0.94,
+        radius=0.075,
+        corner_segments=3,
+        location=(0.0, 0.0, -0.06),
         bevel=True,
     )
-    # The hub barrel is extended rearward (deep along Blender Y, the thin axis)
-    # and capped by a bearing can so the flywheel gains real depth instead of
-    # reading as a shallow coin.  The front face stays at y=-0.15.
-    body.add_cylinder(
-        radius=0.18,
-        depth=0.56,
-        segments=18,
-        location=(0.0, 0.13, 0.03),
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
+    # Folded top cuff (the open mouth), slightly wider and deeper than the sack.
+    body.add_rounded_box_y(
+        width=1.28,
+        height=0.15,
+        depth=1.00,
+        radius=0.050,
+        corner_segments=3,
+        location=(0.0, 0.0, 0.52),
         bevel=True,
     )
-    body.add_cylinder(
-        radius=0.30,
-        depth=0.26,
-        segments=18,
-        location=(0.0, 0.40, 0.03),
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
-        bevel=True,
-    )
-    # Unequal inertia masses and a compact brake shoe break the equal-spoke
-    # fan language.  Their crisp faces sit against the curved continuous rim.
-    rim_masses = (
-        (42.0, 28.0, 0.50, 0.72, 0.16, -0.010),
-        (174.0, 19.0, 0.51, 0.68, 0.14, 0.015),
-        (-104.0, 13.0, 0.54, 0.73, 0.12, -0.025),
-    )
-    for center_degrees, half_sweep_degrees, inner, outer, depth, y in rim_masses:
-        center_angle = math.radians(center_degrees)
-        half_sweep = math.radians(half_sweep_degrees)
-        body.add_extruded_polygon_y(
-            _annular_sector_points(
-                inner_radius=inner,
-                outer_radius=outer,
-                start_angle=center_angle - half_sweep,
-                end_angle=center_angle + half_sweep,
-                steps=3,
-            ),
-            depth=depth,
-            location=(0.0, y, flywheel_center[2]),
+    # Two arching carry handles standing in the front X-Z plane above the cuff.
+    for handle_x in (-0.32, 0.32):
+        body.add_torus_arc(
+            major_radius=0.26,
+            minor_radius=0.050,
+            start_angle=0.0,
+            end_angle=math.pi,
+            arc_segments=20,
+            minor_segments=8,
+            location=(handle_x, 0.0, 0.52),
+            rotation=(_QUARTER_TURN, 0.0, 0.0),
+            bevel=True,
         )
-    brake_angle = math.radians(-104.0)
-    body.add_box(
-        size=(0.15, 0.16, 0.20),
-        location=(
-            0.63 * math.cos(brake_angle),
-            -0.10,
-            flywheel_center[2] + 0.63 * math.sin(brake_angle),
-        ),
-        rotation=(0.0, math.radians(14.0), 0.0),
-    )
 
-    # The unequal cradle prevents this low rotor from reading as a coin or as
-    # the open counterweight geometry used by GDP.
-    body.add_rounded_box_y(
-        width=1.18,
-        height=0.14,
-        depth=0.80,
-        radius=0.035,
-        corner_segments=2,
-        location=(-0.02, 0.05, -0.68),
+    goods_origin = (0.0, 0.0, 0.72)
+    # Goods (category color) rising out of the mouth: two blocks and a round can.
+    accent.add_box(
+        size=(0.30, 0.38, 0.46),
+        location=(-0.19, 0.0, 0.68),
+        rotation=(0.0, math.radians(-8.0), 0.0),
         bevel=True,
     )
-    body.add_rounded_box_y(
-        width=0.16,
-        height=0.34,
-        depth=0.32,
-        radius=0.035,
-        corner_segments=2,
-        location=(-0.46, 0.07, -0.53),
-        bevel=True,
-    )
-    body.add_rounded_box_y(
-        width=0.22,
-        height=0.26,
-        depth=0.32,
-        radius=0.040,
-        corner_segments=2,
-        location=(0.42, 0.07, -0.57),
-        bevel=True,
-    )
-
-    vane_origin = (0.0, -0.16, 0.03)
-    clutch_angle = math.radians(-18.0)
-    # The clutch greeble is enlarged in step with the deeper body so the accent
-    # keeps at least a tenth of the total surface area after the new hub can and
-    # bearing barrel raise the body area.
-    accent.add_extruded_polygon_y(
-        _annular_sector_points(
-            inner_radius=0.24,
-            outer_radius=0.55,
-            start_angle=clutch_angle - math.radians(32.0),
-            end_angle=clutch_angle + math.radians(32.0),
-            steps=3,
-        ),
-        depth=0.26,
-        location=(0.0, -0.24, vane_origin[2]),
+    accent.add_box(
+        size=(0.27, 0.36, 0.52),
+        location=(0.20, 0.0, 0.74),
+        rotation=(0.0, math.radians(7.0), 0.0),
         bevel=True,
     )
     accent.add_cylinder(
-        radius=0.165,
-        depth=0.54,
-        segments=12,
-        location=(0.0, -0.20, vane_origin[2]),
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
+        radius=0.135,
+        depth=0.44,
+        segments=14,
+        location=(0.02, 0.0, 0.58),
         bevel=True,
-    )
-    accent.add_rounded_box_y(
-        width=0.38,
-        height=0.15,
-        depth=0.15,
-        radius=0.030,
-        corner_segments=2,
-        location=(
-            0.25 * math.cos(clutch_angle),
-            -0.19,
-            vane_origin[2] + 0.25 * math.sin(clutch_angle),
-        ),
-        rotation=(0.0, math.radians(18.0), 0.0),
-    )
-    accent.add_box(
-        size=(0.16, 0.16, 0.22),
-        location=(
-            0.51 * math.cos(clutch_angle),
-            -0.19,
-            vane_origin[2] + 0.51 * math.sin(clutch_angle),
-        ),
-        rotation=(0.0, math.radians(18.0), 0.0),
     )
 
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:continuous inertia flywheel weighted by three unequal rim masses and one keyed clutch sector;"
-            "side:shallow rear web with a forward clutch shoe and offset brake block;"
-            "top:asymmetric mass distribution around one compact axial clutch assembly"
+            "front:a rounded shopping bag with two arched handles and goods rising past the mouth;"
+            "side:a deep sack with a folded cuff and forward goods breaking the top line;"
+            "top:a wide bag mouth spanned by two handle arcs around a cluster of goods"
         ),
-        body_detail="continuous demand flywheel, three unequal inertia masses, offset brake shoe, and bearing cradle",
+        body_detail="deep shopping-bag sack, folded top cuff, and two arched carry handles",
         accent_pivot="inertia flywheel clutch axis; scale XYZ about the central hub",
-        accent_origin=vane_origin,
+        accent_origin=goods_origin,
     )
 
 
@@ -352,213 +277,128 @@ def build_investment() -> ModelGeometry:
 
 
 def build_employment() -> ModelGeometry:
-    """Build three load columns captured by one translating locking ring."""
+    """Build three workers of unequal height on a foundation with a front badge bar."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    # Columns are shortened slightly (lowering the long Z axis) and deepened
-    # along Blender Y, and the foundation is thickened with two rear buttresses
-    # so the frame stops reading as a flat plate edge-on.
-    column_specs = (
-        (-0.43, 0.92),
-        (0.00, 1.08),
-        (0.43, 0.86),
+    base_top = -0.62
+    # Foundation slab: deep in Blender Y so the row of figures is not a flat plate.
+    body.add_rounded_box_y(
+        width=1.30,
+        height=0.18,
+        depth=0.90,
+        radius=0.050,
+        corner_segments=2,
+        location=(0.0, 0.0, base_top - 0.09),
+        bevel=True,
     )
-    base_z = -0.50
-    for x, height in column_specs:
-        center_z = base_z + height * 0.5
+    worker_specs = ((-0.42, 0.60), (0.02, 0.78), (0.44, 0.52))
+    for worker_x, torso_height in worker_specs:
+        torso_center_z = base_top + torso_height * 0.5
         body.add_rounded_box_y(
-            width=0.22,
-            height=height,
-            depth=0.44,
-            radius=0.052,
+            width=0.28,
+            height=torso_height,
+            depth=0.54,
+            radius=0.100,
             corner_segments=2,
-            location=(x, 0.03, center_z),
+            location=(worker_x, 0.0, torso_center_z),
             bevel=True,
         )
-        body.add_cylinder(
-            radius=0.135,
-            depth=0.46,
-            segments=12,
-            location=(x, 0.03, base_z + height),
-            rotation=(_QUARTER_TURN, 0.0, 0.0),
-            bevel=x == 0.0,
+        shoulder_z = base_top + torso_height + 0.02
+        body.add_rounded_box_y(
+            width=0.40,
+            height=0.14,
+            depth=0.56,
+            radius=0.060,
+            corner_segments=2,
+            location=(worker_x, 0.0, shoulder_z),
+            bevel=True,
         )
-        body.add_box(
-            size=(0.055, 0.055, height * 0.66),
-            location=(x, -0.175, center_z),
+        head_z = shoulder_z + 0.26
+        body.add_uv_sphere(
+            radius=0.175,
+            segments=16,
+            rings=8,
+            location=(worker_x, 0.0, head_z),
         )
-    body.add_rounded_box_y(
-        width=1.26,
-        height=0.17,
-        depth=0.80,
-        radius=0.045,
-        corner_segments=2,
-        location=(0.0, 0.08, -0.59),
-        bevel=True,
-    )
-    body.add_rounded_box_y(
-        width=0.20,
-        height=0.62,
-        depth=0.30,
-        radius=0.040,
-        corner_segments=2,
-        location=(-0.215, 0.33, -0.16),
-        bevel=True,
-    )
-    body.add_rounded_box_y(
-        width=0.20,
-        height=0.50,
-        depth=0.30,
-        radius=0.040,
-        corner_segments=2,
-        location=(0.215, 0.33, -0.22),
-        bevel=True,
-    )
-    body.add_box(
-        size=(0.46, 0.38, 0.10),
-        location=(-0.34, 0.03, -0.70),
-    )
 
-    ring_origin = (0.0, -0.075, 0.20)
-    accent.add_rounded_rect_ring_y(
-        outer_width=1.18,
-        outer_height=0.25,
-        inner_width=0.98,
-        inner_height=0.11,
+    badge_origin = (0.0, -0.44, -0.30)
+    # Shared front badge bar (category color): the "people employed" nameplate.
+    accent.add_rounded_box_y(
+        width=1.30,
+        height=0.26,
         depth=0.24,
-        outer_radius=0.075,
-        inner_radius=0.035,
-        corner_segments=3,
-        location=ring_origin,
+        radius=0.050,
+        corner_segments=2,
+        location=badge_origin,
         bevel=True,
     )
-    accent.add_rounded_box_y(
-        width=0.18,
-        height=0.18,
-        depth=0.22,
-        radius=0.040,
-        corner_segments=2,
-        location=(0.0, -0.14, ring_origin[2]),
+    accent.add_cylinder(
+        radius=0.150,
+        depth=0.14,
+        segments=16,
+        location=(0.0, badge_origin[1] - 0.10, badge_origin[2]),
+        rotation=(_QUARTER_TURN, 0.0, 0.0),
+        bevel=True,
     )
 
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:three unequal capped load columns captured by one thin horizontal lock;"
-            "side:deep foundation rail behind a shallow translating coupling frame;"
-            "top:single wide locking ring crossing three separated column axes"
+            "front:three unequal capped figures with round heads standing on a slab behind a badge bar;"
+            "side:a deep foundation carrying rounded torsos and spherical heads;"
+            "top:a wide slab of three figure footprints fronted by a badge bar"
         ),
-        body_detail="three unequal load columns, inspection splines, cap bearings, and shared foundation",
+        body_detail="three unequal worker figures with rounded torsos and spherical heads on a deep slab",
         accent_pivot="three-column locking-ring centroid; translate along glTF Y / Blender Z",
-        accent_origin=ring_origin,
+        accent_origin=badge_origin,
     )
 
 
 def build_earnings() -> ModelGeometry:
-    """Build an open profit C-frame with a diagonal datum channel."""
+    """Build an ascending three-bar earnings chart under a bold rising arrow."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    # An open, left-heavy C frame replaces the former roof-like solid mass.
+    base_top = -0.50
+    # Deep chart plinth: the Blender-Y bulk that keeps the bars from reading flat.
     body.add_rounded_box_y(
-        width=0.22,
-        height=1.10,
-        depth=0.56,
+        width=1.46,
+        height=0.20,
+        depth=1.06,
         radius=0.050,
-        corner_segments=2,
-        location=(-0.48, 0.04, 0.00),
+        corner_segments=4,
+        location=(0.0, 0.0, base_top - 0.10),
         bevel=True,
     )
-    body.add_rounded_box_y(
-        width=1.08,
-        height=0.18,
-        depth=0.62,
-        radius=0.045,
-        corner_segments=2,
-        location=(-0.02, 0.04, -0.53),
-        bevel=True,
-    )
-    body.add_rounded_box_y(
-        width=0.72,
-        height=0.16,
-        depth=0.50,
-        radius=0.040,
-        corner_segments=2,
-        location=(-0.24, 0.04, 0.51),
-        bevel=True,
-    )
-    body.add_rounded_box_y(
-        width=0.18,
-        height=0.38,
-        depth=0.52,
-        radius=0.040,
-        corner_segments=2,
-        location=(0.43, 0.04, -0.36),
-        bevel=True,
-    )
-
-    datum_angle = math.radians(-38.0)
-    body.add_rounded_box_y(
-        width=1.02,
-        height=0.075,
-        depth=0.13,
-        radius=0.025,
-        corner_segments=2,
-        location=(-0.02, -0.04, 0.03),
-        rotation=(0.0, datum_angle, 0.0),
-        bevel=True,
-    )
-    body.add_rounded_box_y(
-        width=0.88,
-        height=0.065,
-        depth=0.10,
-        radius=0.022,
-        corner_segments=2,
-        location=(-0.05, 0.10, 0.12),
-        rotation=(0.0, datum_angle, 0.0),
-    )
-    body.add_cylinder(
-        radius=0.14,
-        depth=0.16,
-        segments=12,
-        location=(-0.36, -0.17, -0.25),
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
-        bevel=True,
-    )
-
-    carrier_origin = (0.02, -0.35, 0.02)
-    step_specs = (
-        (-0.25, -0.21, 0.38),
-        (0.03, 0.02, 0.36),
-        (0.31, 0.25, 0.34),
-    )
-    for x, z, width in step_specs:
-        accent.add_rounded_box_y(
-            width=width,
-            height=0.16,
-            depth=0.18,
-            radius=0.030,
-            corner_segments=2,
-            location=(x, carrier_origin[1], z),
+    bar_specs = ((-0.52, 0.46), (0.0, 0.72), (0.52, 0.98))
+    for bar_x, bar_height in bar_specs:
+        body.add_rounded_box_y(
+            width=0.34,
+            height=bar_height,
+            depth=0.64,
+            radius=0.045,
+            corner_segments=4,
+            location=(bar_x, 0.0, base_top + bar_height * 0.5),
             bevel=True,
         )
-    accent.add_cylinder_between(
-        (-0.40, carrier_origin[1] + 0.015, -0.30),
-        (0.40, carrier_origin[1] + 0.015, 0.34),
-        radius=0.045,
-        segments=8,
-        bevel=True,
+
+    arrow_origin = (0.52, -0.02, 0.56)
+    arrow_points = _up_arrow_points(
+        shaft_hw=0.15,
+        head_hw=0.45,
+        z_bottom=-0.34,
+        z_shoulder=0.00,
+        z_tip=0.40,
     )
-    accent.add_cylinder(
-        radius=0.090,
-        depth=0.16,
-        segments=8,
-        location=(0.31, carrier_origin[1], 0.35),
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
+    # Bold rising arrow (category color): flat and thin on Blender Y per contract.
+    accent.add_extruded_polygon_y(
+        arrow_points,
+        depth=0.28,
+        location=arrow_origin,
         bevel=True,
     )
 
@@ -566,277 +406,166 @@ def build_earnings() -> ModelGeometry:
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:open left-heavy C frame exposing an enlarged three-step shuttle on a diagonal datum;"
-            "side:deep fixed standards behind a thin forward stair carrier;"
-            "top:paired diagonal channel rails opening into an asymmetric right-side service gap"
+            "front:three ascending bars on a plinth beneath one bold upward arrow;"
+            "side:a deep chart plinth carrying stepped bars and a thin forward arrow blade;"
+            "top:a wide plinth of three bar footprints with a thin arrow plate above the tallest"
         ),
-        body_detail="open profit C frame, paired diagonal datum channel, offset bearing boss, and deep plinth",
+        body_detail="three ascending earnings bars on a deep chart plinth",
         accent_pivot="stair-carrier centroid; translate along glTF Y / Blender Z",
-        accent_origin=carrier_origin,
+        accent_origin=arrow_origin,
     )
 
 
 def build_defaults() -> ModelGeometry:
-    """Build an upright pressure vessel with a controlled fracture latch."""
+    """Build a broken chain link beside an intact interlocking link with a spark at the gap."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    body.add_cylinder(
-        radius=0.44,
-        depth=0.80,
-        segments=20,
-        location=(0.0, 0.02, 0.02),
+    # Main link: a thick ring standing in the front X-Z plane with a clear gap at
+    # the top (the break).  The arc spans 316 degrees leaving a 44-degree break.
+    body.add_torus_arc(
+        major_radius=0.46,
+        minor_radius=0.165,
+        start_angle=math.radians(112.0),
+        end_angle=math.radians(428.0),
+        arc_segments=32,
+        minor_segments=10,
+        location=(-0.14, 0.0, -0.06),
+        rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
-    body.add_uv_sphere(
-        radius=0.44,
-        segments=18,
-        rings=5,
-        location=(0.0, 0.02, 0.43),
-        scale=(1.0, 1.0, 0.31),
-    )
-    body.add_uv_sphere(
-        radius=0.44,
-        segments=18,
-        rings=5,
-        location=(0.0, 0.02, -0.39),
-        scale=(1.0, 1.0, 0.31),
-    )
-    for z in (-0.38, 0.42):
-        body.add_torus(
-            major_radius=0.44,
-            minor_radius=0.052,
-            major_segments=16,
-            minor_segments=6,
-            location=(0.0, 0.02, z),
-        )
-    for x in (-0.37, 0.37):
-        body.add_rounded_box_y(
-            width=0.085,
-            height=0.72,
-            depth=0.10,
-            radius=0.020,
-            corner_segments=1,
-            location=(x, -0.405, 0.02),
-        )
-    body.add_rounded_box_y(
-        width=0.96,
-        height=0.14,
-        depth=0.50,
-        radius=0.035,
-        corner_segments=2,
-        location=(0.0, 0.02, -0.62),
-        bevel=True,
-    )
-    body.add_cylinder(
-        radius=0.15,
-        depth=0.18,
-        segments=12,
-        location=(0.18, 0.02, 0.66),
+    # Intact neighbour link, interlocked and turned 90 degrees into the Y-Z plane
+    # so the pair reads as a chain and the model gains real Blender-Y depth.
+    body.add_torus(
+        major_radius=0.38,
+        minor_radius=0.165,
+        major_segments=30,
+        minor_segments=10,
+        location=(0.30, 0.0, -0.10),
+        rotation=(0.0, _QUARTER_TURN, 0.0),
     )
 
-    latch_origin = (0.12, -0.50, 0.05)
-    fracture_points = (
-        (-0.17, -0.50, 0.37),
-        (-0.04, -0.50, 0.21),
-        (-0.14, -0.50, 0.06),
-        (0.01, -0.50, -0.10),
-        (-0.09, -0.50, -0.30),
-    )
-    for start, end in zip(fracture_points, fracture_points[1:]):
-        accent.add_cylinder_between(
-            start,
-            end,
-            radius=0.040,
-            segments=6,
-        )
-    accent.add_cylinder(
-        radius=0.13,
-        depth=0.13,
-        segments=10,
-        location=latch_origin,
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
+    spark_origin = (-0.14, 0.0, 0.50)
+    # Down-arrow at the break (category color): a fall/failure marker, not an
+    # award. Flat and thin on Blender Y. A clean non-self-intersecting outline.
+    down_arrow = [
+        (-0.12, 0.42),
+        (0.12, 0.42),
+        (0.12, -0.03),
+        (0.30, -0.03),
+        (0.0, -0.44),
+        (-0.30, -0.03),
+        (-0.12, -0.03),
+    ]
+    accent.add_extruded_polygon_y(
+        down_arrow,
+        depth=0.19,
+        location=spark_origin,
         bevel=True,
-    )
-    accent.add_cylinder_between(
-        latch_origin,
-        (-0.12, -0.50, 0.05),
-        radius=0.055,
-        segments=8,
-        bevel=True,
-    )
-    accent.add_rounded_box_y(
-        width=0.18,
-        height=0.24,
-        depth=0.15,
-        radius=0.030,
-        corner_segments=2,
-        location=(-0.15, -0.50, 0.05),
-    )
-    upper_keeper = (-0.16, -0.50, 0.20)
-    lower_keeper = (-0.16, -0.50, -0.10)
-    for keeper in (upper_keeper, lower_keeper):
-        accent.add_cylinder_between(
-            latch_origin,
-            keeper,
-            radius=0.055,
-            segments=7,
-        )
-    accent.add_cylinder_between(
-        upper_keeper,
-        lower_keeper,
-        radius=0.050,
-        segments=7,
-    )
-    accent.add_torus(
-        major_radius=0.15,
-        minor_radius=0.030,
-        major_segments=16,
-        minor_segments=5,
-        location=latch_origin,
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
     )
 
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:upright banded pressure vessel crossed by a controlled zigzag release seam;"
-            "side:deep cylindrical chamber with forward safety latch and low plinth;"
-            "top:offset rupture cap above twin external stiffener rails"
+            "front:a broken ring link with a gap at the top and a spark burst at the break;"
+            "side:an intact neighbour link turned edgewise giving the chain real depth;"
+            "top:two interlocked links crossing at right angles below a thin spark plate"
         ),
-        body_detail="upright banded pressure chamber, elliptical end bells, external stiffeners, and plinth",
+        body_detail="one broken front chain link and one intact interlocking neighbour link",
         accent_pivot="safety-latch hinge; rotate about glTF Z / Blender -Y",
-        accent_origin=latch_origin,
+        accent_origin=spark_origin,
     )
 
 
 def build_stocks() -> ModelGeometry:
-    """Build captive order-book plungers with a two-rail price spindle."""
+    """Build a candlestick price chart: three dark candles, one highlighted leading candle, and a trend arrow."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
+    base_top = -0.54
+    # Deep chart bed: the Blender-Y bulk under the floating candles.
     body.add_rounded_box_y(
-        width=1.26,
+        width=1.16,
         height=0.18,
-        depth=0.84,
-        radius=0.045,
-        corner_segments=2,
-        location=(0.0, 0.0, -0.55),
+        depth=0.98,
+        radius=0.050,
+        corner_segments=3,
+        location=(0.0, 0.0, base_top - 0.09),
         bevel=True,
     )
-    for y in (-0.27, 0.27):
-        for z in (-0.43, 0.08):
-            body.add_rounded_box_y(
-                width=1.12,
-                height=0.075,
-                depth=0.10,
-                radius=0.025,
-                corner_segments=2,
-                location=(0.0, y, z),
-            )
-
-    pin_specs = (
-        (-0.49, -0.22, 0.56),
-        (-0.18, -0.22, 0.86),
-        (0.16, -0.22, 0.63),
-        (0.49, -0.22, 0.94),
-        (-0.39, 0.20, 0.77),
-        (-0.06, 0.20, 0.49),
-        (0.28, 0.20, 0.82),
-        (0.54, 0.20, 0.60),
+    # (x, low, high, body_bottom, body_top)
+    dark_candles = (
+        (-0.42, -0.34, 0.30, -0.14, 0.16),
+        (-0.14, -0.12, 0.52, 0.02, 0.40),
+        (0.14, 0.00, 0.44, 0.10, 0.34),
     )
-    pin_base = -0.43
-    for x, y, height in pin_specs:
+    for candle_x, low, high, body_bottom, body_top in dark_candles:
         body.add_cylinder(
-            radius=0.073,
-            depth=height,
-            segments=8,
-            location=(x, y, pin_base + height * 0.5),
-            bevel=y < 0.0,
+            radius=0.035,
+            depth=high - low,
+            segments=10,
+            location=(candle_x, 0.0, (high + low) * 0.5),
+            bevel=False,
         )
-        body.add_cylinder(
-            radius=0.105,
-            depth=0.065,
-            segments=8,
-            location=(x, y, pin_base + 0.032),
-        )
-        body.add_cylinder(
-            radius=0.098,
-            depth=0.075,
-            segments=8,
-            location=(x, y, 0.08),
-        )
-
-    # A deep captive housing frame wraps the whole order book.  Extruded far
-    # along Blender Y (the weak side axis), its vertical standards span the full
-    # Z-height, so the Y-Z and X-Y silhouettes read as solid bulk while the
-    # front only gains a thin surrounding bezel.  This is the mass that stops
-    # the two thin pin rows from reading flat edge-on.
-    # Two deep captive standards rise at the outer pin columns.  Because they
-    # sit behind existing plungers in the front (X-Z) view they barely change
-    # the recognizable face, but their large Blender-Y depth spanning the full
-    # Z-height is exactly the bulk that fills the weak Y-Z (side) and X-Y (top)
-    # silhouettes so the two thin pin rows no longer read flat edge-on.
-    for side_x in (-0.49, 0.49):
         body.add_rounded_box_y(
-            width=0.17,
-            height=1.10,
-            depth=0.82,
-            radius=0.045,
-            corner_segments=2,
-            location=(side_x, 0.0, -0.02),
+            width=0.26,
+            height=body_top - body_bottom,
+            depth=0.70,
+            radius=0.040,
+            corner_segments=3,
+            location=(candle_x, 0.0, (body_bottom + body_top) * 0.5),
             bevel=True,
         )
-    spindle_origin = (0.06, -0.36, 0.10)
-    # A genuine two-rail price spindle: a forward and a rear rail carried by one
-    # traveling crosshead.  The second rail keeps the accent surface area in
-    # proportion to the now-deeper body so the accent ratio stays in band.
-    for rail_y in (-0.36, 0.30):
-        accent.add_cylinder(
-            radius=0.072,
-            depth=1.06,
-            segments=12,
-            location=(spindle_origin[0], rail_y, 0.10),
-            bevel=True,
-        )
-        accent.add_cylinder(
-            radius=0.150,
-            depth=0.12,
-            segments=12,
-            location=(spindle_origin[0], rail_y, spindle_origin[2]),
-            bevel=True,
-        )
+
+    lead_x = 0.44
+    lead_origin = (lead_x, 0.0, 0.30)
+    # Leading candle (category color): a highlighted body over a tall high-low wick.
+    accent.add_cylinder(
+        radius=0.038,
+        depth=0.92,
+        segments=8,
+        location=(lead_x, 0.0, 0.24),
+        bevel=False,
+    )
     accent.add_rounded_box_y(
-        width=0.22,
-        height=0.15,
-        depth=0.80,
-        radius=0.030,
-        corner_segments=1,
-        location=(spindle_origin[0], -0.03, spindle_origin[2]),
+        width=0.26,
+        height=0.48,
+        depth=0.42,
+        radius=0.040,
+        corner_segments=3,
+        location=lead_origin,
         bevel=True,
     )
-    for y in (-0.27, 0.27):
-        accent.add_cylinder(
-            radius=0.100,
-            depth=0.12,
-            segments=8,
-            location=(spindle_origin[0], y, spindle_origin[2]),
-        )
+    # Small up-right trend arrow tilted in the front plane (the uptrend cue).
+    trend_points = _up_arrow_points(
+        shaft_hw=0.050,
+        head_hw=0.155,
+        z_bottom=-0.17,
+        z_shoulder=0.02,
+        z_tip=0.19,
+    )
+    accent.add_extruded_polygon_y(
+        trend_points,
+        depth=0.18,
+        location=(0.18, 0.0, 0.62),
+        rotation=(0.0, math.radians(34.0), 0.0),
+        bevel=True,
+    )
 
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:captive non-monotonic plungers pass through paired lower and upper order-book bridges;"
-            "side:two staggered pin rows are locked between socket and guide collars;"
-            "top:a traveling crosshead joins both rails to one forward price spindle"
+            "front:three dark candlesticks and one highlighted leading candle under a rising trend arrow;"
+            "side:a deep chart bed carrying floating candle bodies on high-low wicks;"
+            "top:a wide chart bed with a row of candle footprints and a tilted trend plate"
         ),
-        body_detail="captive two-row order plungers, lower sockets, upper guide collars, paired bridges, and deep bed",
+        body_detail="three dark candlesticks with high-low wicks on a deep chart bed",
         accent_pivot="price-spindle carriage center; translate along glTF Y / Blender Z",
-        accent_origin=spindle_origin,
+        accent_origin=lead_origin,
     )
 
 

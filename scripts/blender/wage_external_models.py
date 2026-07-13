@@ -1,9 +1,13 @@
-"""Precision instruments for the wage and external-economy batch.
+"""Iconic instruments for the wage and external-economy batch.
 
 Every builder is scene-independent.  It appends closed primitive shells to a
 body and an accent assembler, leaving normalization, material assignment, and
 Blender object creation to the shared authoring pipeline.  Coordinates follow
 the library convention: Blender +Z is up and -Y faces the camera.
+
+Each model is a machined, chamfered version of a clear economic pictogram: the
+dark ``body`` carries the recognizable structure, and the category-colored
+``accent`` carries the eye-catching element that names the concept.
 """
 
 from __future__ import annotations
@@ -14,385 +18,247 @@ from hard_surface import MeshAssembler, ModelGeometry
 
 
 _QUARTER_TURN = math.pi * 0.5
+_LAY_ALONG_Y = (_QUARTER_TURN, 0.0, 0.0)  # a Z-axis primitive rotated onto Y
+_LAY_ONTO_XY = (_QUARTER_TURN, 0.0, 0.0)  # an XZ extrusion rotated flat into XY
 
 
-def _radial_xz(radius: float, angle: float, y: float, z_offset: float = 0.0):
-    """Return a point on an XZ working circle used by front-facing mechanisms."""
-
-    return (
-        radius * math.cos(angle),
-        y,
-        z_offset + radius * math.sin(angle),
-    )
-
-
-def _ratchet_tooth_points(angle: float) -> tuple[tuple[float, float], ...]:
-    """Return one directional five-point ratchet tooth attached to its carrier."""
-
-    inner_radius = 0.55
-    shoulder_radius = 0.64
-    tip_radius = 0.72
-    leading = angle - math.radians(9.0)
-    trailing = angle + math.radians(9.0)
-    tip = angle - math.radians(4.0)
-    return (
-        (inner_radius * math.cos(leading), inner_radius * math.sin(leading)),
-        (inner_radius * math.cos(trailing), inner_radius * math.sin(trailing)),
-        (shoulder_radius * math.cos(trailing), shoulder_radius * math.sin(trailing)),
-        (tip_radius * math.cos(tip), tip_radius * math.sin(tip)),
-        (shoulder_radius * math.cos(leading), shoulder_radius * math.sin(leading)),
-    )
-
-
-def _tapered_vane_points(
-    angle: float,
-    inner_radius: float,
+def _star_points_xz(
     outer_radius: float,
-    root_half_width: float,
-    tip_half_width: float,
+    inner_radius: float,
+    points: int = 5,
+    phase: float = _QUARTER_TURN,
 ) -> tuple[tuple[float, float], ...]:
-    """Return a tapered XZ deployment vane with parallel hinge and shoe faces."""
+    """Return a simple (non-self-intersecting) star polygon in the XZ plane."""
 
-    radial = (math.cos(angle), math.sin(angle))
-    tangent = (-math.sin(angle), math.cos(angle))
+    coords: list[tuple[float, float]] = []
+    for index in range(points * 2):
+        radius = outer_radius if index % 2 == 0 else inner_radius
+        angle = phase + math.pi * index / points
+        coords.append((radius * math.cos(angle), radius * math.sin(angle)))
+    return tuple(coords)
 
-    def point(radius: float, half_width: float, side: float):
-        return (
-            radial[0] * radius + tangent[0] * half_width * side,
-            radial[1] * radius + tangent[1] * half_width * side,
-        )
+
+def _right_arrow_points_xz(
+    tail_x: float,
+    shaft_half: float,
+    head_x: float,
+    head_half: float,
+    tip_x: float,
+) -> tuple[tuple[float, float], ...]:
+    """Return a block arrow pointing toward +X (an outbound arrow)."""
 
     return (
-        point(inner_radius, root_half_width, -1.0),
-        point(outer_radius, tip_half_width, -1.0),
-        point(outer_radius, tip_half_width, 1.0),
-        point(inner_radius, root_half_width, 1.0),
+        (tail_x, shaft_half),
+        (head_x, shaft_half),
+        (head_x, head_half),
+        (tip_x, 0.0),
+        (head_x, -head_half),
+        (head_x, -shaft_half),
+        (tail_x, -shaft_half),
     )
 
 
-def _rotate_point_xyz(
-    point: tuple[float, float, float],
-    rotation: tuple[float, float, float],
-) -> tuple[float, float, float]:
-    """Apply the shared XYZ Euler convention to one local attachment point."""
+def _vertical_arrow_points_xz(
+    tail_z: float,
+    shaft_half: float,
+    head_z: float,
+    head_half: float,
+    tip_z: float,
+) -> tuple[tuple[float, float], ...]:
+    """Return a block arrow along Z.  tip_z beyond head_z beyond tail_z sets aim."""
 
-    x, y, z = point
-    rx, ry, rz = rotation
-    y, z = y * math.cos(rx) - z * math.sin(rx), y * math.sin(rx) + z * math.cos(rx)
-    x, z = x * math.cos(ry) + z * math.sin(ry), -x * math.sin(ry) + z * math.cos(ry)
-    x, y = x * math.cos(rz) - y * math.sin(rz), x * math.sin(rz) + y * math.cos(rz)
-    return (x, y, z)
+    return (
+        (-shaft_half, tail_z),
+        (shaft_half, tail_z),
+        (shaft_half, head_z),
+        (head_half, head_z),
+        (0.0, tip_z),
+        (-head_half, head_z),
+        (-shaft_half, head_z),
+    )
 
 
-def _add_annular_band_y(
+def _pointer_needle_points_xz(
+    half_width: float,
+    shoulder_z: float,
+    tip_z: float,
+    base_z: float,
+) -> tuple[tuple[float, float], ...]:
+    """Return a spade pointer polygon (base block, tapered tip) pointing +Z."""
+
+    return (
+        (-half_width, base_z),
+        (half_width, base_z),
+        (half_width, shoulder_z),
+        (0.0, tip_z),
+        (-half_width, shoulder_z),
+    )
+
+
+def _add_conical_wall_z(
     assembler: MeshAssembler,
     *,
-    inner_radius: float,
-    outer_radius: float,
-    start_angle: float,
-    end_angle: float,
-    steps: int,
-    depth: float,
-    location: tuple[float, float, float] = (0.0, 0.0, 0.0),
-    rotation: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    top_outer: float,
+    top_inner: float,
+    bottom_outer: float,
+    bottom_inner: float,
+    z_top: float,
+    z_bottom: float,
+    segments: int,
     bevel: bool = False,
 ) -> None:
-    """Append one closed, quad-faced structural band without a concave N-gon."""
+    """Append one closed hollow frustum (a machined funnel/hopper wall)."""
 
-    half = depth * 0.5
-    local_loops: list[list[tuple[float, float, float]]] = []
-    for y in (half, -half):
-        outer = []
-        inner = []
-        for index in range(steps + 1):
-            ratio = index / steps
-            angle = start_angle + (end_angle - start_angle) * ratio
-            outer.append(
-                (outer_radius * math.cos(angle), y, outer_radius * math.sin(angle))
-            )
-            inner.append(
-                (inner_radius * math.cos(angle), y, inner_radius * math.sin(angle))
-            )
-        local_loops.extend((outer, inner))
+    def ring(radius: float, z: float) -> list[tuple[float, float, float]]:
+        return [
+            (radius * math.cos(2.0 * math.pi * i / segments),
+             radius * math.sin(2.0 * math.pi * i / segments),
+             z)
+            for i in range(segments)
+        ]
 
-    vertices = []
-    for loop in local_loops:
-        for point in loop:
-            x, y, z = _rotate_point_xyz(point, rotation)
-            vertices.append((x + location[0], y + location[1], z + location[2]))
+    outer_top = ring(top_outer, z_top)
+    inner_top = ring(top_inner, z_top)
+    outer_bottom = ring(bottom_outer, z_bottom)
+    inner_bottom = ring(bottom_inner, z_bottom)
+    vertices = outer_top + inner_top + outer_bottom + inner_bottom
 
-    count = steps + 1
-    outer_front = 0
-    inner_front = count
-    outer_back = count * 2
-    inner_back = count * 3
+    ot, it, ob, ib = 0, segments, 2 * segments, 3 * segments
     faces: list[tuple[int, ...]] = []
-    for index in range(steps):
-        following = index + 1
-        faces.extend(
-            (
-                (
-                    outer_front + index,
-                    outer_front + following,
-                    inner_front + following,
-                    inner_front + index,
-                ),
-                (
-                    outer_back + following,
-                    outer_back + index,
-                    inner_back + index,
-                    inner_back + following,
-                ),
-                (
-                    outer_front + index,
-                    outer_back + index,
-                    outer_back + following,
-                    outer_front + following,
-                ),
-                (
-                    inner_front + following,
-                    inner_back + following,
-                    inner_back + index,
-                    inner_front + index,
-                ),
-            )
-        )
-    faces.extend(
-        (
-            (outer_front, inner_front, inner_back, outer_back),
-            (
-                outer_front + steps,
-                outer_back + steps,
-                inner_back + steps,
-                inner_front + steps,
-            ),
-        )
-    )
+    for i in range(segments):
+        j = (i + 1) % segments
+        faces.append((ot + i, ot + j, ob + j, ob + i))   # outer wall
+        faces.append((it + j, it + i, ib + i, ib + j))   # inner wall
+        faces.append((ot + j, ot + i, it + i, it + j))   # top annulus
+        faces.append((ob + i, ob + j, ib + j, ib + i))   # bottom annulus
     assembler.append(vertices, faces, bevel=bevel)
 
 
 def build_wages() -> ModelGeometry:
-    """Build a compensation drum with a sparse, mechanically keyed ratchet."""
+    """Build an ascending staircase crowned by a coin: pay rising."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    # A deep compensation barrel carries the Blender-Y mass so the side (Y-Z)
-    # silhouette reads as a full drum, not a thin disc.  Coaxial bearing collars
-    # on both Y faces extend the barrel without widening the front (X-Z) circle.
-    drum_center = (0.0, 0.04, 0.02)
-    body.add_cylinder(
-        radius=0.56,
-        depth=0.70,
-        segments=24,
-        location=drum_center,
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
-        bevel=True,
+    # Rising staircase (left -> right), four solid chamfered blocks on a plinth.
+    step_depth = 1.30
+    baseline = -0.52
+    step_layout = (
+        (-0.66, 0.42),
+        (-0.22, 0.78),
+        (0.22, 1.14),
+        (0.66, 1.50),
     )
-    for face_y in (0.45, -0.41):
-        body.add_cylinder(
-            radius=0.31,
-            depth=0.14,
-            segments=18,
-            location=(0.0, face_y, 0.02),
-            rotation=(_QUARTER_TURN, 0.0, 0.0),
-            bevel=True,
-        )
-    body.add_cylinder(
-        radius=0.20,
-        depth=0.16,
-        segments=16,
-        location=(0.0, 0.55, 0.02),
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
-        bevel=True,
-    )
-    body.add_torus(
-        major_radius=0.45,
-        minor_radius=0.055,
-        major_segments=24,
-        minor_segments=6,
-        location=(0.0, -0.30, 0.02),
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
-    )
-    body.add_box(
-        size=(1.18, 0.88, 0.14),
-        location=(0.0, 0.03, -0.66),
-        bevel=True,
-    )
-    for x, height in ((-0.47, 0.42), (0.47, 0.34)):
+    for x, height in step_layout:
         body.add_box(
-            size=(0.17, 0.66, height),
-            location=(x, 0.03, -0.48 + height * 0.18),
+            size=(0.46, step_depth, height),
+            location=(x, 0.0, baseline + height * 0.5),
             bevel=True,
         )
-
-    # The dark pawl is fixed to the drum housing and visibly bears on the
-    # leading face of the 31-degree tooth.  Only the indexed carrier and teeth
-    # rotate as the category-accent mechanism.
-    body.add_extruded_polygon_y(
-        (
-            (0.46, 0.51),
-            (0.55, 0.55),
-            (0.65, 0.34),
-            (0.59, 0.28),
-            (0.52, 0.42),
-        ),
-        depth=0.12,
-        location=(0.0, -0.23, 0.0),
-        bevel=False,
+    body.add_box(
+        size=(1.92, step_depth + 0.10, 0.16),
+        location=(0.0, 0.0, baseline - 0.08),
+        bevel=True,
     )
-    body.add_cylinder(
-        radius=0.105,
-        depth=0.15,
-        segments=6,
-        location=(0.51, -0.20, 0.50),
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
-        bevel=False,
+    # A back riser wall ties the steps into one solid mass for the side view.
+    body.add_box(
+        size=(1.92, 0.16, 1.60),
+        location=(0.0, 0.61, baseline + 0.72),
+        bevel=True,
     )
 
-    ratchet_origin = (0.0, -0.24, 0.02)
-    _add_annular_band_y(
-        accent,
-        inner_radius=0.49,
-        outer_radius=0.59,
-        start_angle=math.radians(-160.0),
-        end_angle=math.radians(120.0),
-        steps=13,
-        depth=0.065,
-        location=(0.0, ratchet_origin[1], ratchet_origin[2]),
-        bevel=False,
-    )
-    for degrees in (-142.0, -86.0, -29.0, 31.0, 94.0):
-        angle = math.radians(degrees)
-        accent.add_extruded_polygon_y(
-            _ratchet_tooth_points(angle),
-            depth=0.085,
-            location=(0.0, ratchet_origin[1], ratchet_origin[2]),
-            bevel=False,
-        )
-    terminal_angle = math.radians(120.0)
-    accent.add_box(
-        size=(0.13, 0.10, 0.11),
-        location=_radial_xz(
-            0.57,
-            terminal_angle,
-            ratchet_origin[1],
-            ratchet_origin[2],
-        ),
-        rotation=(0.0, -terminal_angle, 0.0),
+    # The coin: a thick struck disc, thin on Y, standing on the top step.  A
+    # raised hub and a colored rim torus give it a minted-coin read.
+    coin_center = (0.66, 0.0, 1.02)
+    accent.add_cylinder(
+        radius=0.54,
+        depth=0.26,
+        segments=32,
+        location=coin_center,
+        rotation=_LAY_ALONG_Y,
         bevel=True,
     )
     accent.add_cylinder(
-        radius=0.13,
-        depth=0.12,
-        segments=12,
-        location=ratchet_origin,
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
+        radius=0.19,
+        depth=0.30,
+        segments=20,
+        location=coin_center,
+        rotation=_LAY_ALONG_Y,
         bevel=True,
+    )
+    accent.add_torus(
+        major_radius=0.40,
+        minor_radius=0.05,
+        major_segments=28,
+        minor_segments=6,
+        location=coin_center,
+        rotation=_LAY_ALONG_Y,
     )
 
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:directional five-tooth carrier engaged by one fixed upper-right pawl;"
-            "side:thin indexed ratchet plane against a deep compensation drum;"
-            "top:hinged pawl bearing on one continuous partial carrier"
+            "front:four rising stair blocks under a struck coin on the top step;"
+            "side:deep chamfered stair mass behind a thin face-on coin;"
+            "top:stepped tread footprint with one coin disc over the high step"
         ),
-        body_detail="deep compensation drum, recessed hub, unequal standards, and contacting hinged pawl",
+        body_detail="four-tread rising staircase, grounding plinth, and back riser wall",
         accent_pivot="ratchet step axis; glTF Z rotation is Blender -Y",
-        accent_origin=ratchet_origin,
+        accent_origin=coin_center,
     )
 
 
 def build_exports() -> ModelGeometry:
-    """Build a four-port cargo hub with one translating outward vane plate."""
+    """Build a corrugated shipping container with an outbound arrow: goods out."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    body.add_cylinder(
-        radius=0.24,
-        depth=0.84,
-        segments=18,
-        location=(0.0, 0.02, 0.0),
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
+    # The container body: a long chamfered box on four short feet.
+    container = (0.0, 0.0, 0.06)
+    body.add_box(
+        size=(1.58, 1.02, 0.98),
+        location=container,
         bevel=True,
     )
-    body.add_torus(
-        major_radius=0.34,
-        minor_radius=0.052,
-        major_segments=22,
-        minor_segments=6,
-        location=(0.0, 0.25, 0.0),
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
-    )
-
-    port_specs = (
-        ((-0.62, 0.05, 0.18), (0.30, 0.28, 0.22)),
-        ((0.61, 0.05, 0.11), (0.34, 0.30, 0.19)),
-        ((-0.12, 0.05, 0.61), (0.27, 0.28, 0.32)),
-        ((0.14, 0.05, -0.59), (0.32, 0.26, 0.24)),
-    )
-    for location, size in port_specs:
-        body.add_cylinder_between(
-            (location[0] * 0.25, 0.05, location[2] * 0.25),
-            (location[0] * 0.78, 0.05, location[2] * 0.78),
-            radius=0.066,
-            segments=8,
-            bevel=True,
-        )
-        body.add_box(size=size, location=location, bevel=True)
-
-    vane_origin = (0.0, -0.34, 0.0)
-    vane_specs = (
-        (math.radians(-28.0), 0.58),
-        (math.radians(8.0), 0.65),
-        (math.radians(45.0), 0.56),
-    )
-    # A deep fixed hinge boss bridges the hub to the translating plate.  Each
-    # tapered vane ends in a colored shoe captured by a dark body receiver.
-    body.add_cylinder(
-        radius=0.17,
-        depth=0.16,
-        segments=12,
-        location=(0.0, -0.25, 0.0),
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
-        bevel=False,
-    )
-    for index, (angle, outer_radius) in enumerate(vane_specs):
-        tip_x = outer_radius * math.cos(angle)
-        tip_z = outer_radius * math.sin(angle)
+    # Vertical corrugation ridges raised off the front (-Y) face.  These strips
+    # are narrower than twice the fixed bevel width, so they stay unbeveled to
+    # avoid clamp-collapsed zero-area faces.
+    for x in (-0.60, -0.36, -0.12, 0.12, 0.36, 0.60):
         body.add_box(
-            size=(0.15, 0.18, 0.15),
-            location=(tip_x, -0.245, tip_z),
-            rotation=(0.0, -angle, 0.0),
+            size=(0.06, 0.07, 0.86),
+            location=(x, -0.545, 0.06),
             bevel=False,
         )
-        accent.add_extruded_polygon_y(
-            _tapered_vane_points(
-                angle,
-                inner_radius=0.07,
-                outer_radius=outer_radius,
-                root_half_width=0.075,
-                tip_half_width=0.045,
-            ),
-            depth=0.07,
-            location=vane_origin,
+    # Top and bottom rails plus a door seam keep it reading as a container.
+    for z in (0.52, -0.40):
+        body.add_box(
+            size=(1.60, 0.09, 0.09),
+            location=(0.0, -0.52, z + 0.06),
             bevel=True,
         )
-        accent.add_box(
-            size=(0.105, 0.075, 0.115),
-            location=(tip_x, vane_origin[1], tip_z),
-            rotation=(0.0, -angle, 0.0),
-            bevel=index == 0,
-        )
-    accent.add_cylinder(
-        radius=0.11,
-        depth=0.10,
-        segments=12,
-        location=vane_origin,
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
+    for x in (-0.62, 0.62):
+        for y in (-0.36, 0.36):
+            body.add_box(
+                size=(0.16, 0.18, 0.16),
+                location=(x, y, -0.60),
+                bevel=True,
+            )
+
+    # The outbound arrow: a flat plate on the front face pointing out (+X),
+    # thin on Y, translating forward (Blender -Y) as cargo ships.
+    arrow_origin = (0.0, -0.60, 0.06)
+    accent.add_extruded_polygon_y(
+        _right_arrow_points_xz(
+            tail_x=-0.60,
+            shaft_half=0.22,
+            head_x=0.16,
+            head_half=0.44,
+            tip_x=0.68,
+        ),
+        depth=0.13,
+        location=arrow_origin,
         bevel=True,
     )
 
@@ -400,461 +266,344 @@ def build_exports() -> ModelGeometry:
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:three tapered deployment vanes keyed into separate docking shoes;"
-            "side:hinged translating carrier captured by deep fixed receivers;"
-            "top:unequal cargo ports behind one interlocking outbound fan"
+            "front:a ribbed cargo container carrying one outbound arrow decal;"
+            "side:deep footed container box ahead of a thin forward arrow plate;"
+            "top:long corrugated container with a projecting outbound arrow"
         ),
-        body_detail="four unequal cargo ports, recessed coupling ring, hinge boss, and three docking receivers",
+        body_detail="corrugated shipping container, top and sill rails, and four feet",
         accent_pivot="outbound vane plate; glTF +Z advances along Blender -Y",
-        accent_origin=vane_origin,
+        accent_origin=arrow_origin,
     )
 
 
 def build_current_account() -> ModelGeometry:
-    """Build bilateral counter dials around one front-mounted balance axle."""
+    """Build a balance scale with unequal pans and a reading pointer: trade balance."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    # Deep counter barrels carry the Blender-Y mass so the side (Y-Z) silhouette
-    # reads as full drums rather than thin discs.
-    for x, radius, z in ((-0.40, 0.34, 0.06), (0.42, 0.30, -0.02)):
+    # A heavy deep base anchors the instrument and supplies the Y mass.
+    body.add_box(
+        size=(0.66, 1.26, 0.18),
+        location=(0.0, 0.0, -0.86),
+        bevel=True,
+    )
+    # Central upright post.
+    body.add_box(
+        size=(0.24, 0.62, 1.36),
+        location=(0.0, 0.0, -0.10),
+        bevel=True,
+    )
+    # Horizontal balance beam across the top.
+    beam_z = 0.58
+    body.add_box(
+        size=(1.44, 0.52, 0.14),
+        location=(0.0, 0.0, beam_z),
+        bevel=True,
+    )
+    # Two unequal hanging pans (short drums, face up).  Left sits lower/larger.
+    pan_specs = (
+        (-0.58, 0.34, -0.16, 0.14),
+        (0.58, 0.28, 0.10, 0.12),
+    )
+    for x, radius, pan_z, pan_depth in pan_specs:
+        body.add_cylinder_between(
+            (x, 0.0, beam_z - 0.06),
+            (x, 0.0, pan_z + pan_depth * 0.5),
+            radius=0.03,
+            segments=8,
+        )
         body.add_cylinder(
             radius=radius,
-            depth=0.86,
-            segments=18,
-            location=(x, 0.04, z),
-            rotation=(_QUARTER_TURN, 0.0, 0.0),
+            depth=pan_depth,
+            segments=24,
+            location=(x, 0.0, pan_z),
             bevel=True,
         )
-    # A tall Y-deep central spine fills the weak side (Y-Z) silhouette by rising
-    # above and below the dials; its narrow X keeps the top (X-Y) footprint from
-    # growing, so the min view catches up to the dominant top view.
-    body.add_box(
-        size=(0.30, 0.84, 1.04),
-        location=(0.0, 0.04, 0.0),
-        bevel=True,
-    )
-    body.add_box(
-        size=(1.12, 0.66, 0.16),
-        location=(0.0, 0.04, -0.52),
-        bevel=True,
-    )
-    body.add_box(
-        size=(0.18, 0.66, 0.42),
-        location=(-0.54, 0.04, -0.29),
-        bevel=True,
-    )
-    body.add_box(
-        size=(0.18, 0.66, 0.36),
-        location=(0.55, 0.04, -0.33),
-        bevel=True,
-    )
 
-    axle_origin = (0.0, -0.30, 0.03)
-    accent.add_cylinder_between(
-        (-0.56, -0.30, 0.03),
-        (0.56, -0.30, 0.03),
-        radius=0.045,
-        segments=12,
-        bevel=True,
-    )
-    accent.add_box(
-        size=(0.98, 0.10, 0.13),
-        location=axle_origin,
-        bevel=True,
-    )
+    # The reading element: a colored index disc and a spade pointer at the
+    # fulcrum, both flat and thin on Y; the pointer tilts (rotate about Blender
+    # -Y) to show which way the balance leans.
+    fulcrum = (0.0, 0.0, beam_z)
     accent.add_cylinder(
-        radius=0.185,
-        depth=0.13,
-        segments=12,
-        location=axle_origin,
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
+        radius=0.33,
+        depth=0.12,
+        segments=28,
+        location=fulcrum,
+        rotation=_LAY_ALONG_Y,
         bevel=True,
     )
-    for x, radius, z in ((-0.47, 0.205, -0.02), (0.48, 0.175, 0.09)):
-        accent.add_cylinder(
-            radius=radius,
-            depth=0.12,
-            segments=12,
-            location=(x, -0.30, z),
-            rotation=(_QUARTER_TURN, 0.0, 0.0),
-            bevel=True,
-        )
+    accent.add_extruded_polygon_y(
+        _pointer_needle_points_xz(
+            half_width=0.08,
+            shoulder_z=0.32,
+            tip_z=0.64,
+            base_z=-0.13,
+        ),
+        depth=0.10,
+        location=fulcrum,
+        bevel=True,
+    )
 
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:unequal bilateral counter dials crossed by a level axle;"
-            "side:thin balance beam ahead of two deep offset meter barrels;"
-            "top:twin separated counters seated on one low datum cradle"
+            "front:a level beam on a post with two unequal pans and a center pointer;"
+            "side:deep base and post behind a thin fulcrum dial and pointer;"
+            "top:beam and base footprint with two offset pan discs"
         ),
-        body_detail="unequal bilateral counter dials, central bridge, and low datum cradle",
+        body_detail="deep base, upright post, balance beam, and two unequal hanging pans",
         accent_pivot="bilateral balance axle; glTF Z rotation is Blender -Y",
-        accent_origin=axle_origin,
+        accent_origin=fulcrum,
     )
 
 
 def build_capital_flows() -> ModelGeometry:
-    """Build a converging four-inlet manifold with one translating front gate."""
+    """Build a funnel drawing money in with inflow chevrons: capital flowing in."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    body.add_rounded_box_y(
-        width=0.70,
-        height=0.66,
-        depth=0.46,
-        radius=0.11,
-        corner_segments=3,
-        location=(0.0, 0.04, 0.0),
+    # A flared hopper (wide mouth narrowing to a spout), machined as two closed
+    # frustum walls with a colored-free dark rim torus at the mouth.
+    _add_conical_wall_z(
+        body,
+        top_outer=0.70,
+        top_inner=0.60,
+        bottom_outer=0.24,
+        bottom_inner=0.16,
+        z_top=0.56,
+        z_bottom=-0.16,
+        segments=28,
         bevel=True,
     )
-    inlet_points = (
-        (-0.66, 0.30, 0.39),
-        (0.65, 0.30, 0.31),
-        (-0.49, 0.30, -0.52),
-        (0.54, 0.30, -0.48),
+    _add_conical_wall_z(
+        body,
+        top_outer=0.24,
+        top_inner=0.16,
+        bottom_outer=0.205,
+        bottom_inner=0.13,
+        z_top=-0.16,
+        z_bottom=-0.86,
+        segments=24,
+        bevel=False,
     )
-    for x, y, z in inlet_points:
-        inner = (x * 0.34, -0.02, z * 0.34)
-        body.add_cylinder_between(
-            (x, y, z),
-            inner,
-            radius=0.085,
-            segments=10,
-            bevel=False,
-        )
-        dx = x - inner[0]
-        dy = y - inner[1]
-        dz = z - inner[2]
-        direction_length = math.sqrt(dx * dx + dy * dy + dz * dz)
-        direction = (
-            dx / direction_length,
-            dy / direction_length,
-            dz / direction_length,
-        )
-        collar_start = (
-            x - direction[0] * 0.065,
-            y - direction[1] * 0.065,
-            z - direction[2] * 0.065,
-        )
-        collar_end = (
-            x + direction[0] * 0.095,
-            y + direction[1] * 0.095,
-            z + direction[2] * 0.095,
-        )
-        body.add_cylinder_between(
-            collar_start,
-            collar_end,
-            radius=0.14,
-            segments=12,
+    body.add_torus(
+        major_radius=0.66,
+        minor_radius=0.06,
+        major_segments=30,
+        minor_segments=6,
+        location=(0.0, 0.0, 0.56),
+    )
+    # A collar ring at the spout base grounds the throat.
+    body.add_torus(
+        major_radius=0.205,
+        minor_radius=0.05,
+        major_segments=20,
+        minor_segments=6,
+        location=(0.0, 0.0, -0.86),
+    )
+
+    # Three inflow chevrons above the mouth, flat and thin on Y, pointing
+    # down-and-inward; they translate forward (Blender -Y) as capital arrives.
+    chevron_origin = (0.0, 0.0, 0.74)
+    chevron_specs = (
+        (-0.44, 0.02, -math.radians(24.0)),
+        (0.0, 0.14, 0.0),
+        (0.44, 0.02, math.radians(24.0)),
+    )
+    for x, z, tilt in chevron_specs:
+        accent.add_extruded_polygon_y(
+            _vertical_arrow_points_xz(
+                tail_z=0.42,
+                shaft_half=0.105,
+                head_z=0.04,
+                head_half=0.24,
+                tip_z=-0.28,
+            ),
+            depth=0.13,
+            location=(x, 0.0, z),
+            rotation=(0.0, tilt, 0.0),
             bevel=True,
         )
-    body.add_box(
-        size=(0.96, 0.34, 0.13),
-        location=(0.0, 0.05, -0.61),
-        bevel=True,
-    )
-
-    # Fixed gate guide rails bridge the visible gap from the plenum face to the
-    # translating accent frame.  Their end overlap makes the motion mechanically
-    # legible from the perspective and side QA views.
-    for x in (-0.24, 0.24):
-        body.add_box(
-            size=(0.045, 0.30, 0.045),
-            location=(x, -0.285, -0.22),
-            bevel=False,
-        )
-
-    gate_origin = (0.0, -0.38, 0.0)
-    accent.add_rounded_rect_ring_y(
-        outer_width=0.60,
-        outer_height=0.56,
-        inner_width=0.40,
-        inner_height=0.36,
-        depth=0.09,
-        outer_radius=0.10,
-        inner_radius=0.06,
-        corner_segments=3,
-        location=gate_origin,
-        bevel=True,
-    )
-    for x in (-0.15, 0.0, 0.15):
-        accent.add_box(
-            size=(0.085, 0.09, 0.34),
-            location=(x, -0.40, 0.0),
-            bevel=x != 0.0,
-        )
-    accent.add_box(
-        size=(0.22, 0.10, 0.11),
-        location=(0.20, -0.40, 0.32),
-        bevel=True,
-    )
 
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:four coaxial inlet bells converging on a slotted square gate;"
-            "side:forward gate captured on twin rails from the deep collection plenum;"
-            "top:coaxial flanges and trunks narrowing toward one guided throat"
+            "front:a flared funnel with three chevrons descending into its mouth;"
+            "side:deep conical hopper and spout under thin inward-tilted chevrons;"
+            "top:concentric funnel rings ringed by three inbound chevrons"
         ),
-        body_detail="four coaxial inlet trunks and bells, collection plenum, twin gate guides, and base rail",
+        body_detail="flared funnel bowl, tapering spout, mouth rim, and throat collar",
         accent_pivot="inflow gate face; glTF +Z advances along Blender -Y",
-        accent_origin=gate_origin,
+        accent_origin=chevron_origin,
     )
 
 
 def build_fed_rate() -> ModelGeometry:
-    """Build a twelve-segment horizontal governor with one orbital weight."""
+    """Build a face-up US rate dial with a star and needle: US central-bank rate."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    # The twelve crown blocks carry the dominant top-view silhouette; their
-    # bevels are the single largest triangle sink, so only three keep the
-    # weighted edge and the freed budget funds the vertical column below.
-    governor_z = 0.14
+    # A compact dial drum (axis Z, face up) - deliberately distinct from
+    # policy_rate's front-facing revolved gauge.
+    face_z = 0.34
+    body.add_cylinder(
+        radius=0.66,
+        depth=0.74,
+        segments=24,
+        location=(0.0, 0.0, -0.02),
+        bevel=True,
+    )
+    # A raised rim torus + a ring of knurl blocks form the distinctive bezel.
+    body.add_torus(
+        major_radius=0.64,
+        minor_radius=0.075,
+        major_segments=22,
+        minor_segments=6,
+        location=(0.0, 0.0, face_z),
+    )
     for index in range(12):
         angle = 2.0 * math.pi * index / 12.0
-        radius = 0.62
         body.add_box(
-            size=(0.24, 0.13, 0.12),
-            location=(
-                radius * math.cos(angle),
-                radius * math.sin(angle),
-                governor_z,
-            ),
+            size=(0.09, 0.15, 0.12),
+            location=(0.60 * math.cos(angle), 0.60 * math.sin(angle), face_z),
             rotation=(0.0, 0.0, angle + _QUARTER_TURN),
-            bevel=index < 3,
+            bevel=index < 4,
         )
-    _add_annular_band_y(
-        body,
-        inner_radius=0.52,
-        outer_radius=0.68,
-        start_angle=math.radians(-165.0),
-        end_angle=math.radians(165.0),
-        steps=9,
+    # Tick marks recessed below the rim on the up-facing dial face.
+    for index in range(8):
+        angle = 2.0 * math.pi * index / 8.0
+        body.add_box(
+            size=(0.05, 0.05, 0.05),
+            location=(0.44 * math.cos(angle), 0.44 * math.sin(angle), face_z + 0.05),
+        )
+    # A shallow foot ring stabilizes the puck and fills the lower silhouette.
+    body.add_cylinder(
+        radius=0.72,
         depth=0.12,
-        location=(0.0, 0.0, governor_z),
-        rotation=(_QUARTER_TURN, 0.0, 0.0),
+        segments=20,
+        location=(0.0, 0.0, -0.44),
         bevel=True,
     )
-    # Central stacked column: a fat barrel, a governor-plane hub, a base drum,
-    # and a crown cap.  Each stays inside the pedestal top-view radius, so the
-    # weak front (X-Z) and side (Y-Z) views fill symmetrically while the strong
-    # top (X-Y) view barely changes.
-    body.add_cylinder(
-        radius=0.29,
-        depth=1.02,
-        segments=12,
-        location=(0.0, 0.0, -0.05),
-        bevel=True,
-    )
-    body.add_cylinder(
-        radius=0.37,
-        depth=0.26,
-        segments=14,
-        location=(0.0, 0.0, governor_z),
-        bevel=True,
-    )
-    body.add_cylinder(
-        radius=0.40,
-        depth=0.32,
-        segments=14,
-        location=(0.0, 0.0, -0.52),
-        bevel=True,
-    )
-    body.add_cylinder(
-        radius=0.23,
-        depth=0.16,
-        segments=12,
-        location=(0.0, 0.0, 0.47),
-        bevel=True,
-    )
-    for angle in (math.radians(25.0), math.radians(145.0), math.radians(265.0)):
-        body.add_cylinder_between(
-            (0.22 * math.cos(angle), 0.22 * math.sin(angle), -0.23),
-            (0.55 * math.cos(angle), 0.55 * math.sin(angle), governor_z),
-            radius=0.035,
-            segments=8,
-            bevel=False,
-        )
 
-    # The orbital carriage stays a single weighted arm, but the weight grows in
-    # its X-Y disc (never its thin Z depth) and a mid-arm slider collar is added
-    # so the accent area recovers its share after the column bulked the body.
-    # The orbital carriage stays a single weighted arm.  Area is recovered from
-    # a wide arm and a mid slider collar (both inside the crown radius), so the
-    # bounding box is not pushed outward and the column keeps its silhouette fill.
-    orbit_origin = (0.0, 0.0, governor_z)
+    # The reading: a raised colored five-point star and a needle on the dial
+    # face, flat and thin on Blender Z, pivoting about Y.
+    star_z = face_z + 0.08
+    accent.add_extruded_polygon_y(
+        _star_points_xz(outer_radius=0.63, inner_radius=0.25, points=5),
+        depth=0.10,
+        location=(0.0, 0.0, star_z),
+        rotation=_LAY_ONTO_XY,
+        bevel=True,
+    )
+    # Needle laid across the face (thin Z), offset from the hub outward.
+    needle_angle = math.radians(58.0)
     accent.add_box(
-        size=(0.80, 0.24, 0.11),
-        location=(0.33, 0.0, governor_z),
+        size=(0.64, 0.10, 0.06),
+        location=(0.30 * math.cos(needle_angle), 0.30 * math.sin(needle_angle), star_z + 0.02),
+        rotation=(0.0, 0.0, needle_angle),
         bevel=True,
     )
     accent.add_cylinder(
-        radius=0.185,
-        depth=0.18,
-        segments=12,
-        location=(0.40, 0.0, governor_z),
+        radius=0.13,
+        depth=0.10,
+        segments=18,
+        location=(0.0, 0.0, star_z + 0.03),
         bevel=True,
     )
-    accent.add_cylinder(
-        radius=0.225,
-        depth=0.18,
-        segments=14,
-        location=(0.66, 0.0, governor_z),
-        bevel=True,
-    )
-    accent.add_torus_arc(
-        major_radius=0.66,
-        minor_radius=0.05,
-        start_angle=math.radians(-27.0),
-        end_angle=math.radians(28.0),
-        arc_segments=5,
-        minor_segments=6,
-        location=orbit_origin,
-        bevel=True,
-    )
+
+    hub_origin = (0.0, 0.0, star_z)
 
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:vertical governor spindle below an edge-on segmented orbit;"
-            "side:twelve-block horizontal crown above a three-brace pedestal;"
-            "top:open dodecagonal governor ring with one weighted carriage"
+            "front:a wide knurled dial drum seen edge-on under a raised star and needle;"
+            "side:shallow footed rate puck below a thin face-flat star and pointer;"
+            "top:a bezelled dial face carrying a five-point star and one needle"
         ),
-        body_detail="twelve-segment horizontal governor, spindle, pedestal, and three radial braces",
+        body_detail="wide shallow dial drum, knurled bezel ring, twelve ticks, and foot ring",
         accent_pivot="orbital governor axis; glTF Y rotation is Blender Z",
-        accent_origin=orbit_origin,
+        accent_origin=hub_origin,
     )
 
 
 def build_global_growth() -> ModelGeometry:
-    """Build a central support cage inside three orthogonal expanding bands."""
+    """Build a banded globe with a rising up-arrow: global growth."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    body.add_rounded_box_y(
-        width=0.38,
-        height=0.38,
-        depth=0.38,
-        radius=0.075,
-        corner_segments=2,
-        location=(0.0, 0.0, 0.0),
-        bevel=True,
+    # The globe, with raised latitude/longitude band rings (dark structure).
+    globe_center = (0.0, 0.0, -0.14)
+    body.add_uv_sphere(
+        radius=0.78,
+        segments=28,
+        rings=16,
+        location=globe_center,
     )
+    body.add_torus(  # equator
+        major_radius=0.78,
+        minor_radius=0.045,
+        major_segments=32,
+        minor_segments=6,
+        location=globe_center,
+    )
+    body.add_torus(  # a meridian
+        major_radius=0.78,
+        minor_radius=0.042,
+        major_segments=32,
+        minor_segments=6,
+        location=globe_center,
+        rotation=(0.0, _QUARTER_TURN, 0.0),
+    )
+    body.add_torus(  # a mid-latitude band
+        major_radius=0.60,
+        minor_radius=0.038,
+        major_segments=28,
+        minor_segments=6,
+        location=(0.0, 0.0, globe_center[2] + 0.44),
+    )
+    # A polar cap gives the sphere a machined bevel to satisfy the body bevel.
     body.add_cylinder(
-        radius=0.22,
-        depth=0.20,
-        segments=12,
-        location=(0.0, 0.0, 0.0),
+        radius=0.20,
+        depth=0.10,
+        segments=20,
+        location=(0.0, 0.0, globe_center[2] + 0.74),
         bevel=True,
     )
-    cage_corners = (
-        (-0.27, -0.27),
-        (0.27, -0.27),
-        (0.27, 0.27),
-        (-0.27, 0.27),
+
+    # A bold up-arrow rising above the globe - a chunky 3D extrusion (this model
+    # has no thin-axis contract), pulsing with a scale-XYZ growth beat.
+    arrow_origin = (0.0, 0.0, 0.98)
+    accent.add_extruded_polygon_y(
+        _vertical_arrow_points_xz(
+            tail_z=-0.34,
+            shaft_half=0.16,
+            head_z=0.18,
+            head_half=0.34,
+            tip_z=0.56,
+        ),
+        depth=0.40,
+        location=arrow_origin,
+        bevel=True,
     )
-    for x, y in cage_corners:
-        body.add_cylinder_between(
-            (x, y, -0.46),
-            (x, y, 0.46),
-            radius=0.038,
-            segments=8,
-            bevel=False,
-        )
-    for z in (-0.46, 0.46):
-        for index, first in enumerate(cage_corners):
-            second = cage_corners[(index + 1) % len(cage_corners)]
-            body.add_cylinder_between(
-                (first[0], first[1], z),
-                (second[0], second[1], z),
-                radius=0.036,
-                segments=8,
-                bevel=False,
-            )
-
-    # Smooth corner nodes and buried radial ties add structural mass without
-    # turning the cage into a bevel-count exercise.
-    for z in (-0.46, 0.46):
-        for x, y in cage_corners:
-            body.add_uv_sphere(
-                radius=0.07,
-                segments=8,
-                rings=4,
-                location=(x, y, z),
-            )
-    for endpoint in (
-        (0.58, 0.0, 0.0),
-        (-0.58, 0.0, 0.0),
-        (0.0, 0.58, 0.0),
-        (0.0, -0.58, 0.0),
-        (0.0, 0.0, 0.58),
-        (0.0, 0.0, -0.58),
-    ):
-        body.add_cylinder_between(
-            (0.10 * endpoint[0] / 0.58, 0.10 * endpoint[1] / 0.58, 0.10 * endpoint[2] / 0.58),
-            endpoint,
-            radius=0.028,
-            segments=8,
-        )
-
-    growth_origin = (0.0, 0.0, 0.0)
-    band_specs = (
-        (math.radians(-155.0), math.radians(-50.0), 10, (0.0, 0.0, 0.0)),
-        (math.radians(-15.0), math.radians(95.0), 10, (_QUARTER_TURN, 0.0, 0.0)),
-        (math.radians(105.0), math.radians(220.0), 11, (0.0, _QUARTER_TURN, 0.0)),
-    )
-    for band_index, (start_angle, end_angle, steps, rotation) in enumerate(band_specs):
-        _add_annular_band_y(
-            accent,
-            inner_radius=0.61,
-            outer_radius=0.695,
-            start_angle=start_angle,
-            end_angle=end_angle,
-            steps=steps,
-            depth=0.065,
-            location=growth_origin,
-            rotation=rotation,
-            bevel=band_index == 0,
-        )
-
-        # Dark cage-mounted endpoint bearings terminate every colored band and
-        # prevent the three partial axes from reading as a decorative wire globe.
-        for angle in (start_angle, end_angle):
-            bearing = _rotate_point_xyz(
-                (0.65 * math.cos(angle), 0.0, 0.65 * math.sin(angle)),
-                rotation,
-            )
-            body.add_rounded_box_y(
-                width=0.14,
-                height=0.14,
-                depth=0.12,
-                radius=0.030,
-                corner_segments=2,
-                location=bearing,
-                rotation=rotation,
-                bevel=False,
-            )
 
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:two staggered structural growth bands anchored to an open cage;"
-            "side:third partial band terminates in paired machined bearings;"
-            "top:three non-circularized expansion axes around a compact support frame"
+            "front:a banded globe surmounted by a bold rising arrow;"
+            "side:latitude-ringed sphere under a deep upward growth arrow;"
+            "top:concentric globe rings beneath a compact arrow footprint"
         ),
-        body_detail="open central support cage, six band-end bearings, radial ties, and compact core block",
+        body_detail="banded globe with equator, meridian, mid-latitude ring, and polar cap",
         accent_pivot="orthogonal growth-band centroid; scale XYZ",
-        accent_origin=growth_origin,
+        accent_origin=arrow_origin,
     )
 
 

@@ -538,7 +538,7 @@ class BlenderPipelineContractTests(unittest.TestCase):
             "fx": (2_540, 2_940),
             "oil": (2_348, 2_748),
             "housing": (1_416, 1_816),
-            "gdp": (1_820, 2_220),
+            "gdp": (1_560, 1_920),
             "risk_sentiment": (1_736, 2_136),
         }
         library_blend = BLENDER_DIR / "econ-node-library.blend"
@@ -661,7 +661,7 @@ class BlenderPipelineContractTests(unittest.TestCase):
                 self.assertEqual(proof_ids, root_names)
             self.assertEqual(exports[0], exports[1], "proof GLB export must be byte-deterministic")
             self.assertEqual(
-                "98d82fb42fcbd722afdd4e2632690e77aa35c414281520c1253c6f212d3b9bc2",
+                "2232a593b5c194a6d4d61dd1778e72d561f0b8ec27872e1fdb5753e11c83db26",
                 exports[0],
                 "proof geometry/export hash changed while expanding the ready library",
             )
@@ -725,12 +725,12 @@ class BlenderPipelineContractTests(unittest.TestCase):
             *money_price_ids,
         }
         triangle_bands = {
-            "market_rate": (1_808, 2_208),
+            "market_rate": (1_932, 2_332),
             "liquidity": (2_084, 2_484),
-            "credit_spread": (1_676, 2_076),
-            "bank_lending": (1_860, 2_260),
-            "cpi": (1_644, 2_044),
-            "inflation_exp": (1_596, 1_996),
+            "credit_spread": (1_584, 1_984),
+            "bank_lending": (2_376, 2_776),
+            "cpi": (2_456, 2_856),
+            "inflation_exp": (1_624, 2_024),
         }
         author_script = BLENDER_DIR / "author-money-price-models.py"
         geometry_source = BLENDER_DIR / "money_price_models.py"
@@ -773,7 +773,7 @@ class BlenderPipelineContractTests(unittest.TestCase):
             self.assertEqual(24, summary["primitives"])
             self.assertEqual(expected_ready_ids, set(summary["models"]))
             self.assertGreaterEqual(summary["triangles"], 24_500)
-            self.assertLessEqual(summary["triangles"], 26_600)
+            self.assertLessEqual(summary["triangles"], 27_200)
             for node_id, (minimum, maximum) in triangle_bands.items():
                 model = summary["models"][node_id]
                 self.assertGreaterEqual(model["triangles"], minimum, node_id)
@@ -1244,32 +1244,32 @@ class BlenderPipelineContractTests(unittest.TestCase):
             "fx": (2_540, 2_940),
             "oil": (2_348, 2_748),
             "housing": (1_416, 1_816),
-            "gdp": (1_820, 2_220),
+            "gdp": (1_560, 1_920),
             "risk_sentiment": (1_736, 2_136),
-            "market_rate": (1_808, 2_208),
+            "market_rate": (1_932, 2_332),
             "liquidity": (2_084, 2_484),
-            "credit_spread": (1_676, 2_076),
-            "bank_lending": (1_860, 2_260),
-            "cpi": (1_644, 2_044),
-            "inflation_exp": (1_596, 1_996),
-            "wages": (2_452, 2_852),
-            "exports": (2_640, 2_990),
-            "current_account": (2_060, 2_460),
-            "capital_flows": (2_250, 2_650),
-            "fed_rate": (2_552, 2_952),
-            "global_growth": (1_950, 2_350),
-            "consumption": (2_216, 2_616),
+            "credit_spread": (1_584, 1_984),
+            "bank_lending": (2_376, 2_776),
+            "cpi": (2_456, 2_856),
+            "inflation_exp": (1_624, 2_024),
+            "wages": (2_088, 2_488),
+            "exports": (1_520, 1_920),
+            "current_account": (1_796, 2_196),
+            "capital_flows": (2_148, 2_548),
+            "fed_rate": (2_652, 2_952),
+            "global_growth": (2_392, 2_792),
+            "consumption": (1_756, 2_156),
             "investment": (2_016, 2_416),
-            "employment": (1_808, 2_208),
-            "earnings": (1_650, 2_100),
-            "defaults": (1_700, 2_150),
-            "stocks": (2_528, 2_928),
-            "household_debt": (1_800, 2_300),
+            "employment": (2_228, 2_628),
+            "earnings": (1_396, 1_796),
+            "defaults": (1_508, 1_908),
+            "stocks": (1_528, 1_928),
+            "household_debt": (1_728, 2_128),
             "commodity": (1_400, 1_900),
-            "fiscal": (2_536, 2_936),
+            "fiscal": (2_236, 2_636),
             "geopolitics": (2_188, 2_588),
             "tech": (2_560, 2_960),
-            "consumer_conf": (1_808, 2_208),
+            "consumer_conf": (1_716, 2_116),
         }
         script = "\n".join(
             (
