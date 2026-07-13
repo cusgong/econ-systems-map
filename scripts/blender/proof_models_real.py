@@ -27,9 +27,9 @@ def build_housing() -> ModelGeometry:
 
     portals = (
         # outer width/height, inner width/height, depth, x/y/z offset
-        (1.46, 1.24, 1.16, 0.90, 0.13, -0.06, 0.26, 0.02),
-        (1.24, 1.08, 0.96, 0.76, 0.11, 0.04, 0.00, 0.03),
-        (1.02, 0.91, 0.76, 0.63, 0.10, 0.15, -0.25, 0.06),
+        (1.42, 1.24, 1.14, 0.90, 0.24, -0.06, 0.34, 0.02),
+        (1.24, 1.08, 0.96, 0.76, 0.22, 0.04, 0.00, 0.03),
+        (1.02, 0.91, 0.76, 0.63, 0.20, 0.15, -0.38, 0.06),
     )
     for outer_w, outer_h, inner_w, inner_h, depth, x, y, z in portals:
         body.add_rounded_rect_ring_y(
@@ -118,7 +118,7 @@ def build_gdp() -> ModelGeometry:
     accent = MeshAssembler()
 
     cage_radius = 0.78
-    cage_depth = 0.19
+    cage_depth = 0.44
     cage_rotation = (_QUARTER_TURN, 0.0, 0.0)
 
     # Two unequal capped arcs on each depth rail establish a deliberate service

@@ -46,9 +46,9 @@ def build_market_rate() -> ModelGeometry:
     accent = MeshAssembler()
 
     rail_angle = math.radians(-10.0)
-    for y, z in ((-0.14, 0.04), (0.14, -0.04)):
+    for y, z in ((-0.24, 0.04), (0.24, -0.04)):
         body.add_capsule_x(
-            half_length=0.72,
+            half_length=0.60,
             radius=0.08,
             segments=24,
             hemisphere_steps=3,
@@ -58,23 +58,25 @@ def build_market_rate() -> ModelGeometry:
 
     # Unequal end standards keep the rail from reading as a line chart.  The
     # short transverse ties provide the remaining exposed primary edge tags.
+    # The standards are deepened in Y into full gantry posts that seat on the
+    # instrument bed below, so the whole stand gains genuine front-back depth.
     body.add_box(
-        size=(0.18, 0.52, 0.48),
-        location=(-0.75, 0.0, -0.11),
+        size=(0.20, 0.84, 0.48),
+        location=(-0.64, 0.0, -0.11),
         rotation=(0.0, rail_angle, 0.0),
         bevel=True,
     )
     body.add_box(
-        size=(0.18, 0.52, 0.64),
-        location=(0.75, 0.0, 0.15),
+        size=(0.20, 0.84, 0.90),
+        location=(0.64, 0.0, 0.02),
         rotation=(0.0, rail_angle, 0.0),
         bevel=True,
     )
-    for x in (-0.48, 0.48):
+    for x in (-0.42, 0.42):
         slope_z = -math.sin(rail_angle) * x
         body.add_cylinder_between(
-            (x, -0.19, slope_z + 0.04),
-            (x, 0.19, slope_z - 0.04),
+            (x, -0.29, slope_z + 0.04),
+            (x, 0.29, slope_z - 0.04),
             radius=0.045,
             segments=9,
             bevel=True,
@@ -83,16 +85,23 @@ def build_market_rate() -> ModelGeometry:
         size=(0.22, 0.16, 0.10),
         location=(-0.58, -0.23, -0.30),
     )
+    # Instrument bed: the chassis the rail stand is bolted to.  It owns the
+    # Blender-Y (front-back) extent that was previously the flat thin axis.
+    body.add_box(
+        size=(1.42, 0.88, 0.16),
+        location=(0.0, 0.0, -0.42),
+        bevel=True,
+    )
 
     carriage_origin = (0.12, 0.0, 0.02)
     sleeve_centers = (
-        (carriage_origin[0], -0.14, 0.061),
-        (carriage_origin[0], 0.14, -0.019),
+        (carriage_origin[0], -0.24, 0.061),
+        (carriage_origin[0], 0.24, -0.019),
     )
     for center in sleeve_centers:
         accent.add_cylinder(
-            radius=0.13,
-            depth=0.24,
+            radius=0.14,
+            depth=0.30,
             segments=12,
             location=center,
             rotation=(0.0, _QUARTER_TURN, 0.0),
@@ -101,13 +110,13 @@ def build_market_rate() -> ModelGeometry:
     accent.add_cylinder_between(
         sleeve_centers[0],
         sleeve_centers[1],
-        radius=0.055,
+        radius=0.06,
         segments=12,
         bevel=True,
     )
     accent.add_box(
-        size=(0.12, 0.08, 0.20),
-        location=(0.12, -0.22, 0.17),
+        size=(0.14, 0.10, 0.22),
+        location=(0.12, -0.32, 0.17),
     )
 
     return ModelGeometry(
@@ -208,7 +217,7 @@ def build_credit_spread() -> ModelGeometry:
     accent = MeshAssembler()
 
     body.add_capsule_x(
-        half_length=0.75,
+        half_length=0.66,
         radius=0.12,
         segments=28,
         hemisphere_steps=4,
@@ -216,17 +225,17 @@ def build_credit_spread() -> ModelGeometry:
     )
     body.add_rounded_box_y(
         width=0.18,
-        height=0.92,
-        depth=0.30,
+        height=1.00,
+        depth=0.56,
         radius=0.045,
         corner_segments=2,
-        location=(-0.68, 0.03, 0.00),
+        location=(-0.68, 0.03, -0.02),
         bevel=True,
     )
     body.add_rounded_box_y(
         width=0.34,
         height=0.16,
-        depth=0.30,
+        depth=0.44,
         radius=0.040,
         corner_segments=2,
         location=(-0.51, 0.03, 0.31),
@@ -235,7 +244,7 @@ def build_credit_spread() -> ModelGeometry:
     body.add_rounded_box_y(
         width=0.38,
         height=0.16,
-        depth=0.30,
+        depth=0.44,
         radius=0.040,
         corner_segments=2,
         location=(-0.48, 0.03, -0.40),
@@ -243,10 +252,17 @@ def build_credit_spread() -> ModelGeometry:
     )
     body.add_cylinder(
         radius=0.16,
-        depth=0.18,
+        depth=0.40,
         segments=14,
-        location=(-0.68, -0.20, 0.04),
+        location=(-0.62, -0.16, 0.04),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
+        bevel=True,
+    )
+    # Calibration bench: a mounting plate the caliper frame beds into.  It
+    # carries the Blender-Y (front-back) depth that was the flat thin axis.
+    body.add_box(
+        size=(1.36, 0.84, 0.14),
+        location=(0.0, 0.0, -0.55),
         bevel=True,
     )
 
@@ -254,7 +270,7 @@ def build_credit_spread() -> ModelGeometry:
     accent.add_rounded_box_y(
         width=0.11,
         height=0.56,
-        depth=0.12,
+        depth=0.22,
         radius=0.028,
         corner_segments=2,
         location=(0.40, 0.0, 0.00),
@@ -263,18 +279,27 @@ def build_credit_spread() -> ModelGeometry:
     accent.add_rounded_box_y(
         width=0.18,
         height=0.10,
-        depth=0.12,
+        depth=0.20,
         radius=0.025,
         corner_segments=2,
         location=(0.28, 0.0, 0.27),
     )
     accent.add_cylinder(
-        radius=0.10,
-        depth=0.12,
+        radius=0.11,
+        depth=0.26,
         segments=12,
         location=(0.40, 0.0, -0.42),
         rotation=(0.0, _QUARTER_TURN, 0.0),
         bevel=True,
+    )
+    # Vernier thumb roller: an unbeveled X-axis knurl that keeps the moving
+    # jaw's accent-area share up as the body gains bench mass.
+    accent.add_cylinder(
+        radius=0.07,
+        depth=0.16,
+        segments=10,
+        location=(0.54, 0.0, -0.20),
+        rotation=(0.0, _QUARTER_TURN, 0.0),
     )
 
     return ModelGeometry(

@@ -64,16 +64,16 @@ def build_fx() -> ModelGeometry:
 
     ring_pivot = (0.10, -0.03, -0.02)
     body.add_cylinder_between(
-        (ring_pivot[0], -0.29, ring_pivot[2]),
-        (ring_pivot[0], 0.26, ring_pivot[2]),
-        radius=0.105,
+        (ring_pivot[0], -0.62, ring_pivot[2]),
+        (ring_pivot[0], 0.60, ring_pivot[2]),
+        radius=0.115,
         segments=14,
         bevel=True,
     )
-    for y in (-0.31, 0.28):
+    for y in (-0.66, 0.64):
         body.add_cylinder(
-            radius=0.17,
-            depth=0.12,
+            radius=0.24,
+            depth=0.20,
             segments=12,
             location=(ring_pivot[0], y, ring_pivot[2]),
             rotation=(math.pi * 0.5, 0.0, 0.0),

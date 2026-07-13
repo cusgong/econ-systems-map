@@ -71,7 +71,7 @@ ACCENT_CONTRACTS = {
     },
     "fx": {
         "pivotLabel": "true offset ring center; counter-rotate local Y",
-        "blenderTranslation": (0.113864593, 0.0, -0.045545854),
+        "blenderTranslation": (0.113877513, -0.015183652, -0.045551021),
     },
     "oil": {
         "pivotLabel": "coaxial side-handwheel hub; Blender Y exports to glTF Z",
@@ -79,19 +79,19 @@ ACCENT_CONTRACTS = {
     },
     "housing": {
         "pivotLabel": "offset transfer-beam center; translate local Y",
-        "blenderTranslation": (0.193240196, -0.155534804, 0.558511257),
+        "blenderTranslation": (0.184746787, -0.161061332, 0.561345994),
     },
     "gdp": {
         "pivotLabel": "asymmetric counterweight hub center; scale XYZ",
-        "blenderTranslation": (-0.018568849, 0.0, 0.012370927),
+        "blenderTranslation": (-0.016911505, 0.0, 0.011266772),
     },
     "risk_sentiment": {
         "pivotLabel": "upper pendulum hinge",
-        "blenderTranslation": (0.0, -0.123495959, 0.527664542),
+        "blenderTranslation": (0.0, -0.256862551, 0.482901603),
     },
     "market_rate": {
         "pivotLabel": "maturity carriage centroid; translate along glTF X / Blender X",
-        "blenderTranslation": (0.11950956, 0.021142018, -0.041641646),
+        "blenderTranslation": (0.104118206, 0.0, 0.030422898),
     },
     "liquidity": {
         "pivotLabel": "central circulation rotor hub; glTF Y equals Blender Z",
@@ -99,7 +99,7 @@ ACCENT_CONTRACTS = {
     },
     "credit_spread": {
         "pivotLabel": "moving jaw slide center; translate along glTF X / Blender X",
-        "blenderTranslation": (0.417967223, 0.057470493, 0.062695083),
+        "blenderTranslation": (0.412147611, 0.0, 0.092733219),
     },
     "bank_lending": {
         "pivotLabel": "linked piston-face center; glTF +Z advances along Blender -Y",
@@ -115,15 +115,15 @@ ACCENT_CONTRACTS = {
     },
     "wages": {
         "pivotLabel": "ratchet step axis; glTF Z rotation is Blender -Y",
-        "blenderTranslation": (-0.027025283, -0.310501175, 0.01527055),
+        "blenderTranslation": (-0.025744462, -0.261843085, 0.014546844),
     },
     "exports": {
         "pivotLabel": "outbound vane plate; glTF +Z advances along Blender -Y",
-        "blenderTranslation": (-0.005920718, -0.346381733, -0.035524308),
+        "blenderTranslation": (-0.006036391, -0.434617996, -0.036218166),
     },
     "current_account": {
         "pivotLabel": "bilateral balance axle; glTF Z rotation is Blender -Y",
-        "blenderTranslation": (0.012594465, -0.362090876, 0.157534949),
+        "blenderTranslation": (0.011741373, -0.399207115, 0.14686437),
     },
     "capital_flows": {
         "pivotLabel": "inflow gate face; glTF +Z advances along Blender -Y",
@@ -139,15 +139,15 @@ ACCENT_CONTRACTS = {
     },
     "consumption": {
         "pivotLabel": "inertia flywheel clutch axis; scale XYZ about the central hub",
-        "blenderTranslation": (-0.004444095, -0.165113561, 0.04903402),
+        "blenderTranslation": (-0.004437998, -0.293704808, 0.048966721),
     },
     "investment": {
         "pivotLabel": "lower truss hinge; rotate about glTF X / Blender X",
-        "blenderTranslation": (-0.31260567, -0.231879583, -0.328496076),
+        "blenderTranslation": (-0.298793852, -0.283969134, -0.313982129),
     },
     "employment": {
         "pivotLabel": "three-column locking-ring centroid; translate along glTF Y / Blender Z",
-        "blenderTranslation": (0.0, -0.086492246, 0.170440603),
+        "blenderTranslation": (0.0, -0.159827262, 0.224273741),
     },
     "earnings": {
         "pivotLabel": "stair-carrier centroid; translate along glTF Y / Blender Z",
@@ -163,7 +163,7 @@ ACCENT_CONTRACTS = {
     },
     "household_debt": {
         "pivotLabel": "tightening coil axis; rotate glTF Y / Blender Z",
-        "blenderTranslation": (0.028632849, 0.0, -0.023039953),
+        "blenderTranslation": (0.024852229, 0.0, -0.044025287),
     },
     "commodity": {
         "pivotLabel": "faceted ore-core lift center; glTF Y equals Blender Z",
@@ -171,19 +171,19 @@ ACCENT_CONTRACTS = {
     },
     "fiscal": {
         "pivotLabel": "three-outlet valve-bank center; glTF Z equals Blender -Y",
-        "blenderTranslation": (0.0, -0.196796509, 0.578694136),
+        "blenderTranslation": (0.0, -0.370617032, 0.550299764),
     },
     "geopolitics": {
         "pivotLabel": "opposed C-clamp tension axis; rotate glTF Y / Blender Z",
-        "blenderTranslation": (-0.000222626, 0.020040749, 0.0),
+        "blenderTranslation": (-0.00022071, 0.025545072, 0.0),
     },
     "tech": {
         "pivotLabel": "compressor impeller bearing hub; glTF Z equals Blender -Y",
-        "blenderTranslation": (0.0, -0.098511963, 0.0),
+        "blenderTranslation": (0.0, -0.321083426, 0.0),
     },
     "consumer_conf": {
         "pivotLabel": "central confidence-vane lift center; glTF Y equals Blender Z",
-        "blenderTranslation": (0.0, -0.131208829, 0.058315035),
+        "blenderTranslation": (0.0, -0.439958662, 0.055340722),
     },
 }
 PROOF_ACCENT_CONTRACTS = {
@@ -342,36 +342,36 @@ MATERIAL_CONTRACT_HASHES = {
 }
 
 ROOT_CONTRACT_HASHES = {
-    "policy_rate": "2cbb913f0a956c0c9e0aec4ceb21a832c9ccf3cb65ff633e94953d500d34251d",
-    "market_rate": "3115414cab27f2a4962f62a1003153f8afc9da7e80f088e670a5bb1801241daf",
+    "policy_rate": "0454fd0dc0995b20ce3c4d4f745db4e7b2ade286dd51601ba97fea5993e0cc1f",
+    "market_rate": "4c3252b9f55977fb6733822c5291be47e2c568ca36b58359a95647e597854aa4",
     "liquidity": "17f913f3ad44746bee6ad5f80542bd3ceee802fb98bd789f598f15aae16c1491",
-    "credit_spread": "6faeca43968e78a7fa3449c2356f81253b05333c5da3e9029eb98ddfe602c42b",
+    "credit_spread": "2161a02e692b8478d354c721522a0b8c93cbc3aefb0445c8637d38b5c316de29",
     "bank_lending": "5a09763d08ab4c9b73f83f9d7b2a1338a0bb7923316dee8cfac8d550ecddca44",
     "cpi": "e20966949b4917713a6aaed4b187af263bed971dd05ab190138d0de09cb50039",
     "inflation_exp": "ead69863ce3eb3d2847d3296472d715f0cc09ae36126ccf75088bd7776380088",
-    "wages": "8cf14c683de9ce5b020958e791e1f79a6c5045356b4b64721fec3ef4c6ccb357",
-    "fx": "9092f21572914b605cf00d5be07b0534020f7f0179dd1930f7c216e689496b7c",
-    "exports": "076ae55ac49fc979674cfd673894b35264a15a24125e8358f0666fc441f0e3b5",
-    "current_account": "77bfd2c305b92f466f8c0aeebbcb16ad614e1f7b1b243def0c15aa386cec1f64",
+    "wages": "abed3cb0d517a854ae95c54fb17a4b82f01c43d275fd991601b960287bdd5eb4",
+    "fx": "7de3c8303e4b73686fd1a08d6866a56c2a37d4e351bd1dd6693ffe27081fa014",
+    "exports": "3270cee265235905282e8e65d0e8c0fd0bd6cdda78843b79fe619255abdad6ff",
+    "current_account": "91db2fa0c6bfa1561ca6408b339422e8be3ada6b1c4d430b2f2e9ce93bd1127c",
     "capital_flows": "452c74b36bce3b6ba28826874de91d161ec436b1339ffdab0362d01b21d00824",
     "fed_rate": "36f780c13c0584c40f8244d2282db6970bdcd1922461d55c2a385f77635d8cc0",
     "global_growth": "5378acec3d08ecd1dcf5cb006d3a6f7f1e5fbcb163541d52bff77f361b70c7e5",
-    "consumption": "391c1d0136d7db3fd0fccb68691f0795a2513a6772652ebe8c64c541bfb0fe11",
-    "investment": "ecf7711e5f07a8fbed5f26b9cf11ae57fd9de2fd67a23bc7ea5a41dd1ada84ee",
-    "employment": "c417507d1cb36510ad57caf3a488fb6f9f9ad481b37f63a26727e5b6d99fe32a",
+    "consumption": "fc2adff6761317013f81c8536ef8d9d92843015e4262c6187f0720d0babfa9c6",
+    "investment": "c333ecaaf5caec2b52504952b52572660d02b17df46a502fea520495c6e56f88",
+    "employment": "4f6deb4e217a447bdde2468137c615ebbb14248e055fe3ba57fdb5723e9e99d9",
     "earnings": "27edbacd38a2df00f5e7a1a423504c72bea8dae607be3fb3945bcf8fc941e5f5",
     "defaults": "f084d9ca496fa8e73202560e1db25efb5149054e9c7af79e7e60e4f76c3855fa",
-    "gdp": "cb33ae45349abb334f03aed3e1b324228d3f00f9fdbed94fdf5591aea4de3e3c",
+    "gdp": "243212c74b85ccb2ca26823c599b38c859cded86d3259e750c8e3296f59244fa",
     "stocks": "5a0170a01e8a452859c0510985a8a2647014ec984e959ce1ae2ba43593d3857d",
-    "housing": "a6f7c7ee857f72bef1231a22b2627ab01d508ba149295b703debec91078b48a3",
-    "household_debt": "67f1dfc9b68e51c6d6a24db31effb72b136e7ce09cdd17f51285c58c4682be3d",
+    "housing": "f81153dd1c101c17020e48ee9bf1768af997570a2195f631af0356ad6ff9a8da",
+    "household_debt": "28512a3a79eddd531f39922edfcd469303f24b53f3f7ded765d3e0fb7b3ecba4",
     "oil": "01f554d6c78aa39801e3e65c87eb24a5ce2a5978eea0ca906f4c11105a3673d7",
     "commodity": "4f5286153f6cc2d6839ec6a2d7503fad4a3d7cacf257f04974647292c9395c38",
-    "fiscal": "35ceac6a445e57e02980c094a553e56dc277bb8d8ae09dbb1f31a61a6503b8c4",
-    "geopolitics": "2df2a812f10bd644553431c810da1194ee29da86dce68e7dc31722183df4ba0c",
-    "tech": "99c917d967198f304e679797333a17cf27ce8bdd2ee8b1b1f7ac6e3c43419ac0",
-    "risk_sentiment": "273e257a1702aa8f5306f6644c1ebd549db7fa2a548c0af97e5fcf604cc4fff0",
-    "consumer_conf": "ff56d967ff5bd1672ec745014d570d7bee0e1534aed043473c0fb750c4d0855d",
+    "fiscal": "18305c8742a5b6c354c16db14f16d044a292d733ee9bef3575e0d68a6eca8bdd",
+    "geopolitics": "09d618272769f59d6a0f90bccdcae93bc30830370373d7466870d335374ee4a4",
+    "tech": "3a8796917bbf5b148b2fb08a7c27fde6a0e90806e36f50b80372a2b1b8dc549b",
+    "risk_sentiment": "60c39a77fcc125139a010d3c770cda5d924ea232f47448c170f9431d474d943b",
+    "consumer_conf": "3f0f5a328c9d143fbfd2c253fea58ad48527af5f2e28123979da3ad6cb605f17",
 }
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]

@@ -32,36 +32,36 @@ PROOF_TOTAL_TRIANGLES_MIN = 10_600
 PROOF_TOTAL_TRIANGLES_MAX = 13_000
 PROOF_HARD_TRIANGLES_MAX = 18_000
 MODEL_TRIANGLE_BANDS = {
-    "policy_rate": (2_500, 2_750),
-    "fx": (2_200, 2_600),
+    "policy_rate": (2_860, 2_990),
+    "fx": (2_072, 2_472),
     "oil": (1_800, 2_200),
-    "housing": (1_500, 1_900),
-    "gdp": (1_800, 2_200),
-    "risk_sentiment": (1_500, 1_900),
-    "market_rate": (1_500, 1_900),
+    "housing": (1_416, 1_816),
+    "gdp": (1_820, 2_220),
+    "risk_sentiment": (1_616, 2_016),
+    "market_rate": (1_808, 2_208),
     "liquidity": (1_900, 2_300),
-    "credit_spread": (1_400, 1_800),
+    "credit_spread": (1_676, 2_076),
     "bank_lending": (1_700, 2_100),
     "cpi": (1_800, 2_200),
     "inflation_exp": (1_600, 2_000),
-    "wages": (1_950, 2_250),
-    "exports": (2_500, 2_950),
-    "current_account": (1_950, 2_200),
+    "wages": (1_884, 2_284),
+    "exports": (2_640, 2_990),
+    "current_account": (1_884, 2_284),
     "capital_flows": (2_250, 2_650),
     "fed_rate": (2_350, 2_990),
     "global_growth": (1_950, 2_350),
-    "consumption": (1_800, 2_200),
-    "investment": (1_800, 2_200),
-    "employment": (1_450, 1_900),
+    "consumption": (2_216, 2_616),
+    "investment": (2_016, 2_416),
+    "employment": (1_808, 2_208),
     "earnings": (1_650, 2_100),
     "defaults": (1_700, 2_150),
     "stocks": (1_650, 2_050),
     "household_debt": (1_800, 2_300),
     "commodity": (1_400, 1_900),
-    "fiscal": (2_050, 2_350),
+    "fiscal": (2_260, 2_660),
     "geopolitics": (2_200, 2_550),
-    "tech": (2_450, 2_850),
-    "consumer_conf": (1_400, 1_900),
+    "tech": (2_560, 2_960),
+    "consumer_conf": (1_800, 2_200),
 }
 NORMALIZED_RADIUS_MIN = 0.98
 NORMALIZED_RADIUS_MAX = 1.02
@@ -901,10 +901,10 @@ def _validate_model(
     model_triangles = int(body["triangles"] + accent["triangles"])
     if model_triangles > MAX_MODEL_TRIANGLES:
         _append_error(summary, f"{node_id}: triangles {model_triangles} exceed {MAX_MODEL_TRIANGLES}")
-    if node_id == "policy_rate" and not 1800 <= body["triangles"] <= 2200:
+    if node_id == "policy_rate" and not 2200 <= body["triangles"] <= 2400:
         _append_error(
             summary,
-            f"policy_rate: body triangles {body['triangles']} outside 1800..2200",
+            f"policy_rate: body triangles {body['triangles']} outside 2200..2400",
         )
     if node_id in MODEL_TRIANGLE_BANDS:
         minimum, maximum = MODEL_TRIANGLE_BANDS[node_id]

@@ -66,11 +66,22 @@ def build_consumption() -> ModelGeometry:
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
+    # The hub barrel is extended rearward (deep along Blender Y, the thin axis)
+    # and capped by a bearing can so the flywheel gains real depth instead of
+    # reading as a shallow coin.  The front face stays at y=-0.15.
     body.add_cylinder(
         radius=0.18,
-        depth=0.34,
+        depth=0.56,
         segments=18,
-        location=flywheel_center,
+        location=(0.0, 0.13, 0.03),
+        rotation=(_QUARTER_TURN, 0.0, 0.0),
+        bevel=True,
+    )
+    body.add_cylinder(
+        radius=0.30,
+        depth=0.26,
+        segments=18,
+        location=(0.0, 0.40, 0.03),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
@@ -111,10 +122,10 @@ def build_consumption() -> ModelGeometry:
     body.add_rounded_box_y(
         width=1.18,
         height=0.14,
-        depth=0.38,
+        depth=0.52,
         radius=0.035,
         corner_segments=2,
-        location=(-0.02, 0.07, -0.68),
+        location=(-0.02, 0.13, -0.68),
         bevel=True,
     )
     body.add_rounded_box_y(
@@ -138,6 +149,9 @@ def build_consumption() -> ModelGeometry:
 
     vane_origin = (0.0, -0.16, 0.03)
     clutch_angle = math.radians(-18.0)
+    # The clutch greeble is enlarged in step with the deeper body so the accent
+    # keeps at least a tenth of the total surface area after the new hub can and
+    # bearing barrel raise the body area.
     accent.add_extruded_polygon_y(
         _annular_sector_points(
             inner_radius=0.24,
@@ -146,22 +160,22 @@ def build_consumption() -> ModelGeometry:
             end_angle=clutch_angle + math.radians(32.0),
             steps=3,
         ),
-        depth=0.12,
+        depth=0.16,
         location=(0.0, -0.19, vane_origin[2]),
         bevel=True,
     )
     accent.add_cylinder(
         radius=0.14,
-        depth=0.18,
+        depth=0.24,
         segments=12,
         location=vane_origin,
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
     accent.add_rounded_box_y(
-        width=0.34,
-        height=0.13,
-        depth=0.13,
+        width=0.38,
+        height=0.15,
+        depth=0.15,
         radius=0.030,
         corner_segments=2,
         location=(
@@ -172,7 +186,7 @@ def build_consumption() -> ModelGeometry:
         rotation=(0.0, math.radians(18.0), 0.0),
     )
     accent.add_box(
-        size=(0.13, 0.14, 0.18),
+        size=(0.16, 0.16, 0.22),
         location=(
             0.51 * math.cos(clutch_angle),
             -0.19,
@@ -201,10 +215,13 @@ def build_investment() -> ModelGeometry:
     body = MeshAssembler()
     accent = MeshAssembler()
 
+    # The mast and ballast foot are deepened along Blender Y (the thin axis) and
+    # a machinery house is bolted to the mast root so the capital stack gains
+    # genuine front-to-back body depth.  The accent truss stays thin on Y.
     body.add_rounded_box_y(
         width=0.22,
         height=1.30,
-        depth=0.34,
+        depth=0.46,
         radius=0.050,
         corner_segments=2,
         location=(-0.47, 0.05, 0.03),
@@ -213,10 +230,19 @@ def build_investment() -> ModelGeometry:
     body.add_rounded_box_y(
         width=1.18,
         height=0.18,
-        depth=0.62,
+        depth=0.86,
         radius=0.045,
         corner_segments=2,
         location=(-0.03, 0.05, -0.69),
+        bevel=True,
+    )
+    body.add_rounded_box_y(
+        width=0.55,
+        height=0.46,
+        depth=0.55,
+        radius=0.050,
+        corner_segments=2,
+        location=(-0.42, 0.28, -0.42),
         bevel=True,
     )
     body.add_rounded_box_y(
@@ -229,9 +255,9 @@ def build_investment() -> ModelGeometry:
     )
     body.add_cylinder(
         radius=0.22,
-        depth=0.32,
+        depth=0.44,
         segments=16,
-        location=(-0.47, -0.06, -0.39),
+        location=(-0.47, 0.0, -0.39),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
@@ -328,10 +354,13 @@ def build_employment() -> ModelGeometry:
     body = MeshAssembler()
     accent = MeshAssembler()
 
+    # Columns are shortened slightly (lowering the long Z axis) and deepened
+    # along Blender Y, and the foundation is thickened with two rear buttresses
+    # so the frame stops reading as a flat plate edge-on.
     column_specs = (
-        (-0.43, 1.00),
-        (0.00, 1.18),
-        (0.43, 0.94),
+        (-0.43, 0.92),
+        (0.00, 1.08),
+        (0.43, 0.86),
     )
     base_z = -0.50
     for x, height in column_specs:
@@ -339,7 +368,7 @@ def build_employment() -> ModelGeometry:
         body.add_rounded_box_y(
             width=0.22,
             height=height,
-            depth=0.32,
+            depth=0.44,
             radius=0.052,
             corner_segments=2,
             location=(x, 0.03, center_z),
@@ -347,7 +376,7 @@ def build_employment() -> ModelGeometry:
         )
         body.add_cylinder(
             radius=0.135,
-            depth=0.36,
+            depth=0.46,
             segments=12,
             location=(x, 0.03, base_z + height),
             rotation=(_QUARTER_TURN, 0.0, 0.0),
@@ -360,10 +389,28 @@ def build_employment() -> ModelGeometry:
     body.add_rounded_box_y(
         width=1.26,
         height=0.17,
-        depth=0.48,
+        depth=0.80,
         radius=0.045,
         corner_segments=2,
-        location=(0.0, 0.03, -0.59),
+        location=(0.0, 0.08, -0.59),
+        bevel=True,
+    )
+    body.add_rounded_box_y(
+        width=0.20,
+        height=0.62,
+        depth=0.30,
+        radius=0.040,
+        corner_segments=2,
+        location=(-0.215, 0.33, -0.16),
+        bevel=True,
+    )
+    body.add_rounded_box_y(
+        width=0.20,
+        height=0.50,
+        depth=0.30,
+        radius=0.040,
+        corner_segments=2,
+        location=(0.215, 0.33, -0.22),
         bevel=True,
     )
     body.add_box(
@@ -377,7 +424,7 @@ def build_employment() -> ModelGeometry:
         outer_height=0.25,
         inner_width=0.98,
         inner_height=0.11,
-        depth=0.18,
+        depth=0.24,
         outer_radius=0.075,
         inner_radius=0.035,
         corner_segments=3,

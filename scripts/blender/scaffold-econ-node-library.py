@@ -383,7 +383,16 @@ def _policy_rate_geometry() -> tuple[MeshAssembler, MeshAssembler]:
     body = MeshAssembler()
     # The exposed base rims use three geometric transition segments over a
     # 0.06-unit width, approximately 2% of the 3.1-unit raw diameter.
+    # The profile now runs the full instrument depth: a tapered cylindrical
+    # case at the back (gentle slopes, so the wall stays bevel-free like the
+    # original base rings) flowing forward into the rounded front bezel. This
+    # turns a flat dial that vanished edge-on into a solid gauge, and reuses the
+    # single revolve's caps instead of paying for a separate case shell.
     base_profile = [
+        (1.06, 1.06),
+        (1.24, 0.82),
+        (1.36, 0.52),
+        (1.43, 0.30),
         (1.47, 0.18),
         (1.50, 0.172),
         (1.532, 0.147),
@@ -393,7 +402,7 @@ def _policy_rate_geometry() -> tuple[MeshAssembler, MeshAssembler]:
         (1.50, -0.172),
         (1.47, -0.18),
     ]
-    body.add_revolved_y(base_profile, 48, back_y=0.18, front_y=-0.18)
+    body.add_revolved_y(base_profile, 48, back_y=1.10, front_y=-0.18)
 
     # Four vertices per tooth make twelve controlled knurl protrusions around
     # the crown. The front profile then cuts three V-shaped calibration grooves.
@@ -404,8 +413,6 @@ def _policy_rate_geometry() -> tuple[MeshAssembler, MeshAssembler]:
         (1.045, -0.37),
         (0.94, -0.44),
         (0.79, -0.405),
-        (0.68, -0.44),
-        (0.55, -0.405),
         (0.47, -0.44),
         (0.35, -0.405),
         (0.25, -0.47),
@@ -426,11 +433,14 @@ def _policy_rate_geometry() -> tuple[MeshAssembler, MeshAssembler]:
     )
 
     accent = MeshAssembler()
+    # Raised colored bezel collar (category ring) instead of a flush washer:
+    # gives the accent enough surface to hold its area ratio against the deeper
+    # body, and makes the category color read as a bold rim around the dial.
     accent.add_annulus_y(
-        outer_radius=0.955,
-        inner_radius=0.69,
-        back_y=-0.472,
-        front_y=-0.515,
+        outer_radius=1.00,
+        inner_radius=0.72,
+        back_y=-0.45,
+        front_y=-0.82,
         segments=40,
     )
     needle = [

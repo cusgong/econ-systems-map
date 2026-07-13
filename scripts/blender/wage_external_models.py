@@ -203,7 +203,7 @@ def build_wages() -> ModelGeometry:
         rotation=(_QUARTER_TURN, 0.0, 0.0),
     )
     body.add_box(
-        size=(1.18, 0.42, 0.14),
+        size=(1.18, 0.80, 0.14),
         location=(0.0, 0.03, -0.66),
         bevel=True,
     )
@@ -301,7 +301,7 @@ def build_exports() -> ModelGeometry:
 
     body.add_cylinder(
         radius=0.24,
-        depth=0.48,
+        depth=0.84,
         segments=18,
         location=(0.0, 0.02, 0.0),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
@@ -407,7 +407,7 @@ def build_current_account() -> ModelGeometry:
     for x, radius, z in ((-0.40, 0.34, 0.06), (0.42, 0.30, -0.02)):
         body.add_cylinder(
             radius=radius,
-            depth=0.36,
+            depth=0.80,
             segments=18,
             location=(x, 0.04, z),
             rotation=(_QUARTER_TURN, 0.0, 0.0),
@@ -439,19 +439,19 @@ def build_current_account() -> ModelGeometry:
         bevel=True,
     )
     accent.add_box(
-        size=(0.92, 0.075, 0.060),
+        size=(0.96, 0.075, 0.090),
         location=axle_origin,
         bevel=True,
     )
     accent.add_cylinder(
-        radius=0.10,
+        radius=0.145,
         depth=0.09,
         segments=12,
         location=axle_origin,
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
-    for x, radius, z in ((-0.47, 0.105, -0.02), (0.48, 0.085, 0.09)):
+    for x, radius, z in ((-0.47, 0.150, -0.02), (0.48, 0.125, 0.09)):
         accent.add_cylinder(
             radius=radius,
             depth=0.085,

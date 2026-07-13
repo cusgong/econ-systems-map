@@ -43,7 +43,7 @@ def build_risk_sentiment() -> ModelGeometry:
     for x, z in ((-0.72, 0.28), (0.72, 0.28), (-0.72, -0.28), (0.72, -0.28)):
         body.add_cylinder(
             0.095,
-            0.19,
+            0.92,
             segments=12,
             location=(x, 0.10, z),
             rotation=(math.pi * 0.5, 0.0, 0.0),

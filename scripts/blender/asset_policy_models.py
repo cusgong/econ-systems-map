@@ -423,9 +423,9 @@ def build_household_debt() -> ModelGeometry:
 
     beam_angle = math.radians(-4.0)
     body.add_rounded_box_y(
-        width=1.48,
+        width=1.32,
         height=0.17,
-        depth=0.24,
+        depth=0.32,
         radius=0.055,
         corner_segments=2,
         location=(0.0, 0.0, 0.34),
@@ -434,21 +434,21 @@ def build_household_debt() -> ModelGeometry:
     )
     body.add_extruded_polygon_y(
         ((-0.30, -0.58), (0.30, -0.58), (0.0, 0.24)),
-        depth=0.28,
+        depth=0.56,
         location=(0.0, 0.0, 0.0),
         bevel=True,
     )
     body.add_cylinder(
         radius=0.13,
-        depth=0.34,
+        depth=0.44,
         segments=12,
         location=(0.0, 0.0, 0.35),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
     for x, rod_top, weight_radius, weight_depth, weight_z in (
-        (-0.57, 0.38, 0.22, 0.35, -0.20),
-        (0.57, 0.30, 0.17, 0.47, -0.17),
+        (-0.44, 0.38, 0.26, 0.35, -0.20),
+        (0.44, 0.30, 0.21, 0.47, -0.17),
     ):
         body.add_cylinder_between(
             (x, 0.0, rod_top),
@@ -465,7 +465,7 @@ def build_household_debt() -> ModelGeometry:
         )
     body.add_cylinder(
         radius=0.16,
-        depth=0.16,
+        depth=0.22,
         segments=12,
         location=(0.0, 0.0, 0.54),
         bevel=True,
@@ -473,16 +473,16 @@ def build_household_debt() -> ModelGeometry:
 
     _add_helix_tube_z(
         accent,
-        radius=0.235,
-        height=0.50,
+        radius=0.34,
+        height=0.56,
         turns=2.25,
-        tube_radius=0.030,
+        tube_radius=0.032,
         path_segments=36,
         tube_segments=6,
     )
-    for z in (-0.30, 0.30):
+    for z in (-0.335, 0.335):
         accent.add_cylinder(
-            radius=0.12,
+            radius=0.15,
             depth=0.085,
             segments=12,
             location=(0.0, 0.0, z),
@@ -490,7 +490,7 @@ def build_household_debt() -> ModelGeometry:
         )
     accent.add_box(
         size=(0.11, 0.07, 0.10),
-        location=(0.21, 0.0, 0.27),
+        location=(0.30, 0.0, 0.27),
         rotation=(0.0, math.radians(-18.0), 0.0),
         bevel=True,
     )
@@ -627,6 +627,27 @@ def build_fiscal() -> ModelGeometry:
             location=(x, 0.0, -0.58),
             bevel=True,
         )
+    # Rear supply-header drum paired with the inlet barrel (a real distribution
+    # manifold runs a supply header behind the outlet rail).  It hides behind
+    # the barrel in the front view (x +/-0.45 < barrel +/-0.58, same z band) so
+    # the one-inlet/three-crown silhouette is untouched; the side view gains the
+    # double-barrel depth.  Header spans y +0.10..+0.58; two link tubes tie it
+    # down onto the inlet barrel.
+    body.add_cylinder(
+        radius=0.24,
+        depth=0.90,
+        segments=14,
+        location=(0.0, 0.34, -0.03),
+        rotation=(0.0, _QUARTER_TURN, 0.0),
+        bevel=True,
+    )
+    for x in (-0.30, 0.30):
+        body.add_cylinder_between(
+            (x, 0.05, -0.03),
+            (x, 0.34, -0.03),
+            radius=0.06,
+            segments=8,
+        )
 
     valve_y = -0.18
     for index, (x, z) in enumerate(outlets):
@@ -670,7 +691,7 @@ def build_geopolitics() -> ModelGeometry:
     _add_half_ellipsoid_x(
         body,
         sign=-1.0,
-        radii=(0.51, 0.29, 0.49),
+        radii=(0.51, 0.37, 0.49),
         longitude_segments=12,
         latitude_steps=4,
         offset_x=-0.045,
@@ -678,7 +699,7 @@ def build_geopolitics() -> ModelGeometry:
     _add_half_ellipsoid_x(
         body,
         sign=1.0,
-        radii=(0.51, 0.29, 0.49),
+        radii=(0.51, 0.37, 0.49),
         longitude_segments=12,
         latitude_steps=4,
         offset_x=0.045,
@@ -694,26 +715,26 @@ def build_geopolitics() -> ModelGeometry:
         body.add_rounded_box_y(
             width=1.18,
             height=0.12,
-            depth=0.22,
+            depth=0.30,
             radius=0.035,
             corner_segments=2,
             location=(0.0, 0.0, z),
             bevel=True,
         )
     body.add_box(
-        size=(0.24, 0.46, 0.18),
+        size=(0.24, 0.52, 0.18),
         location=(-0.56, 0.0, -0.27),
         rotation=(0.0, math.radians(-18.0), 0.0),
         bevel=True,
     )
     body.add_box(
-        size=(0.24, 0.40, 0.24),
+        size=(0.24, 0.46, 0.24),
         location=(0.56, 0.0, 0.27),
         rotation=(0.0, math.radians(12.0), 0.0),
         bevel=True,
     )
 
-    clamp_y = -0.285
+    clamp_y = -0.375
     _add_diagonal_c_clamp_y(
         accent,
         width=0.42,
@@ -847,18 +868,39 @@ def build_tech() -> ModelGeometry:
         location=(0.0, -0.105, 0.0),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
     )
+    # Rear axial-compressor casing barrel behind the chip cage, plus a rear
+    # bearing boss.  Both sit on Blender +Y so the square front outline is
+    # untouched (r=0.40 < inner-window half 0.42); the side view gains the
+    # barrel-behind-cage profile.  Casing spans y +0.10..+0.44, boss to +0.53.
+    # bevel=False on the casing keeps the model clear of the 3000 hard cap; the
+    # machined rim reads as a sharp compressor case edge either way.
+    body.add_cylinder(
+        radius=0.40,
+        depth=0.34,
+        segments=14,
+        location=(0.0, 0.27, 0.0),
+        rotation=(_QUARTER_TURN, 0.0, 0.0),
+        bevel=False,
+    )
+    body.add_cylinder(
+        radius=0.14,
+        depth=0.12,
+        segments=10,
+        location=(0.0, 0.47, 0.0),
+        rotation=(_QUARTER_TURN, 0.0, 0.0),
+    )
 
     rotor_origin = (0.0, -0.18, 0.0)
     accent.add_cylinder(
         radius=0.245,
-        depth=0.045,
+        depth=0.075,
         segments=12,
         location=(0.0, -0.165, 0.0),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
     )
     accent.add_cylinder(
         radius=0.075,
-        depth=0.13,
+        depth=0.17,
         segments=12,
         location=(0.0, -0.215, 0.0),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
@@ -877,7 +919,7 @@ def build_tech() -> ModelGeometry:
                 middle_half_width=math.radians(6.0),
                 outer_half_width=math.radians(3.5),
             ),
-            depth=0.070,
+            depth=0.110,
             location=(0.0, -0.205, 0.0),
             bevel=index not in {3, 5},
         )
@@ -934,6 +976,18 @@ def build_consumer_conf() -> ModelGeometry:
         )
     body.add_box(size=(0.34, 0.24, 0.12), location=(-0.46, 0.0, -0.43))
     body.add_box(size=(0.22, 0.24, 0.12), location=(0.53, 0.0, -0.43))
+    # Rear gauge can along Blender Y (behind the horizon frame): carries the
+    # missing depth without touching the front X-Z silhouette.  r=0.30 stays
+    # inside the outer frame half-height (0.39), so only the window interior
+    # fills; the can spans y +0.10..+0.70.
+    body.add_cylinder(
+        radius=0.30,
+        depth=0.60,
+        segments=12,
+        location=(0.0, 0.40, 0.0),
+        rotation=(_QUARTER_TURN, 0.0, 0.0),
+        bevel=True,
+    )
 
     vane_origin = (0.0, -0.17, 0.0)
     accent.add_extruded_polygon_y(
@@ -945,20 +999,20 @@ def build_consumer_conf() -> ModelGeometry:
             (-0.07, 0.30),
             (-0.16, -0.02),
         ),
-        depth=0.11,
+        depth=0.15,
         location=vane_origin,
         bevel=True,
     )
     accent.add_cylinder(
         radius=0.105,
-        depth=0.13,
+        depth=0.15,
         segments=12,
         location=(0.0, -0.17, -0.06),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
     accent.add_box(
-        size=(0.48, 0.08, 0.055),
+        size=(0.56, 0.08, 0.075),
         location=(0.0, -0.17, 0.04),
         bevel=True,
     )
