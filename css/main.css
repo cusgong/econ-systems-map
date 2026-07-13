@@ -437,9 +437,9 @@ button { font-family: inherit; }
 /* panel turntable inspector: the selected instrument, large and auto-rotating */
 .model-viewer {
   position: relative;
-  width: 100%;
-  height: 224px;
-  margin: 10px 0 6px;
+  width: min(100%, 220px);
+  aspect-ratio: 1 / 1;
+  margin: 10px auto 8px;
   border-radius: 12px;
   border: 1px solid var(--line);
   background:
@@ -463,7 +463,7 @@ button { font-family: inherit; }
 .model-viewer-canvas { display: block; width: 100%; height: 100%; cursor: grab; }
 .model-viewer-canvas:active { cursor: grabbing; }
 .model-viewer.mv-failed { display: none; }
-@media (max-width: 900px) { .model-viewer { height: 190px; } }
+@media (max-width: 900px) { .model-viewer { width: min(100%, 200px); } }
 
 .seg {
   display: inline-flex;

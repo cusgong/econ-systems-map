@@ -155,7 +155,9 @@ export function createModelViewer({ libraryUrl, categories }) {
     if (!(sphere.radius > 0)) return;
     root.position.sub(sphere.center);
     const wrap = new THREE.Group();
-    wrap.scale.setScalar(1.6 / sphere.radius); // normalize to a stable on-screen size
+    // normalize to a stable on-screen size; the square viewport is the tighter
+    // constraint (equal H/W), so leave a little margin around the instrument
+    wrap.scale.setScalar(1.42 / sphere.radius);
     wrap.add(root);
     pivot.add(wrap);
     controls.target.set(0, 0, 0);
