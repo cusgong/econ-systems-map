@@ -67,7 +67,7 @@ export function hubLegendSamples() {
 }
 
 export function createUI(deps) {
-  const { graph, hubMetrics, scene, categories, cases, loops, descs, version, situation } = deps;
+  const { graph, hubMetrics, scene, modelViewer, categories, cases, loops, descs, version, situation } = deps;
   const catById = new Map(categories.map((c) => [c.id, c]));
   const descById = new Map(descs.map((d) => [d.id, d.desc]));
   const simLevers = deps.simLevers;
@@ -377,6 +377,19 @@ export function createUI(deps) {
     h('span', { class: 'hub-score' }, `${t('인과 허브')} ${hub.score100}/100`),
     h('span', { class: `hub-band hub-band-${hub.band}` }, t(hub.bandKey))));
     b.append(head);
+    // turntable inspector: the map only shows one side, so let the panel show the
+    // whole instrument, auto-rotating. Attached after the panel lands in the DOM;
+    // only rebuilds the model when the selected id changes (spin survives re-renders).
+    if (modelViewer && !state.listMode) {
+      const mv = h('div', { class: 'model-viewer', role: 'img',
+        'aria-label': L(n.name) + ' ' + t('3D 계기 모형') });
+      b.append(mv);
+      requestAnimationFrame(() => {
+        if (mv.isConnected) {
+          modelViewer.attach(mv, n.id, { color: cat.color, cat: n.cat, reducedMotion: reducedMotion() });
+        }
+      });
+    }
     const d = descById.get(n.id);
     if (d) b.append(h('p', { class: 'desc' }, L(d)));
     if (hub.showFallback) {

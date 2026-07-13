@@ -29,39 +29,39 @@ MAX_TOTAL_TRIANGLES = 100_000
 MAX_GLB_BYTES = 3_000_000
 PROOF_MAX_GLB_BYTES = 600_000
 PROOF_TOTAL_TRIANGLES_MIN = 10_600
-PROOF_TOTAL_TRIANGLES_MAX = 13_000
+PROOF_TOTAL_TRIANGLES_MAX = 14_200
 PROOF_HARD_TRIANGLES_MAX = 18_000
 MODEL_TRIANGLE_BANDS = {
     "policy_rate": (2_860, 2_990),
-    "fx": (2_072, 2_472),
-    "oil": (1_800, 2_200),
+    "fx": (2_540, 2_940),
+    "oil": (2_348, 2_748),
     "housing": (1_416, 1_816),
     "gdp": (1_820, 2_220),
-    "risk_sentiment": (1_616, 2_016),
+    "risk_sentiment": (1_736, 2_136),
     "market_rate": (1_808, 2_208),
-    "liquidity": (1_900, 2_300),
+    "liquidity": (2_084, 2_484),
     "credit_spread": (1_676, 2_076),
-    "bank_lending": (1_700, 2_100),
-    "cpi": (1_800, 2_200),
-    "inflation_exp": (1_600, 2_000),
-    "wages": (1_884, 2_284),
+    "bank_lending": (1_860, 2_260),
+    "cpi": (1_644, 2_044),
+    "inflation_exp": (1_596, 1_996),
+    "wages": (2_452, 2_852),
     "exports": (2_640, 2_990),
-    "current_account": (1_884, 2_284),
+    "current_account": (2_060, 2_460),
     "capital_flows": (2_250, 2_650),
-    "fed_rate": (2_350, 2_990),
+    "fed_rate": (2_552, 2_952),
     "global_growth": (1_950, 2_350),
     "consumption": (2_216, 2_616),
     "investment": (2_016, 2_416),
     "employment": (1_808, 2_208),
     "earnings": (1_650, 2_100),
     "defaults": (1_700, 2_150),
-    "stocks": (1_650, 2_050),
+    "stocks": (2_528, 2_928),
     "household_debt": (1_800, 2_300),
     "commodity": (1_400, 1_900),
-    "fiscal": (2_260, 2_660),
-    "geopolitics": (2_200, 2_550),
+    "fiscal": (2_536, 2_936),
+    "geopolitics": (2_188, 2_588),
     "tech": (2_560, 2_960),
-    "consumer_conf": (1_800, 2_200),
+    "consumer_conf": (1_808, 2_208),
 }
 NORMALIZED_RADIUS_MIN = 0.98
 NORMALIZED_RADIUS_MAX = 1.02

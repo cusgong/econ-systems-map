@@ -3,6 +3,7 @@
 
 export const UI_DICT_EN = {
   // shell
+  '3D 계기 모형': '3D instrument model',
   '본문(설명 패널)으로 건너뛰기': 'Skip to the explanation panel',
   '경제 인과관계 지도 · 시스템 사고 훈련장': 'Causal map of the economy · a systems-thinking gym',
   '탐색': 'Explore',

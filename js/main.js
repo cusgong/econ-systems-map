@@ -10,9 +10,10 @@ import { UI_DICT_EN, UI_META } from '../data/strings.js';
 import { buildGraph } from './graph.js';
 import { computeHubMetrics } from './hub-metrics.js';
 import { createScene } from './scene.js';
+import { createModelViewer } from './model-viewer.js';
 import { createUI } from './ui.js';
 
-const APP_VERSION = 'v2.7.0';
+const APP_VERSION = 'v2.8.0';
 
 let fatalShown = false;
 function showFatal() {
@@ -93,8 +94,12 @@ function boot() {
     scene = null;
   }
 
+  const modelViewer = nodeLibraryUrl
+    ? createModelViewer({ libraryUrl: nodeLibraryUrl, categories: CATEGORIES })
+    : null;
+
   const ui = createUI({
-    graph, hubMetrics, scene,
+    graph, hubMetrics, scene, modelViewer,
     categories: CATEGORIES,
     cases: CASES, loops: LOOPS, descs: DESCS, situation: SITUATION,
     simLevers: SIM_LEVERS, simPresets: SIM_PRESETS,

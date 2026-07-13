@@ -46,10 +46,10 @@ def build_market_rate() -> ModelGeometry:
     accent = MeshAssembler()
 
     rail_angle = math.radians(-10.0)
-    for y, z in ((-0.24, 0.04), (0.24, -0.04)):
+    for y, z in ((-0.30, 0.04), (0.30, -0.04)):
         body.add_capsule_x(
-            half_length=0.60,
-            radius=0.08,
+            half_length=0.62,
+            radius=0.135,
             segments=24,
             hemisphere_steps=3,
             location=(0.0, y, z),
@@ -61,14 +61,14 @@ def build_market_rate() -> ModelGeometry:
     # The standards are deepened in Y into full gantry posts that seat on the
     # instrument bed below, so the whole stand gains genuine front-back depth.
     body.add_box(
-        size=(0.20, 0.84, 0.48),
-        location=(-0.64, 0.0, -0.11),
+        size=(0.24, 1.02, 1.02),
+        location=(-0.64, 0.0, 0.10),
         rotation=(0.0, rail_angle, 0.0),
         bevel=True,
     )
     body.add_box(
-        size=(0.20, 0.84, 0.90),
-        location=(0.64, 0.0, 0.02),
+        size=(0.24, 1.02, 1.14),
+        location=(0.64, 0.0, 0.16),
         rotation=(0.0, rail_angle, 0.0),
         bevel=True,
     )
@@ -86,9 +86,10 @@ def build_market_rate() -> ModelGeometry:
         location=(-0.58, -0.23, -0.30),
     )
     # Instrument bed: the chassis the rail stand is bolted to.  It owns the
-    # Blender-Y (front-back) extent that was previously the flat thin axis.
+    # Blender-Y (front-back) extent that was previously the flat thin axis, now
+    # deepened so the whole stand keeps genuine front-back bulk.
     body.add_box(
-        size=(1.42, 0.88, 0.16),
+        size=(1.30, 0.92, 0.16),
         location=(0.0, 0.0, -0.42),
         bevel=True,
     )
@@ -100,8 +101,8 @@ def build_market_rate() -> ModelGeometry:
     )
     for center in sleeve_centers:
         accent.add_cylinder(
-            radius=0.14,
-            depth=0.30,
+            radius=0.185,
+            depth=0.38,
             segments=12,
             location=center,
             rotation=(0.0, _QUARTER_TURN, 0.0),
@@ -110,12 +111,12 @@ def build_market_rate() -> ModelGeometry:
     accent.add_cylinder_between(
         sleeve_centers[0],
         sleeve_centers[1],
-        radius=0.06,
+        radius=0.085,
         segments=12,
         bevel=True,
     )
     accent.add_box(
-        size=(0.14, 0.10, 0.22),
+        size=(0.16, 0.12, 0.24),
         location=(0.12, -0.32, 0.17),
     )
 
@@ -152,9 +153,12 @@ def build_liquidity() -> ModelGeometry:
             minor_segments=6,
             location=(0.0, 0.0, z),
         )
+    # A fuller central manifold column: a wider through-axis so the two edge-on
+    # views (front X-Z and side Y-Z), previously the sparse silhouettes against
+    # the broad top rings, gain a full-height barrel of real diameter.
     body.add_cylinder(
-        radius=0.14,
-        depth=1.05,
+        radius=0.24,
+        depth=1.12,
         segments=16,
         location=(0.0, 0.0, 0.0),
         bevel=True,
@@ -168,25 +172,25 @@ def build_liquidity() -> ModelGeometry:
     )
     for x, y in ((-0.49, 0.18), (0.43, 0.24), (0.10, -0.52)):
         body.add_cylinder_between(
-            (x, y, -0.43),
-            (x, y, 0.43),
-            radius=0.045,
+            (x, y, -0.50),
+            (x, y, 0.50),
+            radius=0.070,
             segments=8,
         )
 
     rotor_origin = (0.0, 0.0, 0.03)
     accent.add_cylinder(
-        radius=0.18,
-        depth=0.16,
+        radius=0.21,
+        depth=0.17,
         segments=12,
         location=rotor_origin,
         bevel=True,
     )
     for index in range(3):
         angle = math.radians(index * 120.0)
-        radius = 0.28
+        radius = 0.30
         accent.add_box(
-            size=(0.54, 0.18, 0.14),
+            size=(0.60, 0.21, 0.15),
             location=(
                 radius * math.cos(angle),
                 radius * math.sin(angle),
@@ -226,7 +230,7 @@ def build_credit_spread() -> ModelGeometry:
     body.add_rounded_box_y(
         width=0.18,
         height=1.00,
-        depth=0.56,
+        depth=0.76,
         radius=0.045,
         corner_segments=2,
         location=(-0.68, 0.03, -0.02),
@@ -259,34 +263,36 @@ def build_credit_spread() -> ModelGeometry:
         bevel=True,
     )
     # Calibration bench: a mounting plate the caliper frame beds into.  It
-    # carries the Blender-Y (front-back) depth that was the flat thin axis.
+    # carries the Blender-Y (front-back) depth that was the flat thin axis and
+    # is deepened in Z into a solid plinth so the side (Y-Z) silhouette, the
+    # weakest view, reads as a bench block rather than a thin shelf.
     body.add_box(
-        size=(1.36, 0.84, 0.14),
-        location=(0.0, 0.0, -0.55),
+        size=(1.36, 0.96, 0.46),
+        location=(0.0, 0.0, -0.50),
         bevel=True,
     )
 
     jaw_origin = (0.40, 0.0, 0.02)
     accent.add_rounded_box_y(
-        width=0.11,
-        height=0.56,
-        depth=0.22,
-        radius=0.028,
+        width=0.13,
+        height=0.66,
+        depth=0.30,
+        radius=0.030,
         corner_segments=2,
         location=(0.40, 0.0, 0.00),
         bevel=True,
     )
     accent.add_rounded_box_y(
-        width=0.18,
-        height=0.10,
-        depth=0.20,
+        width=0.20,
+        height=0.11,
+        depth=0.26,
         radius=0.025,
         corner_segments=2,
-        location=(0.28, 0.0, 0.27),
+        location=(0.28, 0.0, 0.29),
     )
     accent.add_cylinder(
-        radius=0.11,
-        depth=0.26,
+        radius=0.13,
+        depth=0.30,
         segments=12,
         location=(0.40, 0.0, -0.42),
         rotation=(0.0, _QUARTER_TURN, 0.0),
@@ -353,19 +359,27 @@ def build_bank_lending() -> ModelGeometry:
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
+    # Outboard pump-housing cheeks: deep along Blender Y and tall in Z so the
+    # side (Y-Z) silhouette, previously the thin edge-on view of the barrels,
+    # reads as a solid framed housing rather than two overlapping tubes.
+    for x in (-0.62, 0.62):
+        body.add_box(
+            size=(0.18, 1.02, 0.94),
+            location=(x, 0.02, 0.12),
+        )
 
     piston_origin = (0.0, -0.43, 0.08)
     for x in (-0.34, 0.34):
         accent.add_cylinder(
-            radius=0.22,
-            depth=0.10,
+            radius=0.27,
+            depth=0.12,
             segments=14,
             location=(x, -0.46, 0.12),
             rotation=(_QUARTER_TURN, 0.0, 0.0),
             bevel=True,
         )
     accent.add_box(
-        size=(0.86, 0.12, 0.14),
+        size=(0.94, 0.14, 0.18),
         location=(0.0, -0.50, -0.15),
         bevel=True,
     )
@@ -390,10 +404,14 @@ def build_cpi() -> ModelGeometry:
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    drum_center = (0.0, 0.03, 0.02)
+    drum_center = (0.0, 0.10, 0.02)
+    # A deep price-index drum with real barrel length along Blender Y.  The
+    # depth is the front-back (side/top silhouette) axis, so a genuine can here
+    # fills the previously thin side and top views without touching the front
+    # disc that carries the recognizable weighted-sector face.
     body.add_cylinder(
         radius=0.58,
-        depth=0.42,
+        depth=0.74,
         segments=24,
         location=drum_center,
         rotation=(_QUARTER_TURN, 0.0, 0.0),
@@ -403,7 +421,7 @@ def build_cpi() -> ModelGeometry:
         radius=0.64,
         depth=0.13,
         segments=28,
-        location=(0.0, 0.22, 0.02),
+        location=(0.0, 0.44, 0.02),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
@@ -419,7 +437,7 @@ def build_cpi() -> ModelGeometry:
         radius=0.14,
         depth=0.12,
         segments=12,
-        location=(0.0, 0.34, 0.02),
+        location=(0.0, 0.52, 0.02),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
     )
 
@@ -442,14 +460,16 @@ def build_cpi() -> ModelGeometry:
             location=(0.0, -0.24, 0.02),
         )
 
-    body.add_box(size=(1.28, 0.34, 0.13), location=(0.0, 0.08, -0.67))
-    body.add_box(size=(0.14, 0.34, 0.42), location=(-0.57, 0.08, -0.49))
-    body.add_box(size=(0.14, 0.34, 0.34), location=(0.57, 0.08, -0.53))
+    # U-cradle widened deep in Blender Y so the bed reads as a solid saddle
+    # from the top and side, the two silhouettes that were previously thin.
+    body.add_box(size=(1.30, 0.90, 0.15), location=(0.0, 0.08, -0.66))
+    body.add_box(size=(0.16, 0.90, 0.42), location=(-0.57, 0.08, -0.49))
+    body.add_box(size=(0.16, 0.90, 0.34), location=(0.57, 0.08, -0.53))
 
     index_origin = (0.0, -0.31, 0.02)
     accent.add_torus_arc(
         major_radius=0.70,
-        minor_radius=0.065,
+        minor_radius=0.088,
         start_angle=math.radians(-140.0),
         end_angle=math.radians(160.0),
         arc_segments=26,
@@ -509,9 +529,11 @@ def build_inflation_exp() -> ModelGeometry:
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
-    body.add_box(size=(0.98, 0.16, 0.12), location=(0.05, 0.18, -0.59))
-    body.add_box(size=(0.12, 0.16, 0.70), location=(-0.43, 0.18, -0.24))
-    body.add_box(size=(0.12, 0.16, 0.58), location=(0.53, 0.18, -0.18))
+    # Instrument bed: a wide chassis spanning both X and Blender Y so the top
+    # (X-Y) silhouette, previously the sparse view, is filled by a solid plate.
+    body.add_box(size=(1.18, 0.90, 0.17), location=(0.05, 0.10, -0.60))
+    body.add_box(size=(0.12, 0.86, 0.70), location=(-0.43, 0.14, -0.24))
+    body.add_box(size=(0.12, 0.86, 0.58), location=(0.53, 0.14, -0.18))
     for x in (-0.31, 0.47):
         body.add_cylinder_between(
             (x, -0.48, 0.23),

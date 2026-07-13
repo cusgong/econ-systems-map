@@ -50,22 +50,37 @@ def build_risk_sentiment() -> ModelGeometry:
             bevel=z > 0.0,
         )
 
+    # The split yoke gains genuine Blender-Y width from two thick cheek plates
+    # forked to +/-Y.  Each cheek spans the yoke's Z height, so together with
+    # the central gimbal they fill the thin side (Y-Z) and top (X-Y)
+    # silhouettes that made the instrument read flat edge-on, while the open
+    # split reading survives on the front face.
+    for y in (-0.32, 0.32):
+        body.add_rounded_box_y(
+            width=1.18,
+            height=1.24,
+            depth=0.34,
+            radius=0.28,
+            corner_segments=3,
+            location=(0.0, y, 0.0),
+        )
+
     accent = MeshAssembler()
     hinge = (0.0, -0.15, 0.47)
     bob = (0.13, -0.15, -0.32)
-    accent.add_cylinder_between(hinge, bob, radius=0.05, segments=16)
-    accent.add_uv_sphere(0.18, segments=16, rings=6, location=bob, scale=(0.90, 0.70, 1.0))
+    accent.add_cylinder_between(hinge, bob, radius=0.085, segments=16)
+    accent.add_uv_sphere(0.31, segments=16, rings=6, location=bob, scale=(0.92, 0.74, 1.0))
     accent.add_cylinder(
-        0.09,
-        0.20,
+        0.15,
+        0.30,
         segments=12,
         location=hinge,
         rotation=(math.pi * 0.5, 0.0, 0.0),
         bevel=True,
     )
     accent.add_extruded_polygon_y(
-        [(-0.10, -0.06), (0.09, -0.09), (0.14, 0.04), (0.02, 0.14), (-0.12, 0.07)],
-        depth=0.09,
+        [(-0.15, -0.09), (0.14, -0.13), (0.21, 0.06), (0.03, 0.21), (-0.18, 0.10)],
+        depth=0.14,
         location=(0.11, -0.15, -0.53),
         rotation=(0.0, 0.0, math.radians(-8.0)),
     )

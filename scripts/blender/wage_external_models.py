@@ -177,20 +177,32 @@ def build_wages() -> ModelGeometry:
     body = MeshAssembler()
     accent = MeshAssembler()
 
+    # A deep compensation barrel carries the Blender-Y mass so the side (Y-Z)
+    # silhouette reads as a full drum, not a thin disc.  Coaxial bearing collars
+    # on both Y faces extend the barrel without widening the front (X-Z) circle.
     drum_center = (0.0, 0.04, 0.02)
     body.add_cylinder(
         radius=0.56,
-        depth=0.42,
+        depth=0.70,
         segments=24,
         location=drum_center,
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
+    for face_y in (0.45, -0.41):
+        body.add_cylinder(
+            radius=0.31,
+            depth=0.14,
+            segments=18,
+            location=(0.0, face_y, 0.02),
+            rotation=(_QUARTER_TURN, 0.0, 0.0),
+            bevel=True,
+        )
     body.add_cylinder(
-        radius=0.22,
-        depth=0.18,
+        radius=0.20,
+        depth=0.16,
         segments=16,
-        location=(0.0, 0.34, 0.02),
+        location=(0.0, 0.55, 0.02),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
@@ -199,17 +211,17 @@ def build_wages() -> ModelGeometry:
         minor_radius=0.055,
         major_segments=24,
         minor_segments=6,
-        location=(0.0, -0.19, 0.02),
+        location=(0.0, -0.30, 0.02),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
     )
     body.add_box(
-        size=(1.18, 0.80, 0.14),
+        size=(1.18, 0.88, 0.14),
         location=(0.0, 0.03, -0.66),
         bevel=True,
     )
     for x, height in ((-0.47, 0.42), (0.47, 0.34)):
         body.add_box(
-            size=(0.17, 0.34, height),
+            size=(0.17, 0.66, height),
             location=(x, 0.03, -0.48 + height * 0.18),
             bevel=True,
         )
@@ -404,29 +416,38 @@ def build_current_account() -> ModelGeometry:
     body = MeshAssembler()
     accent = MeshAssembler()
 
+    # Deep counter barrels carry the Blender-Y mass so the side (Y-Z) silhouette
+    # reads as full drums rather than thin discs.
     for x, radius, z in ((-0.40, 0.34, 0.06), (0.42, 0.30, -0.02)):
         body.add_cylinder(
             radius=radius,
-            depth=0.80,
+            depth=0.86,
             segments=18,
             location=(x, 0.04, z),
             rotation=(_QUARTER_TURN, 0.0, 0.0),
             bevel=True,
         )
-    body.add_box(size=(0.44, 0.30, 0.18), location=(0.0, 0.17, -0.27))
+    # A tall Y-deep central spine fills the weak side (Y-Z) silhouette by rising
+    # above and below the dials; its narrow X keeps the top (X-Y) footprint from
+    # growing, so the min view catches up to the dominant top view.
     body.add_box(
-        size=(1.10, 0.40, 0.13),
-        location=(0.0, 0.06, -0.52),
+        size=(0.30, 0.84, 1.04),
+        location=(0.0, 0.04, 0.0),
         bevel=True,
     )
     body.add_box(
-        size=(0.16, 0.34, 0.32),
-        location=(-0.54, 0.06, -0.35),
+        size=(1.12, 0.66, 0.16),
+        location=(0.0, 0.04, -0.52),
         bevel=True,
     )
     body.add_box(
-        size=(0.16, 0.34, 0.26),
-        location=(0.55, 0.06, -0.38),
+        size=(0.18, 0.66, 0.42),
+        location=(-0.54, 0.04, -0.29),
+        bevel=True,
+    )
+    body.add_box(
+        size=(0.18, 0.66, 0.36),
+        location=(0.55, 0.04, -0.33),
         bevel=True,
     )
 
@@ -434,27 +455,27 @@ def build_current_account() -> ModelGeometry:
     accent.add_cylinder_between(
         (-0.56, -0.30, 0.03),
         (0.56, -0.30, 0.03),
-        radius=0.040,
+        radius=0.045,
         segments=12,
         bevel=True,
     )
     accent.add_box(
-        size=(0.96, 0.075, 0.090),
+        size=(0.98, 0.10, 0.13),
         location=axle_origin,
         bevel=True,
     )
     accent.add_cylinder(
-        radius=0.145,
-        depth=0.09,
+        radius=0.185,
+        depth=0.13,
         segments=12,
         location=axle_origin,
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
-    for x, radius, z in ((-0.47, 0.150, -0.02), (0.48, 0.125, 0.09)):
+    for x, radius, z in ((-0.47, 0.205, -0.02), (0.48, 0.175, 0.09)):
         accent.add_cylinder(
             radius=radius,
-            depth=0.085,
+            depth=0.12,
             segments=12,
             location=(x, -0.30, z),
             rotation=(_QUARTER_TURN, 0.0, 0.0),
@@ -592,6 +613,9 @@ def build_fed_rate() -> ModelGeometry:
     body = MeshAssembler()
     accent = MeshAssembler()
 
+    # The twelve crown blocks carry the dominant top-view silhouette; their
+    # bevels are the single largest triangle sink, so only three keep the
+    # weighted edge and the freed budget funds the vertical column below.
     governor_z = 0.14
     for index in range(12):
         angle = 2.0 * math.pi * index / 12.0
@@ -604,7 +628,7 @@ def build_fed_rate() -> ModelGeometry:
                 governor_z,
             ),
             rotation=(0.0, 0.0, angle + _QUARTER_TURN),
-            bevel=index < 8,
+            bevel=index < 3,
         )
     _add_annular_band_y(
         body,
@@ -612,54 +636,85 @@ def build_fed_rate() -> ModelGeometry:
         outer_radius=0.68,
         start_angle=math.radians(-165.0),
         end_angle=math.radians(165.0),
-        steps=10,
+        steps=9,
         depth=0.12,
         location=(0.0, 0.0, governor_z),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
+    # Central stacked column: a fat barrel, a governor-plane hub, a base drum,
+    # and a crown cap.  Each stays inside the pedestal top-view radius, so the
+    # weak front (X-Z) and side (Y-Z) views fill symmetrically while the strong
+    # top (X-Y) view barely changes.
     body.add_cylinder(
-        radius=0.13,
-        depth=0.96,
-        segments=16,
-        location=(0.0, 0.0, -0.04),
+        radius=0.29,
+        depth=1.02,
+        segments=12,
+        location=(0.0, 0.0, -0.05),
         bevel=True,
     )
     body.add_cylinder(
-        radius=0.30,
-        depth=0.13,
-        segments=16,
-        location=(0.0, 0.0, -0.57),
-        bevel=False,
+        radius=0.37,
+        depth=0.26,
+        segments=14,
+        location=(0.0, 0.0, governor_z),
+        bevel=True,
+    )
+    body.add_cylinder(
+        radius=0.40,
+        depth=0.32,
+        segments=14,
+        location=(0.0, 0.0, -0.52),
+        bevel=True,
+    )
+    body.add_cylinder(
+        radius=0.23,
+        depth=0.16,
+        segments=12,
+        location=(0.0, 0.0, 0.47),
+        bevel=True,
     )
     for angle in (math.radians(25.0), math.radians(145.0), math.radians(265.0)):
         body.add_cylinder_between(
-            (0.16 * math.cos(angle), 0.16 * math.sin(angle), -0.23),
+            (0.22 * math.cos(angle), 0.22 * math.sin(angle), -0.23),
             (0.55 * math.cos(angle), 0.55 * math.sin(angle), governor_z),
             radius=0.035,
             segments=8,
             bevel=False,
         )
 
+    # The orbital carriage stays a single weighted arm, but the weight grows in
+    # its X-Y disc (never its thin Z depth) and a mid-arm slider collar is added
+    # so the accent area recovers its share after the column bulked the body.
+    # The orbital carriage stays a single weighted arm.  Area is recovered from
+    # a wide arm and a mid slider collar (both inside the crown radius), so the
+    # bounding box is not pushed outward and the column keeps its silhouette fill.
     orbit_origin = (0.0, 0.0, governor_z)
     accent.add_box(
-        size=(0.76, 0.10, 0.085),
-        location=(0.32, 0.0, governor_z),
+        size=(0.80, 0.24, 0.11),
+        location=(0.33, 0.0, governor_z),
         bevel=True,
     )
     accent.add_cylinder(
-        radius=0.16,
+        radius=0.185,
+        depth=0.18,
+        segments=12,
+        location=(0.40, 0.0, governor_z),
+        bevel=True,
+    )
+    accent.add_cylinder(
+        radius=0.225,
         depth=0.18,
         segments=14,
-        location=(0.69, 0.0, governor_z),
+        location=(0.66, 0.0, governor_z),
         bevel=True,
     )
     accent.add_torus_arc(
-        major_radius=0.69,
-        minor_radius=0.045,
-        start_angle=math.radians(-19.0),
-        end_angle=math.radians(20.0),
-        arc_segments=4,
+        major_radius=0.66,
+        minor_radius=0.05,
+        start_angle=math.radians(-27.0),
+        end_angle=math.radians(28.0),
+        arc_segments=5,
         minor_segments=6,
         location=orbit_origin,
         bevel=True,

@@ -122,9 +122,23 @@ def _probe(node_id: str) -> dict:
     accent_ext = accent["extent"]
     thin = SPECS.ACCENT_THIN_AXIS_CONTRACTS.get(node_id)
 
+    # 3-view silhouette occupancy (the real "reads flat from an angle" metric):
+    # a balanced instrument fills a similar area from front/side/top.
+    tri_verts = body["triangleVertices"] + accent["triangleVertices"]
+    occ = {
+        view: len(VALID._projected_occupancy_mask(tri_verts, axes))
+        for view, axes in VALID.OCCUPANCY_VIEW_AXES.items()
+    }
+    occ_max = max(occ.values()) or 1
+    occ_ratio = min(occ.values()) / occ_max
+    weakest = min(occ, key=occ.get)
+
     return {
         "id": node_id,
         "minmax_ratio": round(ratio, 4),
+        "occupancy": occ,
+        "occ_ratio": round(occ_ratio, 4),
+        "weakest_view": weakest,
         "extent_xyz": [round(float(v), 4) for v in ext],
         "triangles": tri,
         "band": band,

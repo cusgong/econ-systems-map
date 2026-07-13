@@ -58,11 +58,14 @@ def build_consumption() -> ModelGeometry:
         location=flywheel_center,
         rotation=(_QUARTER_TURN, 0.0, 0.0),
     )
+    # The former shallow coin face is deepened into a full inertia drum along
+    # Blender Y (the weak side axis).  A wide, Z-spanning barrel is what fills
+    # the Y-Z silhouette; the front still reads as a flywheel inside its rim.
     body.add_cylinder(
-        radius=0.43,
-        depth=0.17,
+        radius=0.48,
+        depth=0.92,
         segments=24,
-        location=(0.0, 0.08, 0.03),
+        location=(0.0, 0.05, 0.05),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
@@ -122,10 +125,10 @@ def build_consumption() -> ModelGeometry:
     body.add_rounded_box_y(
         width=1.18,
         height=0.14,
-        depth=0.52,
+        depth=0.80,
         radius=0.035,
         corner_segments=2,
-        location=(-0.02, 0.13, -0.68),
+        location=(-0.02, 0.05, -0.68),
         bevel=True,
     )
     body.add_rounded_box_y(
@@ -160,15 +163,15 @@ def build_consumption() -> ModelGeometry:
             end_angle=clutch_angle + math.radians(32.0),
             steps=3,
         ),
-        depth=0.16,
-        location=(0.0, -0.19, vane_origin[2]),
+        depth=0.26,
+        location=(0.0, -0.24, vane_origin[2]),
         bevel=True,
     )
     accent.add_cylinder(
-        radius=0.14,
-        depth=0.24,
+        radius=0.165,
+        depth=0.54,
         segments=12,
-        location=vane_origin,
+        location=(0.0, -0.20, vane_origin[2]),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
@@ -717,11 +720,11 @@ def build_stocks() -> ModelGeometry:
 
     body.add_rounded_box_y(
         width=1.26,
-        height=0.16,
-        depth=0.74,
+        height=0.18,
+        depth=0.84,
         radius=0.045,
         corner_segments=2,
-        location=(0.0, 0.02, -0.55),
+        location=(0.0, 0.0, -0.55),
         bevel=True,
     )
     for y in (-0.27, 0.27):
@@ -767,34 +770,58 @@ def build_stocks() -> ModelGeometry:
             location=(x, y, 0.08),
         )
 
+    # A deep captive housing frame wraps the whole order book.  Extruded far
+    # along Blender Y (the weak side axis), its vertical standards span the full
+    # Z-height, so the Y-Z and X-Y silhouettes read as solid bulk while the
+    # front only gains a thin surrounding bezel.  This is the mass that stops
+    # the two thin pin rows from reading flat edge-on.
+    # Two deep captive standards rise at the outer pin columns.  Because they
+    # sit behind existing plungers in the front (X-Z) view they barely change
+    # the recognizable face, but their large Blender-Y depth spanning the full
+    # Z-height is exactly the bulk that fills the weak Y-Z (side) and X-Y (top)
+    # silhouettes so the two thin pin rows no longer read flat edge-on.
+    for side_x in (-0.49, 0.49):
+        body.add_rounded_box_y(
+            width=0.17,
+            height=1.10,
+            depth=0.82,
+            radius=0.045,
+            corner_segments=2,
+            location=(side_x, 0.0, -0.02),
+            bevel=True,
+        )
     spindle_origin = (0.06, -0.36, 0.10)
-    accent.add_cylinder(
-        radius=0.064,
-        depth=1.06,
-        segments=12,
-        location=(spindle_origin[0], spindle_origin[1], 0.10),
-        bevel=True,
-    )
-    accent.add_cylinder(
-        radius=0.145,
-        depth=0.11,
-        segments=12,
-        location=spindle_origin,
-        bevel=True,
-    )
+    # A genuine two-rail price spindle: a forward and a rear rail carried by one
+    # traveling crosshead.  The second rail keeps the accent surface area in
+    # proportion to the now-deeper body so the accent ratio stays in band.
+    for rail_y in (-0.36, 0.30):
+        accent.add_cylinder(
+            radius=0.072,
+            depth=1.06,
+            segments=12,
+            location=(spindle_origin[0], rail_y, 0.10),
+            bevel=True,
+        )
+        accent.add_cylinder(
+            radius=0.150,
+            depth=0.12,
+            segments=12,
+            location=(spindle_origin[0], rail_y, spindle_origin[2]),
+            bevel=True,
+        )
     accent.add_rounded_box_y(
-        width=0.20,
-        height=0.13,
-        depth=0.68,
+        width=0.22,
+        height=0.15,
+        depth=0.80,
         radius=0.030,
         corner_segments=1,
-        location=(spindle_origin[0], -0.02, spindle_origin[2]),
+        location=(spindle_origin[0], -0.03, spindle_origin[2]),
         bevel=True,
     )
     for y in (-0.27, 0.27):
         accent.add_cylinder(
-            radius=0.095,
-            depth=0.10,
+            radius=0.100,
+            depth=0.12,
             segments=8,
             location=(spindle_origin[0], y, spindle_origin[2]),
         )
