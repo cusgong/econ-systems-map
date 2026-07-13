@@ -434,36 +434,58 @@ button { font-family: inherit; }
 }
 .desc { color: var(--ink-2); font-size: 13.5px; margin: 4px 0 10px; }
 
-/* panel turntable inspector: the selected instrument, large and auto-rotating */
+/* panel turntable inspector: the selected instrument, large and auto-rotating.
+   HUD instrument-readout styling — category-tinted glow, corner brackets, a
+   vignette that focuses the eye, and a soft screen sheen. */
 .model-viewer {
+  --mv-accent: var(--cy);
   position: relative;
-  width: min(100%, 220px);
+  width: min(100%, 216px);
   aspect-ratio: 1 / 1;
-  margin: 10px auto 8px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
+  margin: 12px auto 8px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--mv-accent) 26%, var(--line));
   background:
-    radial-gradient(120% 92% at 50% 22%, rgba(34,66,120,.30), transparent 68%),
+    radial-gradient(125% 78% at 50% 14%, color-mix(in srgb, var(--mv-accent) 22%, transparent), transparent 60%),
+    radial-gradient(140% 120% at 50% 118%, rgba(3,8,20,.72), transparent 52%),
+    linear-gradient(180deg, rgba(120,180,255,.05), transparent 22%),
     var(--panel-solid);
+  box-shadow:
+    inset 0 0 34px rgba(3,8,18,.66),
+    inset 0 1px 0 rgba(160,200,255,.08),
+    0 6px 20px rgba(2,6,16,.45);
   overflow: hidden;
   touch-action: none; /* OrbitControls owns drag + pinch */
 }
-.model-viewer::after {
-  content: "⟲";
-  position: absolute; right: 10px; bottom: 7px;
-  font-family: var(--mono); font-size: 12px; letter-spacing: .04em;
-  color: var(--ink-3); opacity: .7; pointer-events: none;
-}
+/* HUD corner brackets */
 .model-viewer::before {
   content: "";
-  position: absolute; inset: 0; border-radius: 12px;
-  box-shadow: inset 0 0 26px rgba(84,224,255,.10);
+  position: absolute; inset: 9px;
   pointer-events: none;
+  z-index: 2;
+  opacity: .6;
+  --bk: color-mix(in srgb, var(--mv-accent) 55%, #d4ecff);
+  background:
+    linear-gradient(var(--bk),var(--bk)) left 0 top 0/13px 1.5px no-repeat,
+    linear-gradient(var(--bk),var(--bk)) left 0 top 0/1.5px 13px no-repeat,
+    linear-gradient(var(--bk),var(--bk)) right 0 top 0/13px 1.5px no-repeat,
+    linear-gradient(var(--bk),var(--bk)) right 0 top 0/1.5px 13px no-repeat,
+    linear-gradient(var(--bk),var(--bk)) left 0 bottom 0/13px 1.5px no-repeat,
+    linear-gradient(var(--bk),var(--bk)) left 0 bottom 0/1.5px 13px no-repeat,
+    linear-gradient(var(--bk),var(--bk)) right 0 bottom 0/13px 1.5px no-repeat,
+    linear-gradient(var(--bk),var(--bk)) right 0 bottom 0/1.5px 13px no-repeat;
 }
-.model-viewer-canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+.model-viewer::after {
+  content: "⟲ 360°";
+  position: absolute; right: 10px; bottom: 7px; z-index: 2;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .08em;
+  color: color-mix(in srgb, var(--mv-accent) 45%, var(--ink-3));
+  opacity: .72; pointer-events: none;
+}
+.model-viewer-canvas { display: block; width: 100%; height: 100%; cursor: grab; position: relative; z-index: 0; }
 .model-viewer-canvas:active { cursor: grabbing; }
 .model-viewer.mv-failed { display: none; }
-@media (max-width: 900px) { .model-viewer { width: min(100%, 200px); } }
+@media (max-width: 900px) { .model-viewer { width: min(100%, 196px); } }
 
 .seg {
   display: inline-flex;

@@ -12,6 +12,23 @@ const BODY_PARAMS = { color: '#3a4654', metalness: 0.76, roughness: 0.32 };
 const AUTO_ROTATE_SPEED = 2.2; // deg-equivalent OrbitControls units
 const RESUME_AUTOROTATE_MS = 2600;
 
+// soft round sprite for the ground pad (same idea as the map's glow sprite)
+function makeGlowTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, 'rgba(255,255,255,0.85)');
+  g.addColorStop(0.35, 'rgba(255,255,255,0.28)');
+  g.addColorStop(0.7, 'rgba(255,255,255,0.06)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 export function createModelViewer({ libraryUrl, categories }) {
   const categoryColor = new Map((categories || []).map((c) => [c.id, c.color]));
   let renderer = null;
@@ -19,6 +36,8 @@ export function createModelViewer({ libraryUrl, categories }) {
   let camera = null;
   let controls = null;
   let pivot = null;
+  let rimLight = null;
+  let groundPad = null;
   let envTexture = null;
   let libraryPromise = null;
   let currentId = null;
@@ -58,9 +77,22 @@ export function createModelViewer({ libraryUrl, categories }) {
     const key = new THREE.DirectionalLight(0xf2f5ff, 1.5);
     key.position.set(6, 9, 7);
     scene.add(key);
-    const rim = new THREE.DirectionalLight(0x74a0e0, 0.85);
-    rim.position.set(-7, 4, -6);
-    scene.add(rim);
+    rimLight = new THREE.DirectionalLight(0x74a0e0, 0.9);
+    rimLight.position.set(-7, 4, -6);
+    scene.add(rimLight);
+
+    // glowing platform under the instrument: grounds it instead of floating in
+    // void, and carries the category colour. Laid flat, seen at a shallow angle.
+    groundPad = new THREE.Mesh(
+      new THREE.CircleGeometry(2.15, 48),
+      new THREE.MeshBasicMaterial({
+        map: makeGlowTexture(), color: 0x54e0ff, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
+      }),
+    );
+    groundPad.rotation.x = -Math.PI / 2;
+    groundPad.position.y = -1.2;
+    scene.add(groundPad);
 
     camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
     camera.position.set(0, 1.1, 5.2);
@@ -157,12 +189,25 @@ export function createModelViewer({ libraryUrl, categories }) {
     const wrap = new THREE.Group();
     // normalize to a stable on-screen size; the square viewport is the tighter
     // constraint (equal H/W), so leave a little margin around the instrument
-    wrap.scale.setScalar(1.42 / sphere.radius);
+    const scale = 1.42 / sphere.radius;
+    wrap.scale.setScalar(scale);
     wrap.add(root);
     pivot.add(wrap);
     controls.target.set(0, 0, 0);
     camera.position.set(0, 1.15, 5.2);
     controls.update();
+    // seat the glow pad just under the model's base
+    const bottom = (box.min.y - sphere.center.y) * scale;
+    if (groundPad) groundPad.position.y = bottom - 0.06;
+  }
+
+  function applyAccent(color) {
+    const accent = new THREE.Color(color);
+    if (rimLight) rimLight.color.copy(accent).lerp(new THREE.Color(0x9fc4ff), 0.35);
+    if (groundPad) {
+      groundPad.material.color.copy(accent);
+      groundPad.material.opacity = 0.6;
+    }
   }
 
   async function swapModel(nodeId, color) {
@@ -188,6 +233,7 @@ export function createModelViewer({ libraryUrl, categories }) {
     clone.scale.set(1, 1, 1);
     styleModel(clone, color);
     frameModel(clone);
+    applyAccent(color);
     container?.classList.remove('mv-failed');
     container?.classList.add('mv-ready');
   }
@@ -220,6 +266,11 @@ export function createModelViewer({ libraryUrl, categories }) {
     resizeObserver?.disconnect();
     renderer?.setAnimationLoop(null);
     disposeCurrent();
+    if (groundPad) {
+      groundPad.geometry.dispose();
+      groundPad.material.map?.dispose();
+      groundPad.material.dispose();
+    }
     envTexture?.dispose();
     controls?.dispose();
     renderer?.dispose();

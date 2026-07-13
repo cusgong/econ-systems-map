@@ -382,6 +382,7 @@ export function createUI(deps) {
     // only rebuilds the model when the selected id changes (spin survives re-renders).
     if (modelViewer && !state.listMode) {
       const mv = h('div', { class: 'model-viewer', role: 'img',
+        style: '--mv-accent:' + cat.color,
         'aria-label': L(n.name) + ' ' + t('3D 계기 모형') });
       b.append(mv);
       requestAnimationFrame(() => {
