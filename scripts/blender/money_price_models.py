@@ -205,7 +205,7 @@ def build_liquidity() -> ModelGeometry:
 
 
 def build_credit_spread() -> ModelGeometry:
-    """Build two unequal bars with a gap bridged by a caliper double-arrow."""
+    """Build two unequal bars with a gap bridged by a bold double-arrow gauge."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
@@ -236,40 +236,38 @@ def build_credit_spread() -> ModelGeometry:
             bevel=True,
         )
 
-    bridge_origin = (0.0, 0.0, 0.18)
-    # Caliper double-arrow bridging the gap, held flat on Blender Y so it reads
-    # as a thin measuring gauge laid across the two bar faces.
+    bridge_origin = (0.0, 0.0, 0.04)
+    # Bold double-headed arrow bridging the whole gap: one thick shaft plus a
+    # large triangular head at each end.  Nominal tips sit at x = -/+0.36:
+    # the 0.035 precision bevel pulls a sharp tip back about 0.047, so the
+    # rendered tip lands at x = -/+0.313, embedded 0.013 into each bar's
+    # inner face (x = -/+0.30), and the contact reads sealed.  Centered at z = 0.04 the tips press the short
+    # bar's face 0.10 below its rim (face top z = 0.14), the natural
+    # spread-measuring height.
     accent.add_box(
-        size=(0.62, 0.14, 0.19),
-        location=(0.0, 0.0, 0.18),
+        size=(0.24, 0.34, 0.36),
+        location=(0.0, 0.0, 0.04),
         bevel=True,
     )
-    arrow = 0.19
+    # Arrowheads: 0.26 long, 0.64 tall, clearly wider than the shaft.
     accent.add_extruded_polygon_y(
-        [(-0.30, 0.18), (-0.30 + arrow, 0.18 + arrow), (-0.30 + arrow, 0.18 - arrow)],
-        depth=0.14,
+        [(-0.36, 0.04), (-0.09, 0.36), (-0.09, -0.28)],
+        depth=0.34,
         bevel=True,
     )
     accent.add_extruded_polygon_y(
-        [(0.30, 0.18), (0.30 - arrow, 0.18 + arrow), (0.30 - arrow, 0.18 - arrow)],
-        depth=0.14,
+        [(0.36, 0.04), (0.09, 0.36), (0.09, -0.28)],
+        depth=0.34,
         bevel=True,
     )
-    # Vertical caliper jaws riding each bar's inner face define the span ends.
-    for x in (-0.30, 0.30):
-        accent.add_box(
-            size=(0.12, 0.15, 0.66),
-            location=(x, 0.0, 0.18),
-            bevel=True,
-        )
 
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:two unequal bars split by a gap spanned by a caliper arrow;"
-            "side:tall seated columns behind one flat gauge bridge;"
-            "top:separated bar blocks joined by a thin cross gauge"
+            "front:two unequal bars split by a gap bridged by one bold double arrow;"
+            "side:tall seated columns crossed by a thick gauge beam;"
+            "top:separated bar blocks joined by a bold cross beam"
         ),
         body_detail="two unequal seated bars with a measured gap between them",
         accent_pivot="moving jaw slide center; translate along glTF X / Blender X",

@@ -13,7 +13,7 @@ import { createScene } from './scene.js';
 import { createModelViewer } from './model-viewer.js';
 import { createUI } from './ui.js';
 
-const APP_VERSION = 'v2.9.0';
+const APP_VERSION = 'v2.10.0';
 
 let fatalShown = false;
 function showFatal() {

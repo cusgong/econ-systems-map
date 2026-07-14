@@ -443,17 +443,20 @@ def _policy_rate_geometry() -> tuple[MeshAssembler, MeshAssembler]:
         front_y=-0.82,
         segments=40,
     )
+    # The needle rides IN FRONT of the raised bezel collar (collar front is
+    # y=-0.82) so it reads from any angle instead of hiding inside the ring,
+    # and it is enlarged ~40% so the dial reads as a gauge at a glance.
     needle = [
-        (-0.075, -0.08),
-        (-0.062, 0.42),
-        (-0.13, 0.40),
-        (0.0, 0.64),
-        (0.13, 0.40),
-        (0.062, 0.42),
-        (0.075, -0.08),
-        (0.0, -0.19),
+        (-0.105, -0.11),
+        (-0.087, 0.47),
+        (-0.185, 0.44),
+        (0.0, 0.72),
+        (0.185, 0.44),
+        (0.087, 0.47),
+        (0.105, -0.11),
+        (0.0, -0.26),
     ]
-    accent.add_extruded_polygon_y(needle, back_y=-0.518, front_y=-0.565)
+    accent.add_extruded_polygon_y(needle, back_y=-0.84, front_y=-0.91)
     _normalise_assemblers(body, accent)
     return body, accent
 

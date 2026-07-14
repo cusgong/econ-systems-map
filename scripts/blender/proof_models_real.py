@@ -14,80 +14,72 @@ from hard_surface import MeshAssembler, ModelGeometry
 
 _QUARTER_TURN = math.pi * 0.5
 def build_housing() -> ModelGeometry:
-    """Build an asymmetric portal-frame load path, not a literal house.
+    """Build an unmistakable gabled house on a ground plinth.
 
-    Three chamfered portal frames step through depth above one foundation beam.
-    A single knee brace and an offset transfer beam make the structure read as
-    engineered framing instead of a stack of appliance-like slabs.  Every
-    visible portal, beam, and gusset rim uses the common precision bevel.
+    Solid walls carry a dark eave fascia band and, above it, the
+    category-coloured gable-roof prism (the accent crown).  A chimney with a
+    cap breaks the ridge silhouette, and the front face carries a recessed
+    door inside a proud frame plus one crossbar window, so the model reads
+    "a house" at a glance from the 3/4 turntable camera.  The dark fascia
+    both keeps the accent area inside the 0.10..0.20 contract and swallows
+    the wall-top corners so nothing pokes through the roof slopes.
     """
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    portals = (
-        # outer width/height, inner width/height, depth, x/y/z offset
-        (1.42, 1.24, 1.14, 0.90, 0.24, -0.06, 0.34, 0.02),
-        (1.24, 1.08, 0.96, 0.76, 0.22, 0.04, 0.00, 0.03),
-        (1.02, 0.91, 0.76, 0.63, 0.20, 0.15, -0.38, 0.06),
+    # Ground plinth the house stands on (also the top-view footprint).
+    body.add_box(size=(2.00, 1.52, 0.20), location=(0.0, 0.0, -0.71), bevel=True)
+    # Solid walls, sunk 0.02 into the plinth.
+    body.add_box(size=(1.44, 1.04, 0.92), location=(0.0, 0.0, -0.17), bevel=True)
+    # Dark eave fascia band between the walls and the coloured roof.
+    body.add_box(size=(1.52, 1.10, 0.10), location=(0.0, 0.0, 0.32), bevel=True)
+    # Chimney and cap on the right roof slope, rising past the ridge.
+    body.add_box(size=(0.20, 0.20, 0.46), location=(0.40, 0.14, 0.64), bevel=True)
+    body.add_box(size=(0.28, 0.28, 0.07), location=(0.40, 0.14, 0.895), bevel=True)
+    # Recessed front door: proud frame ring with a set-back panel.
+    body.add_rounded_rect_ring_y(
+        outer_width=0.40,
+        outer_height=0.68,
+        inner_width=0.28,
+        inner_height=0.56,
+        depth=0.16,
+        outer_radius=0.05,
+        inner_radius=0.03,
+        corner_segments=1,
+        location=(-0.38, -0.52, -0.28),
+        bevel=True,
     )
-    for outer_w, outer_h, inner_w, inner_h, depth, x, y, z in portals:
-        body.add_rounded_rect_ring_y(
-            outer_width=outer_w,
-            outer_height=outer_h,
-            inner_width=inner_w,
-            inner_height=inner_h,
-            depth=depth,
-            outer_radius=0.10,
-            inner_radius=0.07,
-            corner_segments=1,
-            location=(x, y, z),
-            bevel=True,
-        )
+    body.add_box(size=(0.26, 0.12, 0.54), location=(-0.38, -0.49, -0.30), bevel=True)
+    # One front window: proud frame ring with recessed crossbar mullions.
+    body.add_rounded_rect_ring_y(
+        outer_width=0.46,
+        outer_height=0.46,
+        inner_width=0.32,
+        inner_height=0.32,
+        depth=0.14,
+        outer_radius=0.05,
+        inner_radius=0.03,
+        corner_segments=1,
+        location=(0.34, -0.52, -0.10),
+        bevel=True,
+    )
+    # The slim crossbars sit below the clamped-bevel thickness floor, so they
+    # are intentionally unbeveled (same policy as buried tie details elsewhere).
+    body.add_box(size=(0.40, 0.10, 0.08), location=(0.34, -0.50, -0.10))
+    body.add_box(size=(0.08, 0.10, 0.40), location=(0.34, -0.50, -0.10))
+    # Doorstep in front of the recessed door.
+    body.add_box(size=(0.52, 0.30, 0.14), location=(-0.38, -0.57, -0.55), bevel=True)
+    # Shutter panels on both side walls (side-view detail).
+    body.add_box(size=(0.10, 0.44, 0.36), location=(0.70, 0.05, -0.08), bevel=True)
+    body.add_box(size=(0.10, 0.44, 0.36), location=(-0.70, 0.05, -0.08), bevel=True)
 
-    # One foundation beam replaces the previous noisy stack of floor slabs.
-    body.add_box(
-        size=(1.38, 0.46, 0.13),
-        location=(-0.04, 0.13, -0.58),
-        bevel=True,
-    )
-    # The exposed triangular knee plate is a hard-surface gusset and is fully
-    # tagged.  The slim diagonal cylinder behind it is a curved internal tie;
-    # both ends are buried in the frame, so it intentionally has no cap bevel.
-    body.add_extruded_polygon_y(
-        [(-0.58, -0.49), (-0.36, -0.49), (-0.25, -0.08), (-0.39, -0.08)],
-        depth=0.12,
-        location=(0.0, -0.22, 0.0),
-        bevel=True,
-    )
-    body.add_cylinder_between(
-        (-0.42, -0.12, -0.43),
-        (-0.30, -0.12, -0.05),
-        radius=0.045,
-        segments=10,
-    )
-
-    upper_plate_origin = (0.19, -0.18, 0.61)
-    accent.add_rounded_box_y(
-        width=1.14,
-        height=0.14,
-        depth=0.40,
-        radius=0.035,
-        corner_segments=2,
-        location=upper_plate_origin,
-        bevel=True,
-    )
+    # Category-coloured gable roof: a triangular prism seated 0.02 into the
+    # fascia, inset from the fascia rim so no faces are coplanar.
+    roof_centroid = (0.0, 0.0, 0.49)
     accent.add_extruded_polygon_y(
-        [(0.30, 0.48), (0.55, 0.48), (0.66, 0.60), (0.47, 0.60)],
-        depth=0.28,
-        location=(0.0, -0.18, 0.0),
-        bevel=True,
-    )
-    accent.add_cylinder_between(
-        (-0.31, -0.39, 0.57),
-        (-0.31, 0.00, 0.57),
-        radius=0.065,
-        segments=10,
+        [(-0.74, 0.35), (0.74, 0.35), (0.0, 0.77)],
+        depth=1.06,
         bevel=True,
     )
 
@@ -95,13 +87,16 @@ def build_housing() -> ModelGeometry:
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:three offset portal frames with one knee brace;"
-            "side:stepped frame depths and cantilever transfer beam;"
-            "top:asymmetric beam overhang with transverse load pin"
+            "front:gabled house facade with recessed door, crossbar window, and chimney past the ridge;"
+            "side:pitched roof over deep walls and eave fascia on a ground plinth;"
+            "top:roof ridge, chimney cap, and doorstep over a rectangular base slab"
         ),
-        body_detail="three chamfered portal frames, foundation beam, and knee brace",
+        body_detail=(
+            "ground plinth, solid walls, eave fascia, chimney with cap, "
+            "recessed door, crossbar window, doorstep, and side shutters"
+        ),
         accent_pivot="offset transfer-beam center; translate local Y",
-        accent_origin=upper_plate_origin,
+        accent_origin=roof_centroid,
     )
 
 

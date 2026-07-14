@@ -284,33 +284,34 @@ def build_current_account() -> ModelGeometry:
 
     # A heavy deep base anchors the instrument and supplies the Y mass.
     body.add_box(
-        size=(0.66, 1.26, 0.18),
-        location=(0.0, 0.0, -0.86),
+        size=(0.72, 1.40, 0.20),
+        location=(0.0, 0.0, -0.88),
         bevel=True,
     )
-    # Central upright post.
+    # Central upright post, thickened so the frame reads from distance.
     body.add_box(
-        size=(0.24, 0.62, 1.36),
+        size=(0.30, 0.66, 1.42),
         location=(0.0, 0.0, -0.10),
         bevel=True,
     )
-    # Horizontal balance beam across the top.
+    # Heavy horizontal balance beam across the top.
     beam_z = 0.58
     body.add_box(
-        size=(1.44, 0.52, 0.14),
+        size=(1.58, 0.56, 0.20),
         location=(0.0, 0.0, beam_z),
         bevel=True,
     )
-    # Two unequal hanging pans (short drums, face up).  Left sits lower/larger.
+    # Two large, visibly unequal hanging pans (short drums, face up).  Left
+    # sits lower and larger: the heavy side of the balance.
     pan_specs = (
-        (-0.58, 0.34, -0.16, 0.14),
-        (0.58, 0.28, 0.10, 0.12),
+        (-0.60, 0.51, -0.20, 0.16),
+        (0.60, 0.40, 0.12, 0.13),
     )
     for x, radius, pan_z, pan_depth in pan_specs:
         body.add_cylinder_between(
-            (x, 0.0, beam_z - 0.06),
+            (x, 0.0, beam_z - 0.08),
             (x, 0.0, pan_z + pan_depth * 0.5),
-            radius=0.03,
+            radius=0.045,
             segments=8,
         )
         body.add_cylinder(
@@ -321,13 +322,13 @@ def build_current_account() -> ModelGeometry:
             bevel=True,
         )
 
-    # The reading element: a colored index disc and a spade pointer at the
-    # fulcrum, both flat and thin on Y; the pointer tilts (rotate about Blender
+    # The reading element: a colored index disc and a bold flat spade needle
+    # at the fulcrum, both thin on Y; the needle tilts (rotate about Blender
     # -Y) to show which way the balance leans.
     fulcrum = (0.0, 0.0, beam_z)
     accent.add_cylinder(
-        radius=0.33,
-        depth=0.12,
+        radius=0.36,
+        depth=0.13,
         segments=28,
         location=fulcrum,
         rotation=_LAY_ALONG_Y,
@@ -335,12 +336,12 @@ def build_current_account() -> ModelGeometry:
     )
     accent.add_extruded_polygon_y(
         _pointer_needle_points_xz(
-            half_width=0.08,
-            shoulder_z=0.32,
-            tip_z=0.64,
-            base_z=-0.13,
+            half_width=0.13,
+            shoulder_z=0.40,
+            tip_z=0.80,
+            base_z=-0.16,
         ),
-        depth=0.10,
+        depth=0.12,
         location=fulcrum,
         bevel=True,
     )
@@ -349,11 +350,11 @@ def build_current_account() -> ModelGeometry:
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:a level beam on a post with two unequal pans and a center pointer;"
-            "side:deep base and post behind a thin fulcrum dial and pointer;"
-            "top:beam and base footprint with two offset pan discs"
+            "front:a thick beam on a post with two large unequal pans and a bold fulcrum needle;"
+            "side:deep base and post behind a thin fulcrum dial and flat needle;"
+            "top:wide beam and base footprint with two big offset pan discs"
         ),
-        body_detail="deep base, upright post, balance beam, and two unequal hanging pans",
+        body_detail="deep base, thick upright post, heavy balance beam, and two large unequal hanging pans",
         accent_pivot="bilateral balance axle; glTF Z rotation is Blender -Y",
         accent_origin=fulcrum,
     )
@@ -369,12 +370,12 @@ def build_capital_flows() -> ModelGeometry:
     # frustum walls with a colored-free dark rim torus at the mouth.
     _add_conical_wall_z(
         body,
-        top_outer=0.70,
-        top_inner=0.60,
+        top_outer=0.78,
+        top_inner=0.67,
         bottom_outer=0.24,
         bottom_inner=0.16,
-        z_top=0.56,
-        z_bottom=-0.16,
+        z_top=0.52,
+        z_bottom=-0.18,
         segments=28,
         bevel=True,
     )
@@ -384,17 +385,17 @@ def build_capital_flows() -> ModelGeometry:
         top_inner=0.16,
         bottom_outer=0.205,
         bottom_inner=0.13,
-        z_top=-0.16,
+        z_top=-0.18,
         z_bottom=-0.86,
         segments=24,
         bevel=False,
     )
     body.add_torus(
-        major_radius=0.66,
-        minor_radius=0.06,
+        major_radius=0.74,
+        minor_radius=0.07,
         major_segments=30,
         minor_segments=6,
-        location=(0.0, 0.0, 0.56),
+        location=(0.0, 0.0, 0.52),
     )
     # A collar ring at the spout base grounds the throat.
     body.add_torus(
@@ -404,25 +405,34 @@ def build_capital_flows() -> ModelGeometry:
         minor_segments=6,
         location=(0.0, 0.0, -0.86),
     )
+    # A catch basin under the spout receives the inflow and widens the base.
+    body.add_cylinder(
+        radius=0.58,
+        depth=0.18,
+        segments=24,
+        location=(0.0, 0.0, -0.96),
+        bevel=False,
+    )
 
-    # Three inflow chevrons above the mouth, flat and thin on Y, pointing
-    # down-and-inward; they translate forward (Blender -Y) as capital arrives.
-    chevron_origin = (0.0, 0.0, 0.74)
+    # Three big inflow chevrons hovering clearly ABOVE the mouth, flat and
+    # thin on Y, diving down-and-inward; they translate forward (Blender -Y)
+    # as capital arrives.
+    chevron_origin = (0.0, 0.0, 1.06)
     chevron_specs = (
-        (-0.44, 0.02, -math.radians(24.0)),
-        (0.0, 0.14, 0.0),
-        (0.44, 0.02, math.radians(24.0)),
+        (-0.50, 1.04, -math.radians(24.0)),
+        (0.0, 1.18, 0.0),
+        (0.50, 1.04, math.radians(24.0)),
     )
     for x, z, tilt in chevron_specs:
         accent.add_extruded_polygon_y(
             _vertical_arrow_points_xz(
                 tail_z=0.42,
-                shaft_half=0.105,
-                head_z=0.04,
-                head_half=0.24,
-                tip_z=-0.28,
+                shaft_half=0.175,
+                head_z=0.02,
+                head_half=0.39,
+                tip_z=-0.42,
             ),
-            depth=0.13,
+            depth=0.15,
             location=(x, 0.0, z),
             rotation=(0.0, tilt, 0.0),
             bevel=True,
@@ -432,11 +442,11 @@ def build_capital_flows() -> ModelGeometry:
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:a flared funnel with three chevrons descending into its mouth;"
-            "side:deep conical hopper and spout under thin inward-tilted chevrons;"
-            "top:concentric funnel rings ringed by three inbound chevrons"
+            "front:three fat chevrons hovering above a flared funnel mouth, diving inward;"
+            "side:deep conical hopper on a catch basin under thin raised chevron plates;"
+            "top:concentric funnel rings under three large inbound chevrons"
         ),
-        body_detail="flared funnel bowl, tapering spout, mouth rim, and throat collar",
+        body_detail="flared funnel bowl, tapering spout, mouth rim, throat collar, and catch basin",
         accent_pivot="inflow gate face; glTF +Z advances along Blender -Y",
         accent_origin=chevron_origin,
     )
@@ -448,71 +458,74 @@ def build_fed_rate() -> ModelGeometry:
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    # A compact dial drum (axis Z, face up) - deliberately distinct from
-    # policy_rate's front-facing revolved gauge.
-    face_z = 0.34
+    # A wide SHALLOW dial puck (axis Z, face up) on a pedestal column and foot
+    # disc.  The low rim keeps the whole face visible from the 3/4 camera -
+    # deliberately distinct from policy_rate's front-facing revolved gauge.
+    face_z = 0.27
     body.add_cylinder(
-        radius=0.66,
-        depth=0.74,
+        radius=0.80,
+        depth=0.34,
         segments=24,
-        location=(0.0, 0.0, -0.02),
+        location=(0.0, 0.0, 0.10),
         bevel=True,
     )
-    # A raised rim torus + a ring of knurl blocks form the distinctive bezel.
+    # A low rim torus, proud of the face by only its minor radius (0.055).
     body.add_torus(
-        major_radius=0.64,
-        minor_radius=0.075,
-        major_segments=22,
+        major_radius=0.76,
+        minor_radius=0.055,
+        major_segments=20,
         minor_segments=6,
         location=(0.0, 0.0, face_z),
     )
-    for index in range(12):
-        angle = 2.0 * math.pi * index / 12.0
+    # Four cardinal tick studs riding on the rim.
+    for index in range(4):
+        angle = _QUARTER_TURN * index
         body.add_box(
-            size=(0.09, 0.15, 0.12),
-            location=(0.60 * math.cos(angle), 0.60 * math.sin(angle), face_z),
-            rotation=(0.0, 0.0, angle + _QUARTER_TURN),
-            bevel=index < 4,
+            size=(0.12, 0.20, 0.12),
+            location=(0.76 * math.cos(angle), 0.76 * math.sin(angle), face_z + 0.03),
+            rotation=(0.0, 0.0, angle),
+            bevel=True,
         )
-    # Tick marks recessed below the rim on the up-facing dial face.
-    for index in range(8):
-        angle = 2.0 * math.pi * index / 8.0
-        body.add_box(
-            size=(0.05, 0.05, 0.05),
-            location=(0.44 * math.cos(angle), 0.44 * math.sin(angle), face_z + 0.05),
-        )
-    # A shallow foot ring stabilizes the puck and fills the lower silhouette.
+    # Pedestal column and foot disc fill the lower silhouette.
     body.add_cylinder(
-        radius=0.72,
-        depth=0.12,
+        radius=0.46,
+        depth=0.48,
+        segments=16,
+        location=(0.0, 0.0, -0.28),
+        bevel=True,
+    )
+    body.add_cylinder(
+        radius=0.64,
+        depth=0.16,
         segments=20,
-        location=(0.0, 0.0, -0.44),
+        location=(0.0, 0.0, -0.54),
         bevel=True,
     )
 
-    # The reading: a raised colored five-point star and a needle on the dial
-    # face, flat and thin on Blender Z, pivoting about Y.
-    star_z = face_z + 0.08
+    # The reading: a big colored five-point star raised proud of the face
+    # (thick extrude, still thin on Blender Z) plus a bold needle running from
+    # the hub past the star tip, pivoting about Y.
+    star_z = face_z + 0.09
     accent.add_extruded_polygon_y(
-        _star_points_xz(outer_radius=0.63, inner_radius=0.25, points=5),
-        depth=0.10,
+        _star_points_xz(outer_radius=0.48, inner_radius=0.20, points=5),
+        depth=0.17,
         location=(0.0, 0.0, star_z),
         rotation=_LAY_ONTO_XY,
         bevel=True,
     )
-    # Needle laid across the face (thin Z), offset from the hub outward.
-    needle_angle = math.radians(58.0)
+    # Bold needle from the hub center out past the star tip (thin Z).
+    needle_angle = math.radians(-54.0)
     accent.add_box(
-        size=(0.64, 0.10, 0.06),
-        location=(0.30 * math.cos(needle_angle), 0.30 * math.sin(needle_angle), star_z + 0.02),
+        size=(0.76, 0.14, 0.10),
+        location=(0.30 * math.cos(needle_angle), 0.30 * math.sin(needle_angle), star_z + 0.06),
         rotation=(0.0, 0.0, needle_angle),
         bevel=True,
     )
     accent.add_cylinder(
-        radius=0.13,
-        depth=0.10,
+        radius=0.18,
+        depth=0.14,
         segments=18,
-        location=(0.0, 0.0, star_z + 0.03),
+        location=(0.0, 0.0, star_z + 0.04),
         bevel=True,
     )
 
@@ -522,11 +535,11 @@ def build_fed_rate() -> ModelGeometry:
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:a wide knurled dial drum seen edge-on under a raised star and needle;"
-            "side:shallow footed rate puck below a thin face-flat star and pointer;"
-            "top:a bezelled dial face carrying a five-point star and one needle"
+            "front:a wide shallow dial puck on a pedestal foot with a raised star edge and needle;"
+            "side:low-rimmed face-up puck over a column and foot disc, star proud of the face;"
+            "top:an open dial face with four rim studs, one big five-point star, and a long needle"
         ),
-        body_detail="wide shallow dial drum, knurled bezel ring, twelve ticks, and foot ring",
+        body_detail="wide shallow dial puck, low rim torus, four rim studs, pedestal column, and foot disc",
         accent_pivot="orbital governor axis; glTF Y rotation is Blender Z",
         accent_origin=hub_origin,
     )

@@ -558,86 +558,108 @@ def build_commodity() -> ModelGeometry:
 
 
 def build_fiscal() -> ModelGeometry:
-    """Build public spending: a domed government block issuing three coin outlets."""
+    """Build public spending: a stepped capitol paying out three coins at its base."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    # Government building: a wide and DEEP institutional block (deep in Blender Y
-    # so the model carries real depth mass, not a flat plate) on a stepped plinth.
+    # Stepped plinth: two wide shallow slabs, the unmistakable civic staircase.
     body.add_box(
-        size=(0.94, 1.00, 0.44),
-        location=(0.0, 0.0, 0.44),
+        size=(1.78, 1.18, 0.13),
+        location=(0.0, 0.0, 0.065),
         bevel=True,
     )
     body.add_box(
-        size=(1.08, 1.12, 0.11),
-        location=(0.0, 0.0, 0.17),
+        size=(1.60, 1.02, 0.13),
+        location=(0.0, 0.0, 0.195),
         bevel=True,
     )
-    # Capitol dome: a drum, a sphere cap, and a slender finial on the center line.
+    # Main hall block set back on the plinth; its front face hosts the portico.
+    body.add_box(
+        size=(1.44, 0.86, 0.50),
+        location=(0.0, 0.05, 0.51),
+        bevel=True,
+    )
+    # Colonnade: five upright columns standing proud of the hall front (-Y).
+    for x in (-0.60, -0.30, 0.0, 0.30, 0.60):
+        body.add_cylinder(
+            radius=0.05,
+            depth=0.44,
+            segments=8,
+            location=(x, -0.40, 0.48),
+        )
+    # Lintel spanning the columns, tied back into the hall face.
+    body.add_box(
+        size=(1.44, 0.26, 0.10),
+        location=(0.0, -0.34, 0.74),
+        bevel=True,
+    )
+    # Triangular pediment seated on the lintel.
+    body.add_extruded_polygon_y(
+        ((-0.70, 0.0), (0.70, 0.0), (0.0, 0.22)),
+        depth=0.22,
+        location=(0.0, -0.34, 0.79),
+        bevel=True,
+    )
+    # Capitol dome above and behind the pediment: drum, sphere cap, finial.
     body.add_cylinder(
-        radius=0.21,
-        depth=0.12,
+        radius=0.22,
+        depth=0.14,
         segments=16,
-        location=(0.0, 0.0, 0.70),
+        location=(0.0, 0.05, 0.82),
         bevel=True,
     )
     body.add_uv_sphere(
-        radius=0.215,
+        radius=0.26,
         segments=16,
         rings=8,
-        location=(0.0, 0.0, 0.80),
+        location=(0.0, 0.05, 0.88),
     )
     body.add_cylinder(
-        radius=0.045,
+        radius=0.04,
         depth=0.14,
-        segments=10,
-        location=(0.0, 0.0, 0.98),
+        segments=8,
+        location=(0.0, 0.05, 1.17),
     )
-    # Three outlet chutes fan down and out from the plinth, each ending in a
-    # dark nozzle collar that frames the coin it issues.
-    outlets = ((-0.47, -0.34), (0.0, -0.46), (0.47, -0.34))
-    for x, z in outlets:
-        body.add_cylinder_between(
-            (x * 0.44, 0.0, 0.11),
-            (x, 0.0, z + 0.11),
-            radius=0.072,
-            segments=10,
+    # Three chute mouths pierce the plinth front, one per payout slot.  Sharp
+    # unbeveled edges keep the slots crisp and the model under the triangle cap.
+    for x in (-0.58, 0.0, 0.58):
+        body.add_box(
+            size=(0.42, 0.22, 0.26),
+            location=(x, -0.42, 0.13),
+        )
+
+    # Category coins: flat front-facing discs (thin in Blender Y) with a raised
+    # torus rim, each sliding out of its chute mouth at the base front.  The
+    # coin bank rocks about the payout axis as public money flows to programs.
+    for x in (-0.58, 0.0, 0.58):
+        accent.add_cylinder(
+            radius=0.24,
+            depth=0.08,
+            segments=16,
+            location=(x, -0.55, 0.20),
+            rotation=(_QUARTER_TURN, 0.0, 0.0),
             bevel=x == 0.0,
         )
-        body.add_cylinder(
-            radius=0.115,
-            depth=0.12,
-            segments=12,
-            location=(x, 0.0, z + 0.07),
+        accent.add_torus(
+            major_radius=0.195,
+            minor_radius=0.050,
+            major_segments=14,
+            minor_segments=6,
+            location=(x, -0.55, 0.20),
             rotation=(_QUARTER_TURN, 0.0, 0.0),
-            bevel=True,
         )
 
-    # Category coins issued from the three outlets: flat front-facing discs
-    # (thin in Blender Y) with a raised rim, the public money flowing out to
-    # programs.  The whole coin bank rotates about the vertical Z axis.
-    for x, z in outlets:
-        accent.add_cylinder(
-            radius=0.208,
-            depth=0.125,
-            segments=16,
-            location=(x, 0.0, z - 0.03),
-            rotation=(_QUARTER_TURN, 0.0, 0.0),
-            bevel=True,
-        )
-
-    coin_bank_origin = (0.0, 0.0, -0.40)
+    coin_bank_origin = (0.0, -0.55, 0.20)
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:a domed government block issues three coins down three fanning outlets;"
-            "side:deep institutional mass and dome above one forward coin bank;"
-            "top:a broad building footprint keyed to three spaced coin faces"
+            "front:a stepped capitol with five-column portico, pediment, and dome pays out three rimmed coins;"
+            "side:deep stepped base and hall mass carry a drum dome behind a forward portico;"
+            "top:broad rectangular footprint under a centered dome with three coin slots on the front edge"
         ),
-        body_detail="deep domed government block, stepped plinth, and three fanning outlet chutes",
+        body_detail="stepped plinth, five-column portico, lintel, pediment, drum dome, and three coin chutes",
         accent_pivot="three-outlet valve-bank center; glTF Z equals Blender -Y",
         accent_origin=coin_bank_origin,
     )
@@ -914,16 +936,17 @@ def build_consumer_conf() -> ModelGeometry:
     # (-Y) face is the dial the scale and needle sit on.
     body.add_cylinder(
         radius=0.50,
-        depth=0.60,
+        depth=0.56,
         segments=28,
-        location=(0.0, 0.30, 0.06),
+        location=(0.0, 0.28, 0.06),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
-    # Semicircular scale arc across the top of the dial (left = low, right = high).
+    # Wide semicircular scale ring across the top of the dial, overhanging the
+    # drum edge so the half-ring reads at a glance (left = low, right = high).
     body.add_torus_arc(
-        major_radius=0.41,
-        minor_radius=0.05,
+        major_radius=0.46,
+        minor_radius=0.07,
         start_angle=math.radians(6.0),
         end_angle=math.radians(174.0),
         arc_segments=28,
@@ -932,13 +955,15 @@ def build_consumer_conf() -> ModelGeometry:
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
-    # Three scale posts: low (left), mid (top), high (right).
+    # Three tick studs on the arc, protruding toward the viewer: low, mid, high.
     for degrees in (26.0, 90.0, 154.0):
         angle = math.radians(degrees)
-        body.add_box(
-            size=(0.06, 0.10, 0.12),
-            location=(0.41 * math.cos(angle), -0.05, 0.06 + 0.41 * math.sin(angle)),
-            rotation=(0.0, _QUARTER_TURN - angle, 0.0),
+        body.add_cylinder(
+            radius=0.045,
+            depth=0.16,
+            segments=10,
+            location=(0.46 * math.cos(angle), -0.05, 0.06 + 0.46 * math.sin(angle)),
+            rotation=(_QUARTER_TURN, 0.0, 0.0),
         )
     # Instrument stand: a trapezoidal neck onto a footed base plate.
     body.add_extruded_polygon_y(
@@ -957,26 +982,42 @@ def build_consumer_conf() -> ModelGeometry:
         bevel=True,
     )
 
-    # Category needle: a bold flat pointer (thin in Blender Y) aimed up toward the
-    # HIGH side, seated on a broad hub cap.  The animation lifts it along Blender
-    # Z (glTF Y), reading as confidence rising.
-    vane_origin = (0.0, -0.24, 0.06)
+    # Category needle: a long tapered pointer (thin in Blender Y) that reaches
+    # the scale ring on the HIGH side, seated on an axle hub with a small front
+    # knob and a counterweight disc on its tail.  The animation lifts it along
+    # Blender Z (glTF Y), reading as confidence rising.
+    vane_origin = (0.0, -0.165, 0.06)
     accent.add_extruded_polygon_y(
         (
-            (-0.12, -0.07),
-            (0.07, -0.14),
-            (0.40, 0.46),
-            (0.26, 0.57),
+            (-0.185, -0.094),
+            (-0.046, -0.200),
+            (0.368, 0.422),
+            (0.318, 0.462),
         ),
-        depth=0.07,
-        location=(0.0, -0.24, 0.06),
+        depth=0.09,
+        location=(0.0, -0.165, 0.06),
         bevel=True,
     )
     accent.add_cylinder(
-        radius=0.235,
+        radius=0.15,
+        depth=0.14,
+        segments=16,
+        location=(0.0, -0.07, 0.06),
+        rotation=(_QUARTER_TURN, 0.0, 0.0),
+        bevel=True,
+    )
+    accent.add_cylinder(
+        radius=0.07,
         depth=0.07,
-        segments=20,
-        location=(0.0, -0.27, 0.06),
+        segments=12,
+        location=(0.0, -0.215, 0.06),
+        rotation=(_QUARTER_TURN, 0.0, 0.0),
+    )
+    accent.add_cylinder(
+        radius=0.15,
+        depth=0.09,
+        segments=12,
+        location=(-0.148, -0.165, -0.129),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
@@ -985,11 +1026,11 @@ def build_consumer_conf() -> ModelGeometry:
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:a semicircular dial gauge crossed by one bold needle aimed at the high side;"
-            "side:a round meter can in depth behind a thin dial face and pointer;"
-            "top:a circular gauge footprint with a single forward needle blade"
+            "front:a wide half-ring scale with three tick studs and one long needle aimed at the high side;"
+            "side:a deep meter can behind a thin dial, axle hub, and forward knob;"
+            "top:a circular gauge footprint crossed by a single raised needle blade"
         ),
-        body_detail="semicircular dial gauge, meter can, scale posts, and instrument stand",
+        body_detail="wide half-ring scale arc, three tick studs, meter can, and instrument stand",
         accent_pivot="central confidence-vane lift center; glTF Y equals Blender Z",
         accent_origin=vane_origin,
     )

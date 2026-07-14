@@ -13,131 +13,128 @@ from hard_surface import MeshAssembler, ModelGeometry
 
 
 def build_fx() -> ModelGeometry:
-    """Build an asymmetric double-gimbal foreign-exchange instrument.
+    """Build the universal currency-exchange icon for KRW/USD.
 
-    The nested front rings are backed by a genuine three-axis rotor cage: an
-    X-axis rotor drum that fills the side (Y-Z) end-view, a flat X-Y gimbal ring
-    that fills the top periphery and extends the thin Blender-Y axis, and an
-    enlarged counter-rotating accent ring.  The evaluated (post-bevel) triangle
-    total is ~2,740, inside the 3,000 runtime cap.
+    An upright won-struck coin (drum + raised face boss + relief marks) stands
+    on a plinth pedestal, and the category accent is the classic pair of
+    opposing curved arrows: two horizontal torus arcs tipped with arrowhead
+    prisms that circulate around the coin in the X-Y plane.  Blender +Z exports
+    to glTF +Y, so the runtime rotate-y motion spins the arrow pair around the
+    standing coin, which is exactly the "exchange" gesture.
     """
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    # The two primary bands use different centers and compound tilts.  Their
-    # 0.15-unit radial separation remains a readable shadow break after the
-    # final pair normalization.
-    body.add_torus(
-        major_radius=1.18,
-        minor_radius=0.12,
-        major_segments=38,
-        minor_segments=8,
-        location=(-0.05, 0.02, 0.04),
-        rotation=(math.radians(88.0), math.radians(8.0), math.radians(-6.0)),
-    )
-    body.add_torus(
-        major_radius=0.80,
-        minor_radius=0.11,
-        major_segments=34,
-        minor_segments=8,
-        location=(0.10, -0.03, -0.03),
-        rotation=(math.radians(67.0), math.radians(-18.0), math.radians(14.0)),
-    )
-
-    # Asymmetric bearing pods lock the rings into a mechanical gimbal reading
-    # rather than an atom or globe.  Each pod is a separately closed shell.
-    bearing_pods = (
-        ((-1.24, 0.02, 0.15), (0.0, math.pi * 0.5, 0.0)),
-        ((1.14, -0.01, -0.08), (0.0, math.pi * 0.5, 0.0)),
-        ((0.19, -0.12, 0.82), (0.0, 0.0, 0.0)),
-        ((0.03, 0.08, -0.86), (0.0, 0.0, 0.0)),
-    )
-    for location, rotation in bearing_pods:
-        body.add_cylinder(
-            radius=0.15,
-            depth=0.22,
-            segments=12,
-            location=location,
-            rotation=rotation,
-        )
-
-    ring_pivot = (0.10, -0.03, -0.02)
-    body.add_cylinder_between(
-        (ring_pivot[0], -0.62, ring_pivot[2]),
-        (ring_pivot[0], 0.60, ring_pivot[2]),
-        radius=0.115,
-        segments=14,
-        bevel=True,
-    )
-    for y in (-0.66, 0.64):
-        body.add_cylinder(
-            radius=0.24,
-            depth=0.20,
-            segments=12,
-            location=(ring_pivot[0], y, ring_pivot[2]),
-            rotation=(math.pi * 0.5, 0.0, 0.0),
-        )
-
-    # A rotor drum faces the Y-Z (side) plane so the gyroscope reads as bulk
-    # edge-on instead of a flat ring stack.  Paired gimbal side plates sit at
-    # +/-Y over the existing front footprint: they fill the thin side (Y-Z) and
-    # top (X-Y) silhouettes while overlapping the front ring reading, so the
-    # front silhouette stays intact and the instrument gains real Blender-Y
-    # depth from every angle.
-    rotor_center = (0.03, 0.0, 0.0)
+    # Upright coin core: the drum axis lies along Blender Y so the flat struck
+    # face looks straight at the -Y front camera.  The beveled drum rim plus a
+    # proud face boss give the stepped edge profile that reads "coin" in
+    # silhouette; the 0.46 boss depth keeps the side (Y-Z) view a solid slab.
+    coin_center = (0.0, 0.0, 0.14)
     body.add_cylinder(
-        radius=0.92,
-        depth=0.82,
-        segments=28,
-        location=rotor_center,
-        rotation=(0.0, math.pi * 0.5, 0.0),
-    )
-    # A third gimbal ring lies flat in the X-Y plane.  Edge-on it barely touches
-    # the front and side silhouettes, but its annulus fills the wide top (X-Y)
-    # periphery the rotor drum cannot reach and extends the thin Blender-Y axis.
-    body.add_torus(
-        major_radius=0.92,
-        minor_radius=0.14,
-        major_segments=30,
-        minor_segments=6,
-        location=rotor_center,
-        rotation=(0.0, 0.0, 0.0),
-    )
-    # The restrained category accent is a third, smaller exchange ring.  Its
-    # authored center becomes the true local origin so runtime Y rotation is a
-    # counter-rotation around the ring rather than an orbit around the model.
-    accent.add_torus(
-        major_radius=0.52,
-        minor_radius=0.16,
-        major_segments=28,
-        minor_segments=8,
-        location=ring_pivot,
-        rotation=(math.radians(91.0), math.radians(27.0), math.radians(-11.0)),
-    )
-    # A visible keyed center hub makes the counter-rotating accent a precision
-    # mechanism rather than a decorative ring.  Its exposed cap loops carry
-    # the selective three-segment bevel.
-    accent.add_cylinder(
-        radius=0.20,
-        depth=0.16,
-        segments=12,
-        location=ring_pivot,
+        radius=0.78,
+        depth=0.40,
+        segments=40,
+        location=coin_center,
         rotation=(math.pi * 0.5, 0.0, 0.0),
         bevel=True,
     )
+    body.add_cylinder(
+        radius=0.60,
+        depth=0.54,
+        segments=32,
+        location=coin_center,
+        rotation=(math.pi * 0.5, 0.0, 0.0),
+    )
+
+    # Relief won mark on both struck faces: four alternating strokes make the
+    # W and two wider crossing bars complete the currency glyph.  Each mark
+    # protrudes 0.07 out of the boss face and stays buried 0.03 inside it, so
+    # no shell face is coplanar with the boss caps.
+    stroke_tilt = math.radians(16.0)
+    for face_y in (-0.29, 0.29):
+        for leg_x, tilt_sign in ((-0.15, -1.0), (-0.05, 1.0), (0.05, -1.0), (0.15, 1.0)):
+            body.add_box(
+                size=(0.09, 0.10, 0.36),
+                location=(leg_x, face_y, 0.14),
+                rotation=(0.0, tilt_sign * stroke_tilt, 0.0),
+            )
+        for bar_z in (0.055, 0.225):
+            body.add_box(
+                size=(0.56, 0.10, 0.08),
+                location=(0.0, face_y, bar_z),
+            )
+
+    # Plinth pedestal: a short stem buried in both the coin rim and the base
+    # keeps every cap hidden, and the wide rounded base balances the top and
+    # side occupancy against the horizontal arrow orbit.
+    body.add_cylinder(
+        radius=0.17,
+        depth=0.32,
+        segments=16,
+        location=(0.0, 0.0, -0.76),
+    )
+    body.add_rounded_box_y(
+        width=1.06,
+        height=0.26,
+        depth=1.02,
+        radius=0.10,
+        corner_segments=3,
+        location=(0.0, 0.0, -0.98),
+        bevel=True,
+    )
+
+    # Exchange accent: two opposing 135-degree torus arcs chase each other in
+    # the horizontal X-Y plane at coin-equator height.  Their shared center is
+    # the authored accent origin, so the runtime local-Y (Blender Z) rotation
+    # circulates the arrows around the standing coin.
+    orbit_radius = 0.98
+    orbit_minor = 0.09
+    arc_spans = (
+        (math.radians(17.0), math.radians(147.0)),
+        (math.radians(197.0), math.radians(327.0)),
+    )
+    for start_angle, end_angle in arc_spans:
+        accent.add_torus_arc(
+            major_radius=orbit_radius,
+            minor_radius=orbit_minor,
+            start_angle=start_angle,
+            end_angle=end_angle,
+            arc_segments=26,
+            minor_segments=8,
+            location=coin_center,
+            rotation=(0.0, 0.0, 0.0),
+            bevel=True,
+        )
+    # Arrowhead prisms cap each arc tip and point along the counterclockwise
+    # travel tangent.  The 0.20 slab thickness fully swallows the arc end cap,
+    # and the blades stay razor-thin on Blender Z so the orbit reads as a flat
+    # circulation band, never a second disc.
+    for end_angle_degrees in (147.0, 327.0):
+        end_angle = math.radians(end_angle_degrees)
+        accent.add_extruded_polygon_y(
+            points_xz=((0.30, 0.0), (-0.12, 0.22), (-0.12, -0.22)),
+            depth=0.20,
+            location=(
+                orbit_radius * math.cos(end_angle),
+                orbit_radius * math.sin(end_angle),
+                coin_center[2],
+            ),
+            rotation=(math.pi * 0.5, 0.0, end_angle + math.pi * 0.5),
+        )
 
     return ModelGeometry(
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:offset nested gimbals with unequal bearing pods; "
-            "side:crossed tilted bands around a short exchange axle; "
-            "top:asymmetric ring stack with displaced inner center"
+            "front:upright won-struck coin on a plinth with a level arrow orbit "
+            "crossing its equator; "
+            "side:thick coin slab pierced by the flat circulation band; "
+            "top:two chasing arc arrows circling the coin core"
         ),
-        body_detail="double tilted gimbal, four bearing pods, and short exchange axle",
+        body_detail="upright won-relief coin drum, face bosses, and plinth pedestal",
         accent_pivot="true offset ring center; counter-rotate local Y",
-        accent_origin=ring_pivot,
+        accent_origin=coin_center,
     )
 
 

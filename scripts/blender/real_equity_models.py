@@ -18,10 +18,23 @@ from __future__ import annotations
 
 import math
 
-from hard_surface import MeshAssembler, ModelGeometry
+from hard_surface import MeshAssembler, ModelGeometry, rounded_rectangle_points
 
 
 _QUARTER_TURN = math.pi * 0.5
+
+
+def _tapered_torso_points(
+    width: float,
+    height: float,
+    radius: float,
+    corner_segments: int,
+    taper: float,
+) -> list[tuple[float, float]]:
+    """Return a rounded A-taper torso XZ outline (wider at the base) for Y extrusion."""
+
+    points = rounded_rectangle_points(width, height, radius, corner_segments)
+    return [(x * (1.0 - taper * (z / height)), z) for x, z in points]
 
 
 def _up_arrow_points(
@@ -61,65 +74,60 @@ def _star_points(
 
 
 def build_consumption() -> ModelGeometry:
-    """Build a shopping bag with two arched handles and goods rising past the mouth."""
+    """Build a tapered shopping bag with a folded cuff, thick handles, and goods."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    # Bag sack: a deep rounded box.  Its 0.94 Blender-Y depth is what fills the
-    # side and top silhouettes so the front bag face never reads as a flat plate.
+    # Tapered sack: visibly narrower at the base than at the mouth so the
+    # profile reads as a paper bag, never a plain box.  The trapezoid outline
+    # is extruded along Blender Y to keep genuine front-to-back depth.
+    sack_outline = [
+        (-0.44, -0.60),
+        (0.44, -0.60),
+        (0.61, 0.44),
+        (-0.61, 0.44),
+    ]
+    body.add_extruded_polygon_y(sack_outline, depth=0.92, bevel=True)
+    # Folded rim cuff overhanging the sack mouth on all four sides.
     body.add_rounded_box_y(
-        width=1.20,
-        height=1.02,
-        depth=0.94,
-        radius=0.075,
+        width=1.34,
+        height=0.17,
+        depth=1.02,
+        radius=0.055,
         corner_segments=3,
-        location=(0.0, 0.0, -0.06),
+        location=(0.0, 0.0, 0.525),
         bevel=True,
     )
-    # Folded top cuff (the open mouth), slightly wider and deeper than the sack.
-    body.add_rounded_box_y(
-        width=1.28,
-        height=0.15,
-        depth=1.00,
-        radius=0.050,
-        corner_segments=3,
-        location=(0.0, 0.0, 0.52),
-        bevel=True,
-    )
-    # Two arching carry handles standing in the front X-Z plane above the cuff.
-    for handle_x in (-0.32, 0.32):
+    # Two thick carry handles (front sheet and back sheet) arching well above
+    # the cuff, leaving the mouth centre clear for the goods.
+    for handle_y in (-0.30, 0.30):
         body.add_torus_arc(
-            major_radius=0.26,
-            minor_radius=0.050,
+            major_radius=0.30,
+            minor_radius=0.095,
             start_angle=0.0,
             end_angle=math.pi,
             arc_segments=20,
             minor_segments=8,
-            location=(handle_x, 0.0, 0.52),
+            location=(0.0, handle_y, 0.60),
             rotation=(_QUARTER_TURN, 0.0, 0.0),
             bevel=True,
         )
 
-    goods_origin = (0.0, 0.0, 0.72)
-    # Goods (category color) rising out of the mouth: two blocks and a round can.
+    goods_origin = (0.0, 0.0, 0.70)
+    # Goods (category color): one tall leaning carton and one round can, two
+    # clearly different items rising past the mouth between the handles.
     accent.add_box(
-        size=(0.30, 0.38, 0.46),
-        location=(-0.19, 0.0, 0.68),
-        rotation=(0.0, math.radians(-8.0), 0.0),
-        bevel=True,
-    )
-    accent.add_box(
-        size=(0.27, 0.36, 0.52),
-        location=(0.20, 0.0, 0.74),
-        rotation=(0.0, math.radians(7.0), 0.0),
+        size=(0.32, 0.34, 0.70),
+        location=(-0.17, 0.0, 0.62),
+        rotation=(0.0, math.radians(-6.0), 0.0),
         bevel=True,
     )
     accent.add_cylinder(
-        radius=0.135,
-        depth=0.44,
+        radius=0.155,
+        depth=0.56,
         segments=14,
-        location=(0.02, 0.0, 0.58),
+        location=(0.20, 0.0, 0.50),
         bevel=True,
     )
 
@@ -127,11 +135,11 @@ def build_consumption() -> ModelGeometry:
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:a rounded shopping bag with two arched handles and goods rising past the mouth;"
-            "side:a deep sack with a folded cuff and forward goods breaking the top line;"
-            "top:a wide bag mouth spanned by two handle arcs around a cluster of goods"
+            "front:a bag tapering to a narrow base under a folded cuff, one bold handle arc, and two goods;"
+            "side:a deep tapered sack with front and back handle arcs rising over the cuff;"
+            "top:a wide cuffed mouth crossed by two parallel handle arcs around boxed and round goods"
         ),
-        body_detail="deep shopping-bag sack, folded top cuff, and two arched carry handles",
+        body_detail="tapered shopping-bag sack, overhanging folded cuff, and two thick handle arcs",
         accent_pivot="inertia flywheel clutch axis; scale XYZ about the central hub",
         accent_origin=goods_origin,
     )
@@ -277,68 +285,65 @@ def build_investment() -> ModelGeometry:
 
 
 def build_employment() -> ModelGeometry:
-    """Build three workers of unequal height on a foundation with a front badge bar."""
+    """Build three crisp round-headed figures on a low plinth with a team nameplate."""
 
     body = MeshAssembler()
     accent = MeshAssembler()
 
     base_top = -0.62
-    # Foundation slab: deep in Blender Y so the row of figures is not a flat plate.
+    # Clean low plinth, deep in Blender Y, carrying all three figures.
     body.add_rounded_box_y(
-        width=1.30,
-        height=0.18,
-        depth=0.90,
+        width=1.40,
+        height=0.22,
+        depth=0.88,
         radius=0.050,
         corner_segments=2,
-        location=(0.0, 0.0, base_top - 0.09),
+        location=(0.0, 0.0, -0.73),
         bevel=True,
     )
-    worker_specs = ((-0.42, 0.60), (0.02, 0.78), (0.44, 0.52))
-    for worker_x, torso_height in worker_specs:
-        torso_center_z = base_top + torso_height * 0.5
-        body.add_rounded_box_y(
-            width=0.28,
+    # (x, torso height, head radius): the centre figure stands tallest and the
+    # figures are spread wide enough that every gap stays open at a glance.
+    worker_specs = ((-0.48, 0.58, 0.20), (0.0, 0.74, 0.22), (0.48, 0.52, 0.20))
+    for worker_x, torso_height, head_radius in worker_specs:
+        torso_outline = _tapered_torso_points(
+            width=0.34,
             height=torso_height,
-            depth=0.54,
-            radius=0.100,
-            corner_segments=2,
-            location=(worker_x, 0.0, torso_center_z),
+            radius=0.10,
+            corner_segments=3,
+            taper=0.16,
+        )
+        body.add_extruded_polygon_y(
+            torso_outline,
+            depth=0.60,
+            location=(worker_x, 0.0, base_top + torso_height * 0.5),
             bevel=True,
         )
-        shoulder_z = base_top + torso_height + 0.02
-        body.add_rounded_box_y(
-            width=0.40,
-            height=0.14,
-            depth=0.56,
-            radius=0.060,
-            corner_segments=2,
-            location=(worker_x, 0.0, shoulder_z),
-            bevel=True,
-        )
-        head_z = shoulder_z + 0.26
+        # Big head floating a clear 0.07 neck gap above the torso shoulder line.
+        head_z = base_top + torso_height + 0.07 + head_radius
         body.add_uv_sphere(
-            radius=0.175,
-            segments=16,
-            rings=8,
+            radius=head_radius,
+            segments=18,
+            rings=9,
             location=(worker_x, 0.0, head_z),
         )
 
-    badge_origin = (0.0, -0.44, -0.30)
-    # Shared front badge bar (category color): the "people employed" nameplate.
+    plate_origin = (0.0, -0.50, -0.73)
+    # Team nameplate (category color) mounted flush on the plinth front face,
+    # with a round badge emblem proud of the plate.
     accent.add_rounded_box_y(
         width=1.30,
-        height=0.26,
-        depth=0.24,
-        radius=0.050,
+        height=0.22,
+        depth=0.18,
+        radius=0.060,
         corner_segments=2,
-        location=badge_origin,
+        location=plate_origin,
         bevel=True,
     )
     accent.add_cylinder(
-        radius=0.150,
+        radius=0.11,
         depth=0.14,
         segments=16,
-        location=(0.0, badge_origin[1] - 0.10, badge_origin[2]),
+        location=(0.0, -0.62, -0.73),
         rotation=(_QUARTER_TURN, 0.0, 0.0),
         bevel=True,
     )
@@ -347,13 +352,13 @@ def build_employment() -> ModelGeometry:
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:three unequal capped figures with round heads standing on a slab behind a badge bar;"
-            "side:a deep foundation carrying rounded torsos and spherical heads;"
-            "top:a wide slab of three figure footprints fronted by a badge bar"
+            "front:three spaced round-headed figures of stepped height on a plinth with a front nameplate;"
+            "side:a deep plinth carrying tapered torsos under big floating spherical heads;"
+            "top:a wide plinth of three separated figure footprints with a nameplate proud of the front edge"
         ),
-        body_detail="three unequal worker figures with rounded torsos and spherical heads on a deep slab",
+        body_detail="three spaced A-taper worker torsos with big floating heads on a clean low plinth",
         accent_pivot="three-column locking-ring centroid; translate along glTF Y / Blender Z",
-        accent_origin=badge_origin,
+        accent_origin=plate_origin,
     )
 
 
@@ -485,73 +490,75 @@ def build_stocks() -> ModelGeometry:
     body = MeshAssembler()
     accent = MeshAssembler()
 
-    base_top = -0.54
-    # Deep chart bed: the Blender-Y bulk under the floating candles.
+    # Slim chart bed: thinner and smaller than the candles it carries so the
+    # candlesticks, not the plinth, dominate the icon.
     body.add_rounded_box_y(
-        width=1.16,
-        height=0.18,
-        depth=0.98,
-        radius=0.050,
+        width=1.18,
+        height=0.12,
+        depth=0.88,
+        radius=0.045,
         corner_segments=3,
-        location=(0.0, 0.0, base_top - 0.09),
+        location=(0.0, 0.02, -0.70),
         bevel=True,
     )
-    # (x, low, high, body_bottom, body_top)
+    # (x, wick_low, wick_high, body_bottom, body_top): tall bodies with clearly
+    # alternating heights, every wick protruding past both ends of its body.
     dark_candles = (
-        (-0.42, -0.34, 0.30, -0.14, 0.16),
-        (-0.14, -0.12, 0.52, 0.02, 0.40),
-        (0.14, 0.00, 0.44, 0.10, 0.34),
+        (-0.45, -0.62, 0.12, -0.44, -0.04),
+        (-0.15, -0.42, 0.48, -0.22, 0.32),
+        (0.15, -0.54, 0.24, -0.36, 0.08),
     )
     for candle_x, low, high, body_bottom, body_top in dark_candles:
         body.add_cylinder(
-            radius=0.035,
+            radius=0.050,
             depth=high - low,
             segments=10,
-            location=(candle_x, 0.0, (high + low) * 0.5),
+            location=(candle_x, 0.07, (high + low) * 0.5),
             bevel=False,
         )
         body.add_rounded_box_y(
-            width=0.26,
+            width=0.28,
             height=body_top - body_bottom,
-            depth=0.70,
+            depth=0.82,
             radius=0.040,
             corner_segments=3,
-            location=(candle_x, 0.0, (body_bottom + body_top) * 0.5),
+            location=(candle_x, 0.07, (body_bottom + body_top) * 0.5),
             bevel=True,
         )
 
-    lead_x = 0.44
-    lead_origin = (lead_x, 0.0, 0.30)
-    # Leading candle (category color): a highlighted body over a tall high-low wick.
+    lead_x = 0.45
+    lead_y = -0.25
+    lead_origin = (lead_x, lead_y, 0.22)
+    # Leading candle (category color): the tallest body, pulled toward the
+    # camera, on a thick wick protruding at both ends.
     accent.add_cylinder(
-        radius=0.038,
-        depth=0.92,
-        segments=8,
-        location=(lead_x, 0.0, 0.24),
+        radius=0.052,
+        depth=0.90,
+        segments=10,
+        location=(lead_x, lead_y, 0.19),
         bevel=False,
     )
     accent.add_rounded_box_y(
-        width=0.26,
-        height=0.48,
-        depth=0.42,
+        width=0.28,
+        height=0.56,
+        depth=0.46,
         radius=0.040,
         corner_segments=3,
         location=lead_origin,
         bevel=True,
     )
-    # Small up-right trend arrow tilted in the front plane (the uptrend cue).
+    # Bold upright arrow directly above the leading candle (the uptrend cue).
     trend_points = _up_arrow_points(
-        shaft_hw=0.050,
-        head_hw=0.155,
+        shaft_hw=0.085,
+        head_hw=0.25,
         z_bottom=-0.17,
         z_shoulder=0.02,
-        z_tip=0.19,
+        z_tip=0.17,
     )
     accent.add_extruded_polygon_y(
         trend_points,
         depth=0.18,
-        location=(0.18, 0.0, 0.62),
-        rotation=(0.0, math.radians(34.0), 0.0),
+        location=(lead_x, lead_y, 0.75),
         bevel=True,
     )
 
@@ -559,11 +566,11 @@ def build_stocks() -> ModelGeometry:
         body=body,
         accent=accent,
         silhouette_signature=(
-            "front:three dark candlesticks and one highlighted leading candle under a rising trend arrow;"
-            "side:a deep chart bed carrying floating candle bodies on high-low wicks;"
-            "top:a wide chart bed with a row of candle footprints and a tilted trend plate"
+            "front:four alternating candlesticks stepping up to a tall leading candle under a bold up arrow;"
+            "side:deep candle bodies floating on protruding wicks over a slim chart bed;"
+            "top:a slim rectangular bed of four candle footprints with the leading candle proud of the front"
         ),
-        body_detail="three dark candlesticks with high-low wicks on a deep chart bed",
+        body_detail="three dark alternating candlesticks with thick protruding wicks on a slim chart bed",
         accent_pivot="price-spindle carriage center; translate along glTF Y / Blender Z",
         accent_origin=lead_origin,
     )
